@@ -12,6 +12,53 @@ export class WorldScene extends Phaser.Scene {
     this.playerGold = 50;
     this.heroesRecruited = 0;
     this.attackCooldown = 0;
+    this.currentInteractingNpc = null;
+
+    this.specialties = [
+      {
+        id: 'vanguard',
+        name: 'Vanguard Spear',
+        color: 0xffc26b,
+        description: 'Steady duelist. Bonus damage at close range.',
+        minDamage: 10,
+        maxDamage: 16,
+        range: 52,
+        splash: false,
+      },
+      {
+        id: 'strategist',
+        name: 'Strategist Fan',
+        color: 0x7bc7ff,
+        description: 'Wide strike. Hits all nearby enemies.',
+        minDamage: 7,
+        maxDamage: 11,
+        range: 65,
+        splash: true,
+      },
+      {
+        id: 'shadow',
+        name: 'Shadow Blades',
+        color: 0xd89cff,
+        description: 'Short reach. High crit chance.',
+        minDamage: 8,
+        maxDamage: 14,
+        range: 42,
+        splash: false,
+        critChance: 0.3,
+      },
+    ];
+    this.currentSpecialtyIndex = 0;
+
+    this.chapterState = {
+      chapter: 1,
+      stage: 'talk_songjiang',
+      objective: 'Talk to Song Jiang in Liangshan stronghold.',
+      completed: false,
+      raidersDefeated: 0,
+      raidersTarget: 3,
+      minibossSpawned: false,
+      minibossDefeated: false,
+    };
   }
 
   create() {
@@ -23,6 +70,9 @@ export class WorldScene extends Phaser.Scene {
     this.setupCamera();
     this.setupInput();
     this.setupCollisions();
+    this.switchSpecialty(0, false);
+    this.showChapterToast('Chapter 1: Oath at Liangshan begins.');
+    this.updateMissionUI();
   }
 
   createWorld() {
@@ -30,34 +80,24 @@ export class WorldScene extends Phaser.Scene {
     const mapHeight = 50;
     const tileSize = 32;
 
-    // Tile map layout (0=grass, 1=water, 2=path, 3=wall, 4=building)
     this.mapData = [];
     for (let y = 0; y < mapHeight; y++) {
       this.mapData[y] = [];
       for (let x = 0; x < mapWidth; x++) {
-        // Border water
         if (x === 0 || y === 0 || x === mapWidth - 1 || y === mapHeight - 1) {
           this.mapData[y][x] = 1;
-        }
-        // Liangshan lake (center-ish)
-        else if (x >= 20 && x <= 30 && y >= 20 && y <= 30) {
+        } else if (x >= 20 && x <= 30 && y >= 20 && y <= 30) {
           this.mapData[y][x] = 1;
-        }
-        // Main path (horizontal)
-        else if (y === 25 && x >= 5 && x <= 45) {
+        } else if (y === 25 && x >= 5 && x <= 45) {
           this.mapData[y][x] = 2;
-        }
-        // Main path (vertical)
-        else if (x === 25 && y >= 5 && y <= 45) {
+        } else if (x === 25 && y >= 5 && y <= 45) {
           this.mapData[y][x] = 2;
-        }
-        else {
+        } else {
           this.mapData[y][x] = 0;
         }
       }
     }
 
-    // Town walls (top-left area — Liangshan stronghold)
     for (let x = 3; x <= 15; x++) {
       this.mapData[3][x] = 3;
       this.mapData[14][x] = 3;
@@ -66,11 +106,9 @@ export class WorldScene extends Phaser.Scene {
       this.mapData[y][3] = 3;
       this.mapData[y][15] = 3;
     }
-    // Gate
     this.mapData[14][9] = 2;
     this.mapData[14][10] = 2;
 
-    // Render tiles
     this.groundLayer = this.add.group();
     this.wallObjects = this.physics.add.staticGroup();
 
@@ -84,9 +122,8 @@ export class WorldScene extends Phaser.Scene {
           this.add.image(px, py, 'grass').setOrigin(0);
         } else if (tile === 1) {
           this.add.image(px, py, 'water').setOrigin(0);
-          // Water is collidable
           const waterBlock = this.wallObjects.create(px + 16, py + 16, 'water');
-          waterBlock.setAlpha(0); // invisible blocker
+          waterBlock.setAlpha(0);
           waterBlock.refreshBody();
         } else if (tile === 2) {
           this.add.image(px, py, 'grass').setOrigin(0);
@@ -100,156 +137,267 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // Add buildings inside the stronghold
     this.add.image(6 * tileSize, 5 * tileSize, 'building').setOrigin(0).setScale(1.5);
     this.add.image(10 * tileSize, 5 * tileSize, 'building').setOrigin(0).setScale(1.2);
 
-    // World bounds
     this.physics.world.setBounds(0, 0, mapWidth * tileSize, mapHeight * tileSize);
   }
 
   createPlayer() {
-    // Start player near the town entrance
     this.player = this.physics.add.sprite(9 * 32 + 16, 16 * 32, 'player');
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body.setSize(20, 20);
     this.player.body.setOffset(6, 10);
 
-    // Player name
     this.playerNameTag = this.add.text(0, 0, '勇士', {
       fontSize: '10px',
       fill: '#ffffff',
       stroke: '#000000',
-      strokeThickness: 2
+      strokeThickness: 2,
     }).setOrigin(0.5).setDepth(11);
   }
 
   createNPCs() {
     const npcData = [
-      { x: 7, y: 8, name: '宋江', role: 'Song Jiang', dialog: 'Welcome, brave warrior! Liangshan needs heroes like you. Join our cause against corruption!', recruitable: true },
-      { x: 11, y: 7, name: '吴用', role: 'Wu Yong', dialog: 'Ah, a new face. I am Wu Yong, strategist of Liangshan. What brings you to our marsh?', recruitable: false },
-      { x: 9, y: 10, name: '林冲', role: 'Lin Chong', dialog: 'I was once an instructor of the Imperial Guard. Betrayed by corrupt officials. Now I fight for justice.', recruitable: true },
-      { x: 30, y: 10, name: '村民', role: 'Villager', dialog: 'The corrupt magistrate\'s soldiers have been terrorizing our village! Please help us!', recruitable: false },
+      {
+        id: 'songjiang',
+        x: 7,
+        y: 8,
+        name: '宋江',
+        role: 'Song Jiang',
+        dialog: 'Liangshan calls for unity. Prove your resolve and our banner is yours.',
+        recruitable: true,
+      },
+      {
+        id: 'wuyong',
+        x: 11,
+        y: 7,
+        name: '吴用',
+        role: 'Wu Yong',
+        dialog: 'Read your battlefield. A sharp mind wins before steel is drawn.',
+        recruitable: false,
+      },
+      {
+        id: 'linchong',
+        x: 9,
+        y: 10,
+        name: '林冲',
+        role: 'Lin Chong',
+        dialog: 'Strength is nothing without conviction. Hold your line.',
+        recruitable: true,
+      },
+      {
+        id: 'villager',
+        x: 30,
+        y: 10,
+        name: '刘村民',
+        role: 'Village Elder Liu',
+        dialog: 'Magistrate raiders burned our granary! Their captain still stalks the road.',
+        recruitable: false,
+      },
     ];
 
-    npcData.forEach(data => {
+    npcData.forEach((data) => {
       const npc = this.physics.add.sprite(data.x * 32 + 16, data.y * 32 + 16, 'npc');
       npc.setImmovable(true);
       npc.setDepth(9);
       npc.npcData = data;
 
-      // Name tag
       const tag = this.add.text(data.x * 32 + 16, data.y * 32 - 4, data.name, {
         fontSize: '9px',
         fill: '#ffff88',
         stroke: '#000000',
-        strokeThickness: 2
+        strokeThickness: 2,
       }).setOrigin(0.5).setDepth(12);
 
+      npc.nameTag = tag;
       this.npcs.push(npc);
     });
   }
 
+  createEnemy(data) {
+    const enemy = this.physics.add.sprite(data.x * 32, data.y * 32, 'enemy');
+    enemy.setDepth(9);
+    enemy.enemyId = data.id;
+    enemy.displayName = data.name;
+    enemy.hp = data.hp;
+    enemy.maxHp = data.hp;
+    enemy.moveSpeed = data.speed;
+    enemy.damage = data.damage;
+    enemy.gold = data.gold;
+    enemy.isMiniBoss = !!data.isMiniBoss;
+    enemy.patrolDir = 1;
+    enemy.patrolTimer = 0;
+
+    enemy.hpBar = this.add.graphics().setDepth(13);
+    enemy.nameTag = this.add.text(enemy.x, enemy.y - 32, data.name, {
+      fontSize: enemy.isMiniBoss ? '11px' : '9px',
+      fill: enemy.isMiniBoss ? '#ff8a8a' : '#ffdd88',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(13);
+
+    if (enemy.isMiniBoss) {
+      enemy.setScale(1.2);
+      enemy.setTint(0xff9999);
+    }
+
+    this.updateEnemyHPBar(enemy);
+    this.enemies.push(enemy);
+  }
+
   createEnemies() {
-    const enemyPositions = [
-      { x: 32, y: 10 },
-      { x: 35, y: 15 },
-      { x: 38, y: 8 },
-      { x: 40, y: 30 },
+    const raiders = [
+      { id: 'raider-hei', name: 'Black-Fang Hei', x: 32, y: 10, hp: 36, speed: 62, damage: 6, gold: 14 },
+      { id: 'raider-luo', name: 'Iron-Nail Luo', x: 35, y: 15, hp: 34, speed: 58, damage: 5, gold: 12 },
+      { id: 'raider-yan', name: 'Mud-Wolf Yan', x: 38, y: 8, hp: 38, speed: 60, damage: 6, gold: 15 },
     ];
 
-    enemyPositions.forEach(pos => {
-      const enemy = this.physics.add.sprite(pos.x * 32, pos.y * 32, 'enemy');
-      enemy.setDepth(9);
-      enemy.hp = 30;
-      enemy.maxHp = 30;
-      enemy.patrolDir = 1;
-      enemy.patrolTimer = 0;
+    raiders.forEach((raider) => this.createEnemy(raider));
+  }
 
-      // HP bar
-      enemy.hpBar = this.add.graphics().setDepth(13);
-      this.updateEnemyHPBar(enemy);
+  spawnMiniBoss() {
+    if (this.chapterState.minibossSpawned) return;
 
-      this.enemies.push(enemy);
+    this.chapterState.minibossSpawned = true;
+    this.createEnemy({
+      id: 'captain-zhao',
+      name: 'Captain Zhao the Chain',
+      x: 40,
+      y: 30,
+      hp: 120,
+      speed: 72,
+      damage: 10,
+      gold: 80,
+      isMiniBoss: true,
     });
+
+    this.showChapterToast('Miniboss Appears: Captain Zhao the Chain!');
+    this.chapterState.stage = 'defeat_miniboss';
+    this.chapterState.objective = 'Defeat Captain Zhao the Chain.';
+    this.updateMissionUI();
   }
 
   updateEnemyHPBar(enemy) {
     enemy.hpBar.clear();
-    const ratio = enemy.hp / enemy.maxHp;
+    const ratio = Phaser.Math.Clamp(enemy.hp / enemy.maxHp, 0, 1);
+    const width = enemy.isMiniBoss ? 46 : 32;
+
     enemy.hpBar.fillStyle(0x000000);
-    enemy.hpBar.fillRect(enemy.x - 16, enemy.y - 22, 32, 5);
+    enemy.hpBar.fillRect(enemy.x - width / 2, enemy.y - 22, width, 5);
     enemy.hpBar.fillStyle(ratio > 0.5 ? 0x00ff00 : ratio > 0.25 ? 0xffff00 : 0xff0000);
-    enemy.hpBar.fillRect(enemy.x - 16, enemy.y - 22, 32 * ratio, 5);
+    enemy.hpBar.fillRect(enemy.x - width / 2, enemy.y - 22, width * ratio, 5);
+
+    if (enemy.nameTag) {
+      enemy.nameTag.setPosition(enemy.x, enemy.y - (enemy.isMiniBoss ? 36 : 30));
+    }
   }
 
   createUI() {
-    // UI fixed to camera
     this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(100);
 
-    // Background panel
     const panel = this.add.graphics();
-    panel.fillStyle(0x000000, 0.7);
-    panel.fillRect(5, 5, 220, 70);
+    panel.fillStyle(0x000000, 0.72);
+    panel.fillRect(5, 5, 350, 96);
     panel.lineStyle(2, 0xc8a96e);
-    panel.strokeRect(5, 5, 220, 70);
+    panel.strokeRect(5, 5, 350, 96);
 
-    // Title
-    const title = this.add.text(115, 15, '夢 Dream of Water Margin', {
-      fontSize: '11px', fill: '#c8a96e', fontFamily: 'serif'
+    const title = this.add.text(180, 15, '夢 Dream of Water Margin', {
+      fontSize: '11px', fill: '#c8a96e', fontFamily: 'serif',
     }).setOrigin(0.5);
 
-    // HP
     this.hpText = this.add.text(15, 32, `HP: ${this.playerHP}/${this.playerMaxHP}`, {
-      fontSize: '12px', fill: '#ff6666'
+      fontSize: '12px', fill: '#ff6666',
     });
 
-    // Gold
     this.goldText = this.add.text(15, 50, `Gold: ${this.playerGold} 两`, {
-      fontSize: '12px', fill: '#ffdd44'
+      fontSize: '12px', fill: '#ffdd44',
     });
 
-    // Heroes recruited
-    this.heroText = this.add.text(120, 32, `Heroes: ${this.heroesRecruited}/108`, {
-      fontSize: '12px', fill: '#88aaff'
+    this.heroText = this.add.text(15, 68, `Heroes: ${this.heroesRecruited}/108`, {
+      fontSize: '12px', fill: '#88aaff',
     });
 
-    // Controls hint
-    this.hintText = this.add.text(120, 50, 'WASD/Arrows: Move  Space: Attack', {
-      fontSize: '9px', fill: '#aaaaaa'
+    this.specialtyText = this.add.text(140, 32, 'Style: -', {
+      fontSize: '12px', fill: '#9fe7ff',
     });
 
-    this.uiContainer.add([panel, title, this.hpText, this.goldText, this.heroText, this.hintText]);
+    this.hintText = this.add.text(140, 50, 'Q / 1-3: Switch style   Space: Attack   E: Talk', {
+      fontSize: '9px', fill: '#aaaaaa',
+    });
 
-    // Dialog box (hidden by default)
+    this.objectiveText = this.add.text(140, 68, '', {
+      fontSize: '10px', fill: '#cde6ff', wordWrap: { width: 205 },
+    });
+
+    this.uiContainer.add([
+      panel,
+      title,
+      this.hpText,
+      this.goldText,
+      this.heroText,
+      this.specialtyText,
+      this.hintText,
+      this.objectiveText,
+    ]);
+
+    const gameWidth = this.scale.width;
+    const gameHeight = this.scale.height;
+    const boxX = 20;
+    const boxWidth = gameWidth - 40;
+    const boxHeight = 140;
+    const boxY = gameHeight - boxHeight - 16;
+
     this.dialogBox = this.add.container(0, 0).setScrollFactor(0).setDepth(200).setVisible(false);
     const dialogBg = this.add.graphics();
     dialogBg.fillStyle(0x1a0a00, 0.95);
-    dialogBg.fillRect(20, 440, 760, 120);
+    dialogBg.fillRect(boxX, boxY, boxWidth, boxHeight);
     dialogBg.lineStyle(2, 0xc8a96e);
-    dialogBg.strokeRect(20, 440, 760, 120);
+    dialogBg.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
-    this.dialogNameText = this.add.text(35, 452, '', {
-      fontSize: '14px', fill: '#c8a96e', fontFamily: 'serif', fontStyle: 'bold'
+    this.dialogNameText = this.add.text(boxX + 15, boxY + 12, '', {
+      fontSize: '14px', fill: '#c8a96e', fontFamily: 'serif', fontStyle: 'bold',
     });
-    this.dialogText = this.add.text(35, 475, '', {
-      fontSize: '13px', fill: '#ffffff', wordWrap: { width: 720 }
+    this.dialogText = this.add.text(boxX + 15, boxY + 36, '', {
+      fontSize: '13px', fill: '#ffffff', wordWrap: { width: boxWidth - 30 },
     });
-    this.dialogPrompt = this.add.text(700, 545, '[SPACE to close]', {
-      fontSize: '11px', fill: '#888888'
+    this.dialogPrompt = this.add.text(boxX + boxWidth - 130, boxY + boxHeight - 18, '[SPACE to close]', {
+      fontSize: '11px', fill: '#888888',
     });
 
     this.dialogBox.add([dialogBg, this.dialogNameText, this.dialogText, this.dialogPrompt]);
 
-    // Floating damage text pool
-    this.damageTexts = [];
+    this.chapterToast = this.add.text(this.scale.width / 2, 110, '', {
+      fontSize: '14px',
+      fill: '#ffeab5',
+      stroke: '#000',
+      strokeThickness: 4,
+      fontStyle: 'bold',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(220).setScrollFactor(0).setVisible(false);
+  }
+
+  updateMissionUI() {
+    this.objectiveText.setText(`Chapter ${this.chapterState.chapter}: ${this.chapterState.objective}`);
+  }
+
+  showChapterToast(text) {
+    this.chapterToast.setText(text).setAlpha(1).setVisible(true);
+    this.tweens.killTweensOf(this.chapterToast);
+    this.tweens.add({
+      targets: this.chapterToast,
+      alpha: 0,
+      duration: 2200,
+      delay: 800,
+      onComplete: () => this.chapterToast.setVisible(false),
+    });
   }
 
   setupCamera() {
     this.cameras.main.setBounds(0, 0, 50 * 32, 50 * 32);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setZoom(1.5);
+    this.cameras.main.setZoom(1.0);
   }
 
   setupInput() {
@@ -260,41 +408,98 @@ export class WorldScene extends Phaser.Scene {
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
       attack: Phaser.Input.Keyboard.KeyCodes.SPACE,
-      interact: Phaser.Input.Keyboard.KeyCodes.E
+      interact: Phaser.Input.Keyboard.KeyCodes.E,
+      switchStyle: Phaser.Input.Keyboard.KeyCodes.Q,
+      style1: Phaser.Input.Keyboard.KeyCodes.ONE,
+      style2: Phaser.Input.Keyboard.KeyCodes.TWO,
+      style3: Phaser.Input.Keyboard.KeyCodes.THREE,
     });
   }
 
   setupCollisions() {
     this.physics.add.collider(this.player, this.wallObjects);
-    this.npcs.forEach(npc => {
+    this.npcs.forEach((npc) => {
       this.physics.add.collider(this.player, npc);
     });
-    this.enemies.forEach(enemy => {
-      this.physics.add.collider(this.player, this.wallObjects);
+    this.enemies.forEach((enemy) => {
+      this.physics.add.collider(this.player, enemy);
+      this.physics.add.collider(enemy, this.wallObjects);
     });
+  }
+
+  switchSpecialty(index, announce = true) {
+    this.currentSpecialtyIndex = Phaser.Math.Wrap(index, 0, this.specialties.length);
+    const style = this.specialties[this.currentSpecialtyIndex];
+    this.specialtyText.setText(`Style: ${style.name}`);
+    this.player.setTint(style.color);
+
+    if (announce) {
+      this.showChapterToast(`Switched to ${style.name}`);
+    }
+  }
+
+  applyMissionProgressFromDialog(npc) {
+    const npcId = npc.npcData.id;
+
+    if (this.chapterState.stage === 'talk_songjiang' && npcId === 'songjiang') {
+      this.chapterState.stage = 'talk_villager';
+      this.chapterState.objective = 'Travel east and speak with Village Elder Liu.';
+      this.updateMissionUI();
+      this.showChapterToast('Mission Updated: Meet Village Elder Liu');
+    } else if (this.chapterState.stage === 'talk_villager' && npcId === 'villager') {
+      this.chapterState.stage = 'clear_raiders';
+      this.chapterState.objective = `Defeat named raiders (${this.chapterState.raidersDefeated}/${this.chapterState.raidersTarget}).`;
+      this.updateMissionUI();
+      this.showChapterToast('Mission Updated: Clear the named raiders');
+    } else if (this.chapterState.stage === 'return_songjiang' && npcId === 'songjiang') {
+      this.chapterState.stage = 'complete';
+      this.chapterState.completed = true;
+      this.chapterState.objective = 'Chapter complete. Await Chapter 2.';
+      this.updateMissionUI();
+      this.showChapterToast('Chapter 1 Complete: Oath at Liangshan');
+      this.playerGold += 100;
+      this.goldText.setText(`Gold: ${this.playerGold} 两`);
+    }
   }
 
   showDialog(npc) {
     this.dialogActive = true;
+    this.currentInteractingNpc = npc;
     this.dialogBox.setVisible(true);
     this.dialogNameText.setText(`${npc.npcData.name} (${npc.npcData.role})`);
 
     let text = npc.npcData.dialog;
-    if (npc.npcData.recruitable && !npc.npcData.recruited) {
-      text += '\n[Press E to recruit this hero!]';
+
+    if (npc.npcData.id === 'songjiang' && this.chapterState.stage === 'talk_songjiang') {
+      text += '\n\n[Main Mission] Go to Elder Liu east of Liangshan and aid the village.';
     }
+    if (npc.npcData.id === 'villager' && this.chapterState.stage === 'talk_villager') {
+      text += '\n\n[Main Mission] Defeat the three named raiders near the roads.';
+    }
+    if (npc.npcData.id === 'songjiang' && this.chapterState.stage === 'return_songjiang') {
+      text += '\n\n[Main Mission] You returned victorious. Report and claim your reward.';
+    }
+
+    if (npc.npcData.recruitable && !npc.npcData.recruited) {
+      text += '\n[Press E while this dialog is open to recruit this hero!]';
+    }
+
     this.dialogText.setText(text);
     this.player.setVelocity(0, 0);
   }
 
   hideDialog() {
+    if (this.currentInteractingNpc) {
+      this.applyMissionProgressFromDialog(this.currentInteractingNpc);
+      this.currentInteractingNpc = null;
+    }
     this.dialogActive = false;
     this.dialogBox.setVisible(false);
   }
 
   showDamageText(x, y, amount, color = '#ff4444') {
-    const txt = this.add.text(x, y - 20, `-${amount}`, {
-      fontSize: '16px', fill: color, stroke: '#000', strokeThickness: 3, fontStyle: 'bold'
+    const txt = this.add.text(x, y - 20, `${amount}`, {
+      fontSize: '16px', fill: color, stroke: '#000', strokeThickness: 3, fontStyle: 'bold',
     }).setDepth(50);
 
     this.tweens.add({
@@ -302,37 +507,73 @@ export class WorldScene extends Phaser.Scene {
       y: y - 60,
       alpha: 0,
       duration: 800,
-      onComplete: () => txt.destroy()
+      onComplete: () => txt.destroy(),
     });
   }
 
+  onEnemyDefeated(enemy) {
+    this.playerGold += enemy.gold;
+    this.goldText.setText(`Gold: ${this.playerGold} 两`);
+    this.showDamageText(enemy.x, enemy.y - 20, `+${enemy.gold} gold`, '#ffdd44');
+
+    if (enemy.nameTag) enemy.nameTag.destroy();
+    enemy.hpBar.destroy();
+    enemy.destroy();
+    this.enemies = this.enemies.filter((e) => e !== enemy);
+
+    if (!enemy.isMiniBoss) {
+      this.chapterState.raidersDefeated += 1;
+      if (this.chapterState.stage === 'clear_raiders') {
+        this.chapterState.objective = `Defeat named raiders (${this.chapterState.raidersDefeated}/${this.chapterState.raidersTarget}).`;
+        this.updateMissionUI();
+      }
+
+      if (this.chapterState.raidersDefeated >= this.chapterState.raidersTarget) {
+        this.spawnMiniBoss();
+      }
+    } else {
+      this.chapterState.minibossDefeated = true;
+      this.chapterState.stage = 'return_songjiang';
+      this.chapterState.objective = 'Return to Song Jiang in Liangshan stronghold.';
+      this.updateMissionUI();
+      this.showChapterToast('Captain Zhao defeated! Return to Song Jiang.');
+    }
+  }
+
   attackNearbyEnemies() {
-    const attackRange = 48;
-    this.enemies.forEach(enemy => {
+    const style = this.specialties[this.currentSpecialtyIndex];
+    let hitCount = 0;
+
+    this.enemies.forEach((enemy) => {
       if (!enemy.active) return;
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
-      if (dist < attackRange) {
-        const damage = Phaser.Math.Between(8, 15);
-        enemy.hp -= damage;
-        this.showDamageText(enemy.x, enemy.y, damage, '#ff4444');
-        this.updateEnemyHPBar(enemy);
+      if (dist <= style.range) {
+        if (!style.splash && hitCount > 0) return;
 
-        // Flash enemy
+        let damage = Phaser.Math.Between(style.minDamage, style.maxDamage);
+        if (style.id === 'vanguard' && dist < 36) {
+          damage += 3;
+        }
+        if (style.id === 'shadow' && Math.random() < (style.critChance || 0)) {
+          damage += 10;
+          this.showDamageText(enemy.x, enemy.y - 15, 'CRIT!', '#ffa2ff');
+        }
+
+        enemy.hp -= damage;
+        this.showDamageText(enemy.x, enemy.y, `-${damage}`, '#ff4444');
+        this.updateEnemyHPBar(enemy);
+        hitCount += 1;
+
         this.tweens.add({
           targets: enemy,
-          alpha: 0.2,
+          alpha: 0.25,
           yoyo: true,
-          duration: 100,
-          repeat: 2
+          duration: 80,
+          repeat: 2,
         });
 
         if (enemy.hp <= 0) {
-          this.playerGold += 10;
-          this.goldText.setText(`Gold: ${this.playerGold} 两`);
-          this.showDamageText(enemy.x, enemy.y - 20, '10 gold', '#ffdd44');
-          enemy.hpBar.destroy();
-          enemy.destroy();
-          this.enemies = this.enemies.filter(e => e !== enemy);
+          this.onEnemyDefeated(enemy);
         }
       }
     });
@@ -341,26 +582,24 @@ export class WorldScene extends Phaser.Scene {
   update(time, delta) {
     if (this.dialogActive) {
       if (Phaser.Input.Keyboard.JustDown(this.wasd.attack)) {
-        // Check recruit
-        const nearNPC = this.npcs.find(npc => {
-          const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y);
-          return dist < 60;
-        });
+        this.hideDialog();
+      }
+
+      if (Phaser.Input.Keyboard.JustDown(this.wasd.interact)) {
+        const nearNPC = this.npcs.find((npc) => Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 60);
         if (nearNPC?.npcData.recruitable && !nearNPC.npcData.recruited) {
           nearNPC.npcData.recruited = true;
-          this.heroesRecruited++;
+          this.heroesRecruited += 1;
           this.heroText.setText(`Heroes: ${this.heroesRecruited}/108`);
-          this.dialogText.setText(nearNPC.npcData.dialog + '\n✓ Hero recruited! They have joined Liangshan!');
-        } else {
-          this.hideDialog();
+          this.dialogText.setText(`${nearNPC.npcData.dialog}\n✓ Hero recruited! They have joined Liangshan!`);
         }
       }
       return;
     }
 
-    // Movement
     const speed = 120;
-    let vx = 0, vy = 0;
+    let vx = 0;
+    let vy = 0;
 
     if (this.cursors.left.isDown || this.wasd.left.isDown) vx = -speed;
     else if (this.cursors.right.isDown || this.wasd.right.isDown) vx = speed;
@@ -369,28 +608,31 @@ export class WorldScene extends Phaser.Scene {
 
     this.player.setVelocity(vx, vy);
 
-    // Update player name tag position
     this.playerNameTag.setPosition(this.player.x, this.player.y - 22);
 
-    // Attack
+    if (Phaser.Input.Keyboard.JustDown(this.wasd.switchStyle)) {
+      this.switchSpecialty(this.currentSpecialtyIndex + 1);
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.wasd.style1)) this.switchSpecialty(0);
+    if (Phaser.Input.Keyboard.JustDown(this.wasd.style2)) this.switchSpecialty(1);
+    if (Phaser.Input.Keyboard.JustDown(this.wasd.style3)) this.switchSpecialty(2);
+
     this.attackCooldown -= delta;
     if (Phaser.Input.Keyboard.JustDown(this.wasd.attack) && this.attackCooldown <= 0) {
-      this.attackCooldown = 400;
+      this.attackCooldown = 320;
       this.attackNearbyEnemies();
 
-      // Attack flash
       this.tweens.add({
         targets: this.player,
-        scaleX: 1.3,
-        scaleY: 1.3,
+        scaleX: 1.25,
+        scaleY: 1.25,
         yoyo: true,
-        duration: 100
+        duration: 90,
       });
     }
 
-    // Interact with NPCs
     if (Phaser.Input.Keyboard.JustDown(this.wasd.interact)) {
-      this.npcs.forEach(npc => {
+      this.npcs.forEach((npc) => {
         const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y);
         if (dist < 60) {
           this.showDialog(npc);
@@ -398,8 +640,7 @@ export class WorldScene extends Phaser.Scene {
       });
     }
 
-    // Enemy patrol AI
-    this.enemies.forEach(enemy => {
+    this.enemies.forEach((enemy) => {
       if (!enemy.active) return;
 
       enemy.patrolTimer += delta;
@@ -408,34 +649,27 @@ export class WorldScene extends Phaser.Scene {
         enemy.patrolTimer = 0;
       }
 
-      // Chase player if close
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
-      if (dist < 150) {
-        // Move toward player
+      if (dist < 170) {
         const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
-        enemy.setVelocity(Math.cos(angle) * 60, Math.sin(angle) * 60);
+        enemy.setVelocity(Math.cos(angle) * enemy.moveSpeed, Math.sin(angle) * enemy.moveSpeed);
 
-        // Damage player on contact
         if (dist < 30) {
           if (!enemy.lastDamageTime || time - enemy.lastDamageTime > 1000) {
             enemy.lastDamageTime = time;
-            this.playerHP = Math.max(0, this.playerHP - 5);
+            this.playerHP = Math.max(0, this.playerHP - enemy.damage);
             this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
-            this.showDamageText(this.player.x, this.player.y, 5, '#ff0000');
-
-            // Screen flash
-            this.cameras.main.flash(200, 255, 0, 0, false);
+            this.showDamageText(this.player.x, this.player.y, `-${enemy.damage}`, '#ff0000');
+            this.cameras.main.flash(150, 255, 0, 0, false);
           }
         }
       } else {
-        enemy.setVelocity(enemy.patrolDir * 30, 0);
+        enemy.setVelocity(enemy.patrolDir * (enemy.isMiniBoss ? 36 : 28), 0);
       }
 
-      // Update HP bar position
       this.updateEnemyHPBar(enemy);
     });
 
-    // Update UI
     this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
   }
 }

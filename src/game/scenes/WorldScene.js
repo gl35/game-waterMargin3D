@@ -13,6 +13,7 @@ export class WorldScene extends Phaser.Scene {
     this.heroesRecruited = 0;
     this.attackCooldown = 0;
     this.currentInteractingNpc = null;
+    this.playerDown = false;
 
     this.specialties = [
       {
@@ -241,6 +242,10 @@ export class WorldScene extends Phaser.Scene {
     if (enemy.isMiniBoss) {
       enemy.setScale(1.2);
       enemy.setTint(0xff9999);
+      enemy.enraged = false;
+      enemy.chargeState = 'idle';
+      enemy.nextChargeAt = 0;
+      enemy.chargeEndsAt = 0;
     }
 
     this.updateEnemyHPBar(enemy);
@@ -511,6 +516,84 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  damagePlayer(amount, source = 'hit') {
+    if (this.playerDown) return;
+
+    this.playerHP = Math.max(0, this.playerHP - amount);
+    this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
+    this.showDamageText(this.player.x, this.player.y, `-${amount}`, '#ff0000');
+
+    if (source === 'heavy') {
+      this.cameras.main.shake(180, 0.01);
+      this.cameras.main.flash(180, 255, 120, 0, false);
+    } else {
+      this.cameras.main.flash(150, 255, 0, 0, false);
+    }
+
+    if (this.playerHP <= 0) {
+      this.handlePlayerDefeat();
+    }
+  }
+
+  handlePlayerDefeat() {
+    if (this.playerDown) return;
+    this.playerDown = true;
+
+    this.player.setVelocity(0, 0);
+    this.player.setAlpha(0.5);
+    this.showChapterToast('You were defeated. Retreating to Liangshan...');
+
+    this.time.delayedCall(1200, () => {
+      this.playerHP = this.playerMaxHP;
+      this.player.setPosition(9 * 32 + 16, 16 * 32);
+      this.player.setAlpha(1);
+      this.playerDown = false;
+      this.playerGold = Math.max(0, this.playerGold - 20);
+      this.goldText.setText(`Gold: ${this.playerGold} 两`);
+      this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
+      this.showChapterToast('Recovered at Liangshan (-20 gold).');
+    });
+  }
+
+  updateMiniBossBehavior(enemy, time, dist) {
+    if (!enemy.isMiniBoss) return false;
+
+    if (!enemy.enraged && enemy.hp / enemy.maxHp <= 0.5) {
+      enemy.enraged = true;
+      enemy.moveSpeed += 20;
+      enemy.damage += 3;
+      enemy.setTint(0xff5555);
+      this.showChapterToast('Captain Zhao is enraged!');
+    }
+
+    if (enemy.chargeState === 'idle' && time >= enemy.nextChargeAt && dist < 240) {
+      enemy.chargeState = 'charging';
+      enemy.chargeEndsAt = time + 700;
+      enemy.nextChargeAt = time + 4200;
+      enemy.setVelocity(0, 0);
+      enemy.setTint(0xffee88);
+      this.showDamageText(enemy.x, enemy.y - 18, 'HEAVY STRIKE!', '#ffd966');
+      return true;
+    }
+
+    if (enemy.chargeState === 'charging') {
+      enemy.setVelocity(0, 0);
+      if (time >= enemy.chargeEndsAt) {
+        enemy.chargeState = 'idle';
+        enemy.setTint(enemy.enraged ? 0xff5555 : 0xff9999);
+
+        const blastRange = 85;
+        const blastDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+        if (blastDist <= blastRange) {
+          this.damagePlayer(18, 'heavy');
+        }
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   onEnemyDefeated(enemy) {
     this.playerGold += enemy.gold;
     this.goldText.setText(`Gold: ${this.playerGold} 两`);
@@ -597,6 +680,11 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
+    if (this.playerDown) {
+      this.player.setVelocity(0, 0);
+      return;
+    }
+
     const speed = 120;
     let vx = 0;
     let vy = 0;
@@ -650,20 +738,19 @@ export class WorldScene extends Phaser.Scene {
       }
 
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
-      if (dist < 170) {
+      const bossBusy = this.updateMiniBossBehavior(enemy, time, dist);
+
+      if (!bossBusy && dist < 170) {
         const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
         enemy.setVelocity(Math.cos(angle) * enemy.moveSpeed, Math.sin(angle) * enemy.moveSpeed);
 
         if (dist < 30) {
           if (!enemy.lastDamageTime || time - enemy.lastDamageTime > 1000) {
             enemy.lastDamageTime = time;
-            this.playerHP = Math.max(0, this.playerHP - enemy.damage);
-            this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
-            this.showDamageText(this.player.x, this.player.y, `-${enemy.damage}`, '#ff0000');
-            this.cameras.main.flash(150, 255, 0, 0, false);
+            this.damagePlayer(enemy.damage);
           }
         }
-      } else {
+      } else if (!bossBusy) {
         enemy.setVelocity(enemy.patrolDir * (enemy.isMiniBoss ? 36 : 28), 0);
       }
 

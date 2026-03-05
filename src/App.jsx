@@ -49,10 +49,10 @@ class ZeldaPhaseOne extends Phaser.Scene {
     g.fillStyle(0xffd54f); g.fillRect(22, 14, 8, 2); // sword
     g.generateTexture('player', 32, 32); g.clear();
 
-    // slime enemy
-    g.fillStyle(0x7b1fa2); g.fillEllipse(16, 20, 22, 14);
-    g.fillStyle(0xab47bc); g.fillEllipse(16, 16, 18, 10);
-    g.fillStyle(0xffffff); g.fillRect(10, 15, 2, 2); g.fillRect(20, 15, 2, 2);
+    // slime enemy (yellow jelly)
+    g.fillStyle(0xf9a825); g.fillEllipse(16, 20, 22, 14);
+    g.fillStyle(0xffeb3b); g.fillEllipse(16, 16, 18, 10);
+    g.fillStyle(0x5d4037); g.fillRect(10, 15, 2, 2); g.fillRect(20, 15, 2, 2);
     g.generateTexture('slime', 32, 32); g.clear();
 
     // slash
@@ -134,45 +134,35 @@ class ZeldaPhaseOne extends Phaser.Scene {
 
   createTouchControls() {
     const { width, height } = this.scale;
+    this.input.addPointer(2);
 
-    // Virtual D-pad area (left bottom)
-    const base = this.add.circle(92, height - 92, 62, 0x000000, 0.25)
-      .setScrollFactor(0).setDepth(30).setInteractive();
-    const stick = this.add.circle(92, height - 92, 26, 0xffffff, 0.25)
-      .setScrollFactor(0).setDepth(31);
-
-    const resetStick = () => {
-      stick.x = 92;
-      stick.y = height - 92;
-      this.touch.left = this.touch.right = this.touch.up = this.touch.down = false;
+    const makeBtn = (x, y, label, onDown, onUp) => {
+      const btn = this.add.circle(x, y, 24, 0x000000, 0.28)
+        .setScrollFactor(0).setDepth(30).setInteractive();
+      this.add.text(x - 7, y - 8, label, { fontSize: '14px', color: '#fff' })
+        .setScrollFactor(0).setDepth(31);
+      btn.on('pointerdown', () => { onDown?.(); btn.setFillStyle(0xffffff, 0.25); });
+      btn.on('pointerup', () => { onUp?.(); btn.setFillStyle(0x000000, 0.28); });
+      btn.on('pointerout', () => { onUp?.(); btn.setFillStyle(0x000000, 0.28); });
+      return btn;
     };
 
-    const updateStick = (pointer) => {
-      const dx = Phaser.Math.Clamp(pointer.x - 92, -36, 36);
-      const dy = Phaser.Math.Clamp(pointer.y - (height - 92), -36, 36);
-      stick.x = 92 + dx;
-      stick.y = height - 92 + dy;
+    // D-pad buttons (left)
+    makeBtn(70, height - 70, '▲', () => this.touch.up = true, () => this.touch.up = false);
+    makeBtn(70, height - 20, '▼', () => this.touch.down = true, () => this.touch.down = false);
+    makeBtn(20, height - 20, '◀', () => this.touch.left = true, () => this.touch.left = false);
+    makeBtn(120, height - 20, '▶', () => this.touch.right = true, () => this.touch.right = false);
 
-      this.touch.left = dx < -12;
-      this.touch.right = dx > 12;
-      this.touch.up = dy < -12;
-      this.touch.down = dy > 12;
-    };
-
-    base.on('pointerdown', updateStick);
-    this.input.on('pointermove', (p) => { if (p.isDown && p.x < width * 0.45) updateStick(p); });
-    this.input.on('pointerup', resetStick);
-
-    // Attack button (right bottom)
-    const attackBtn = this.add.circle(width - 92, height - 92, 44, 0xffd54f, 0.35)
+    // Attack button (right)
+    const attackBtn = this.add.circle(width - 80, height - 50, 38, 0xffd54f, 0.35)
       .setScrollFactor(0).setDepth(30).setInteractive();
-    this.add.text(width - 110, height - 104, 'ATTACK', { fontSize: '10px', color: '#000' })
+    this.add.text(width - 98, height - 58, 'ATK', { fontSize: '12px', color: '#000' })
       .setScrollFactor(0).setDepth(31);
 
     attackBtn.on('pointerdown', () => {
       this.touch.attack = true;
       this.doAttack();
-      attackBtn.setFillStyle(0xffe082, 0.5);
+      attackBtn.setFillStyle(0xffe082, 0.55);
     });
     attackBtn.on('pointerup', () => {
       this.touch.attack = false;

@@ -13,6 +13,7 @@ class ZeldaPhaseOne extends Phaser.Scene {
     this.lastAttack = 0;
     this.hp = 6;
     this.hpText = null;
+    this.touch = { up: false, down: false, left: false, right: false, attack: false };
   }
 
   preload() {
@@ -127,6 +128,60 @@ class ZeldaPhaseOne extends Phaser.Scene {
     this.add.text(width - 250, 12, 'WASD/Arrows Move  SPACE Attack', {
       fontSize: '12px', color: '#f7e7c6', backgroundColor: '#00000066', padding: { x: 6, y: 4 }
     }).setScrollFactor(0).setDepth(20);
+
+    this.createTouchControls();
+  }
+
+  createTouchControls() {
+    const { width, height } = this.scale;
+
+    // Virtual D-pad area (left bottom)
+    const base = this.add.circle(92, height - 92, 62, 0x000000, 0.25)
+      .setScrollFactor(0).setDepth(30).setInteractive();
+    const stick = this.add.circle(92, height - 92, 26, 0xffffff, 0.25)
+      .setScrollFactor(0).setDepth(31);
+
+    const resetStick = () => {
+      stick.x = 92;
+      stick.y = height - 92;
+      this.touch.left = this.touch.right = this.touch.up = this.touch.down = false;
+    };
+
+    const updateStick = (pointer) => {
+      const dx = Phaser.Math.Clamp(pointer.x - 92, -36, 36);
+      const dy = Phaser.Math.Clamp(pointer.y - (height - 92), -36, 36);
+      stick.x = 92 + dx;
+      stick.y = height - 92 + dy;
+
+      this.touch.left = dx < -12;
+      this.touch.right = dx > 12;
+      this.touch.up = dy < -12;
+      this.touch.down = dy > 12;
+    };
+
+    base.on('pointerdown', updateStick);
+    this.input.on('pointermove', (p) => { if (p.isDown && p.x < width * 0.45) updateStick(p); });
+    this.input.on('pointerup', resetStick);
+
+    // Attack button (right bottom)
+    const attackBtn = this.add.circle(width - 92, height - 92, 44, 0xffd54f, 0.35)
+      .setScrollFactor(0).setDepth(30).setInteractive();
+    this.add.text(width - 110, height - 104, 'ATTACK', { fontSize: '10px', color: '#000' })
+      .setScrollFactor(0).setDepth(31);
+
+    attackBtn.on('pointerdown', () => {
+      this.touch.attack = true;
+      this.doAttack();
+      attackBtn.setFillStyle(0xffe082, 0.5);
+    });
+    attackBtn.on('pointerup', () => {
+      this.touch.attack = false;
+      attackBtn.setFillStyle(0xffd54f, 0.35);
+    });
+    attackBtn.on('pointerout', () => {
+      this.touch.attack = false;
+      attackBtn.setFillStyle(0xffd54f, 0.35);
+    });
   }
 
   onPlayerHit() {
@@ -178,10 +233,10 @@ class ZeldaPhaseOne extends Phaser.Scene {
     const speed = 130;
     let vx = 0, vy = 0;
 
-    if (this.cursors.left.isDown || this.keys.a.isDown) vx = -speed;
-    if (this.cursors.right.isDown || this.keys.d.isDown) vx = speed;
-    if (this.cursors.up.isDown || this.keys.w.isDown) vy = -speed;
-    if (this.cursors.down.isDown || this.keys.s.isDown) vy = speed;
+    if (this.cursors.left.isDown || this.keys.a.isDown || this.touch.left) vx = -speed;
+    if (this.cursors.right.isDown || this.keys.d.isDown || this.touch.right) vx = speed;
+    if (this.cursors.up.isDown || this.keys.w.isDown || this.touch.up) vy = -speed;
+    if (this.cursors.down.isDown || this.keys.s.isDown || this.touch.down) vy = speed;
 
     this.player.setVelocity(vx, vy);
     if (vx < 0) this.player.setFlipX(true);

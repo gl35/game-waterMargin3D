@@ -52,7 +52,7 @@ function Player({ keys }) {
     <group ref={ref} position={[0, 0, 0]}>
       {/* Body */}
       <mesh position={[0, 1, 0]} castShadow>
-        <capsuleGeometry args={[0.45, 1.1, 6, 10]} />
+        <cylinderGeometry args={[0.45, 0.5, 1.8, 16]} />
         <meshStandardMaterial color="#9b1b1b" roughness={0.75} />
       </mesh>
       {/* Head */}
@@ -227,14 +227,39 @@ function DreamScene() {
   );
 }
 
+function supportsWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+  } catch {
+    return false;
+  }
+}
+
+function FallbackView() {
+  return (
+    <div className="fallback">
+      <h2>3D is unsupported in this browser/session</h2>
+      <p>Switch to Chrome/Edge desktop, or open this page directly (not embedded webview).</p>
+      <p>I can also switch back to the enhanced 2D version if you want.</p>
+    </div>
+  );
+}
+
 export default function App() {
+  const [webglOk, setWebglOk] = useState(true);
+
+  useEffect(() => {
+    setWebglOk(supportsWebGL());
+  }, []);
+
   return (
     <div className="app3d">
       <div className="title">夢 Dream of Water Margin — 3D Prototype</div>
       <div className="viewport">
-        <DreamScene />
+        {webglOk ? <DreamScene /> : <FallbackView />}
       </div>
-      <div className="hud">WASD / Arrow Keys to move • This is the new 3D visual baseline</div>
+      <div className="hud">WASD / Arrow Keys to move • 3D mode</div>
     </div>
   );
 }

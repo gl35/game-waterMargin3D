@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Environment, OrbitControls, Sky, ContactShadows } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import './App.css';
@@ -206,25 +206,22 @@ function DreamScene() {
 
   return (
     <Canvas shadows camera={{ position: [12, 10, 12], fov: 52 }}>
-      <color attach="background" args={['#b8d6ff']} />
-      <fog attach="fog" args={['#b8d6ff', 35, 95]} />
+      <color attach="background" args={['#9ec3ea']} />
+      <fog attach="fog" args={['#9ec3ea', 45, 120]} />
 
-      <ambientLight intensity={0.6} />
+      <ambientLight intensity={0.8} />
+      <hemisphereLight intensity={0.35} color={'#dbeafe'} groundColor={'#365314'} />
       <directionalLight
         castShadow
-        intensity={1.15}
+        intensity={1.0}
         position={[20, 24, 12]}
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
       />
-
-      <Sky distance={450000} sunPosition={[1, 0.7, 0.4]} inclination={0.53} azimuth={0.24} />
-      <Environment preset="park" />
 
       <World />
       <Player keys={keys} />
 
-      <ContactShadows position={[0, 0, 0]} opacity={0.35} scale={90} blur={1.8} far={30} />
       <OrbitControls enablePan={false} enableZoom={false} maxPolarAngle={1.2} minPolarAngle={0.7} />
     </Canvas>
   );

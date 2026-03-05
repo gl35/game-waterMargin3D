@@ -25,8 +25,11 @@ body {
 }
 
 .viewport {
-  width: min(1200px, 96vw);
-  height: min(760px, 78vh);
+  width: 96vw;
+  max-width: 1200px;
+  height: 78vh;
+  max-height: 760px;
+  min-height: 420px;
   border: 2px solid #f3d19c66;
   border-radius: 10px;
   overflow: hidden;

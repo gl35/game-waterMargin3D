@@ -1,41 +1,49 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
+* { box-sizing: border-box; }
 body {
-  background: #0a0500;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  font-family: serif;
+  margin: 0;
+  background: radial-gradient(circle at top, #111827 0%, #030712 70%);
+  color: #e5e7eb;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
-.app {
+.app3d {
+  width: 100vw;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
 }
 
-#game-container canvas {
-  border: 2px solid #c8a96e;
-  box-shadow: 0 0 30px rgba(200, 169, 110, 0.4);
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f3d19c;
+  letter-spacing: 0.3px;
 }
 
-.controls-hint {
-  display: flex;
-  gap: 24px;
-  color: #888;
+.viewport {
+  width: min(1200px, 96vw);
+  height: min(760px, 78vh);
+  border: 2px solid #f3d19c66;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+}
+
+.viewport canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.hud {
   font-size: 13px;
-  font-family: sans-serif;
-}
-
-.controls-hint span {
-  background: rgba(255,255,255,0.05);
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid #333;
+  color: #9ca3af;
+  background: #0b1220cc;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 8px 12px;
 }

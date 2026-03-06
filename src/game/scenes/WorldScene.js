@@ -84,9 +84,9 @@ export class WorldScene extends Phaser.Scene {
     this.currentSpecialtyIndex = 0;
 
     this.chapterState = {
-      chapter: 1,
-      stage: 'talk_songjiang',
-      objective: 'Talk to Song Jiang in Liangshan stronghold.',
+      chapter: 0,
+      stage: 'chapter0_intro',
+      objective: 'Talk to Wu Yong to understand Liangshan\'s cause.',
       completed: false,
       raidersDefeated: 0,
       raidersTarget: 3,
@@ -107,7 +107,7 @@ export class WorldScene extends Phaser.Scene {
     this.createTouchControls();
     this.setupCollisions();
     this.switchSpecialty(this.currentSpecialtyIndex, false);
-    this.showChapterToast(`Chapter 1 begins • Visual: ${this.currentArtStyle}`);
+    this.showChapterToast(`Chapter ${this.chapterState.chapter} begins • Visual: ${this.currentArtStyle}`);
     this.updateMissionUI();
 
     this.time.addEvent({
@@ -858,13 +858,26 @@ export class WorldScene extends Phaser.Scene {
   applyMissionProgressFromDialog(npc) {
     const npcId = npc.npcData.id;
 
-    if (this.chapterState.stage === 'talk_songjiang' && npcId === 'songjiang') {
+    if (this.chapterState.stage === 'chapter0_intro' && npcId === 'wuyong') {
+      this.chapterState.stage = 'chapter0_recruit';
+      this.chapterState.objective = 'Recruit Lin Chong and ask Tonkey to join.';
+      this.updateMissionUI();
+      this.showChapterToast('Chapter 0 Updated: Build your first squad');
+      this.saveCheckpoint();
+      return;
+    }
+
+    if (this.chapterState.stage === 'chapter0_ready' && npcId === 'songjiang') {
+      this.chapterState.chapter = 1;
       this.chapterState.stage = 'talk_villager';
       this.chapterState.objective = 'Travel east and speak with Village Elder Liu.';
       this.updateMissionUI();
-      this.showChapterToast('Mission Updated: Meet Village Elder Liu');
+      this.showChapterToast('Chapter 1 Begins: Oath at Liangshan');
       this.saveCheckpoint();
-    } else if (this.chapterState.stage === 'talk_villager' && npcId === 'villager') {
+      return;
+    }
+
+    if (this.chapterState.stage === 'talk_villager' && npcId === 'villager') {
       this.chapterState.stage = 'clear_raiders';
       this.chapterState.objective = `Defeat named raiders (${this.chapterState.raidersDefeated}/${this.chapterState.raidersTarget}).`;
       this.updateMissionUI();
@@ -891,8 +904,11 @@ export class WorldScene extends Phaser.Scene {
 
     let text = npc.npcData.dialog;
 
-    if (npc.npcData.id === 'songjiang' && this.chapterState.stage === 'talk_songjiang') {
-      text += '\n\n[Main Mission] Go to Elder Liu east of Liangshan and aid the village.';
+    if (npc.npcData.id === 'wuyong' && this.chapterState.stage === 'chapter0_intro') {
+      text += '\n\n[Chapter 0] Form your first band. Recruit Lin Chong and Tonkey.';
+    }
+    if (npc.npcData.id === 'songjiang' && this.chapterState.stage === 'chapter0_ready') {
+      text += '\n\n[Chapter 0] Your squad is ready. Report in to begin Chapter 1.';
     }
     if (npc.npcData.id === 'villager' && this.chapterState.stage === 'talk_villager') {
       text += '\n\n[Main Mission] Defeat the three named raiders near the roads.';
@@ -1198,6 +1214,15 @@ export class WorldScene extends Phaser.Scene {
           this.tonkey.setPosition(this.player.x - 26, this.player.y + 18);
           this.dialogText.setText('Tonkey: I\'m in. Stay sharp — I\'ll cut down anyone who gets too close.\n✓ Tonkey now follows and fights for you.');
           this.showChapterToast('Companion Joined: Tonkey');
+
+          const linchong = this.npcs.find((n) => n.npcData.id === 'linchong');
+          if (this.chapterState.stage === 'chapter0_recruit' && linchong?.npcData.recruited) {
+            this.chapterState.stage = 'chapter0_ready';
+            this.chapterState.objective = 'Report to Song Jiang to begin Chapter 1.';
+            this.updateMissionUI();
+            this.showChapterToast('Chapter 0 Updated: Report to Song Jiang');
+          }
+
           this.saveCheckpoint();
           return;
         }
@@ -1207,6 +1232,14 @@ export class WorldScene extends Phaser.Scene {
           this.heroesRecruited += 1;
           this.heroText.setText(`Heroes: ${this.heroesRecruited}/108`);
           this.dialogText.setText(`${nearNPC.npcData.dialog}\n✓ Hero recruited! They have joined Liangshan!`);
+
+          if (this.chapterState.stage === 'chapter0_recruit' && nearNPC.npcData.id === 'linchong' && this.tonkeyUnlocked) {
+            this.chapterState.stage = 'chapter0_ready';
+            this.chapterState.objective = 'Report to Song Jiang to begin Chapter 1.';
+            this.updateMissionUI();
+            this.showChapterToast('Chapter 0 Updated: Report to Song Jiang');
+          }
+
           this.saveCheckpoint();
         }
       }

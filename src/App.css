@@ -40,8 +40,14 @@ html, body, #root { width: 100%; height: 100%; margin: 0; background: radial-gra
 }
 
 @media (max-width: 720px) {
-  .zelda-title { font-size: 14px; }
-  .zelda-frame { max-height: 66vh; }
+  .zelda-shell {
+    justify-content: flex-start;
+    gap: 6px;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  }
+  .zelda-title { font-size: 14px; width: 98vw; }
+  .zelda-frame-wrap { width: 98vw; }
+  .zelda-frame { max-height: 58vh; }
   .hud-overlay {
     font-size: 16px;
     line-height: 1.4;

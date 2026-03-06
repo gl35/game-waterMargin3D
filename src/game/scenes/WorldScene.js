@@ -579,6 +579,9 @@ export class WorldScene extends Phaser.Scene {
       this.objectiveText,
     ]);
 
+    // We render HUD in React overlay for mobile/desktop consistency.
+    this.uiContainer.setVisible(false);
+
     // Fallback mini-HUD (always-on) in case container styling fails on some browsers.
     this.hudFallback = this.add.text(14, 14, '', {
       fontSize: '12px',
@@ -1448,10 +1451,8 @@ export class WorldScene extends Phaser.Scene {
     this.updateTonkey(delta);
     this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
 
-    if (this.uiContainer) this.uiContainer.setVisible(true);
     if (this.hudFallback) {
-      this.hudFallback.setVisible(true);
-      this.hudFallback.setText(`HP ${this.playerHP}/${this.playerMaxHP}   Gold ${this.playerGold}   Heroes ${this.heroesRecruited}/108`);
+      this.hudFallback.setVisible(false);
     }
 
     window.dispatchEvent(new CustomEvent('dowm:hud', {

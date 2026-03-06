@@ -676,6 +676,19 @@ export class WorldScene extends Phaser.Scene {
       cycleArt: Phaser.Input.Keyboard.KeyCodes.T,
       dismissVictory: Phaser.Input.Keyboard.KeyCodes.R,
     });
+
+    // iPhone-safe fallback: tap directly on an NPC to talk.
+    this.input.on('pointerdown', (pointer) => {
+      if (this.dialogActive || this.playerDown) return;
+
+      const tappedNpc = this.npcs.find((npc) => Phaser.Math.Distance.Between(pointer.worldX, pointer.worldY, npc.x, npc.y) <= 42);
+      if (!tappedNpc) return;
+
+      const near = Phaser.Math.Distance.Between(this.player.x, this.player.y, tappedNpc.x, tappedNpc.y) <= 140;
+      if (near) {
+        this.showDialog(tappedNpc);
+      }
+    });
   }
 
   createTouchControls() {

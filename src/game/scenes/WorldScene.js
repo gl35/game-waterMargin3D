@@ -1455,5 +1455,15 @@ export class WorldScene extends Phaser.Scene {
       this.hudFallback.setVisible(true);
       this.hudFallback.setText(`HP ${this.playerHP}/${this.playerMaxHP}   Gold ${this.playerGold}   Heroes ${this.heroesRecruited}/108`);
     }
+
+    window.dispatchEvent(new CustomEvent('dowm:hud', {
+      detail: {
+        hp: this.playerHP,
+        maxHp: this.playerMaxHP,
+        gold: this.playerGold,
+        heroes: this.heroesRecruited,
+        objective: `Chapter ${this.chapterState.chapter}: ${this.chapterState.objective}`,
+      },
+    }));
   }
 }

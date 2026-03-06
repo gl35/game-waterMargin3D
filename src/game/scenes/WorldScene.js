@@ -527,43 +527,44 @@ export class WorldScene extends Phaser.Scene {
   }
 
   createUI() {
-    this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(500).setVisible(true);
+    this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(2000).setVisible(true);
 
     const theme = this.stylePalette[this.currentArtStyle] || this.stylePalette.wuxia;
+    const safeTop = Math.max(10, Math.round(this.scale.height * 0.02));
 
     const panel = this.add.graphics();
-    panel.fillStyle(theme.panel, this.currentArtStyle === 'ink' ? 0.9 : 0.78);
-    panel.fillRect(5, 5, 350, 96);
+    panel.fillStyle(theme.panel, this.currentArtStyle === 'ink' ? 0.92 : 0.82);
+    panel.fillRect(8, safeTop, 350, 96);
     panel.fillStyle(theme.panelTop, this.currentArtStyle === 'ink' ? 0.5 : 0.25);
-    panel.fillRect(5, 5, 350, 30);
+    panel.fillRect(8, safeTop, 350, 30);
     panel.lineStyle(2, Phaser.Display.Color.HexStringToColor(theme.accent).color);
-    panel.strokeRect(5, 5, 350, 96);
+    panel.strokeRect(8, safeTop, 350, 96);
 
-    const title = this.add.text(180, 15, '夢 Dream of Water Margin', {
+    const title = this.add.text(182, safeTop + 10, '夢 Dream of Water Margin', {
       fontSize: '11px', fill: theme.accent, fontFamily: 'serif',
     }).setOrigin(0.5);
 
-    this.hpText = this.add.text(15, 32, `HP: ${this.playerHP}/${this.playerMaxHP}`, {
+    this.hpText = this.add.text(18, safeTop + 27, `HP: ${this.playerHP}/${this.playerMaxHP}`, {
       fontSize: '12px', fill: '#ff6666',
     });
 
-    this.goldText = this.add.text(15, 50, `Gold: ${this.playerGold} 两`, {
+    this.goldText = this.add.text(18, safeTop + 45, `Gold: ${this.playerGold} 两`, {
       fontSize: '12px', fill: '#ffdd44',
     });
 
-    this.heroText = this.add.text(15, 68, `Heroes: ${this.heroesRecruited}/108`, {
+    this.heroText = this.add.text(18, safeTop + 63, `Heroes: ${this.heroesRecruited}/108`, {
       fontSize: '12px', fill: '#88aaff',
     });
 
-    this.specialtyText = this.add.text(140, 32, 'Style: -', {
+    this.specialtyText = this.add.text(142, safeTop + 27, 'Style: -', {
       fontSize: '12px', fill: '#9fe7ff',
     });
 
-    this.hintText = this.add.text(140, 50, 'Q/1-3: Specialties   Space: Attack   E: Talk', {
+    this.hintText = this.add.text(142, safeTop + 45, 'Q/1-3: Specialties   Space: Attack   E: Talk', {
       fontSize: '9px', fill: theme.hint,
     });
 
-    this.objectiveText = this.add.text(140, 68, '', {
+    this.objectiveText = this.add.text(142, safeTop + 63, '', {
       fontSize: '10px', fill: theme.objective, wordWrap: { width: 205 },
     });
 
@@ -579,7 +580,7 @@ export class WorldScene extends Phaser.Scene {
     ]);
 
     // Fallback mini-HUD (always-on) in case container styling fails on some browsers.
-    this.hudFallback = this.add.text(14, 108, '', {
+    this.hudFallback = this.add.text(14, 14, '', {
       fontSize: '12px',
       fill: '#ffffff',
       stroke: '#000000',
@@ -591,7 +592,7 @@ export class WorldScene extends Phaser.Scene {
     const boxWidth = Math.min(gameWidth - 120, 620);
     const boxX = Math.round((gameWidth - boxWidth) / 2);
     const boxHeight = 196;
-    const safeBottom = Math.max(28, Math.round(gameHeight * 0.18));
+    const safeBottom = Math.max(8, Math.round(gameHeight * 0.06));
     const boxY = gameHeight - boxHeight - safeBottom;
 
     this.dialogBox = this.add.container(0, 0).setScrollFactor(0).setDepth(200).setVisible(false);
@@ -1449,7 +1450,9 @@ export class WorldScene extends Phaser.Scene {
     this.updateTonkey(delta);
     this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
 
+    if (this.uiContainer) this.uiContainer.setVisible(true);
     if (this.hudFallback) {
+      this.hudFallback.setVisible(true);
       this.hudFallback.setText(`HP ${this.playerHP}/${this.playerMaxHP}   Gold ${this.playerGold}   Heroes ${this.heroesRecruited}/108`);
     }
   }

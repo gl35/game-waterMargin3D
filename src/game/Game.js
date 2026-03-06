@@ -7,11 +7,13 @@ const config = {
   width: 1600,
   height: 900,
   backgroundColor: '#1a1a1a',
-  resolution: Math.max(1, Math.min(2, window.devicePixelRatio || 1)),
+  resolution: Math.max(1, Math.min(3, window.devicePixelRatio || 1)),
   render: {
     antialias: true,
+    antialiasGL: true,
     pixelArt: false,
     roundPixels: false,
+    powerPreference: 'high-performance',
   },
   scale: {
     mode: Phaser.Scale.FIT,

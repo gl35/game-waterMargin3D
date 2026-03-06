@@ -25,6 +25,17 @@ export class WorldScene extends Phaser.Scene {
     };
     this.currentArtStyle = localStorage.getItem(this.styleKey) || 'wuxia';
 
+    this.touchState = {
+      up: false,
+      down: false,
+      left: false,
+      right: false,
+      attackPressed: false,
+      interactPressed: false,
+      switchPressed: false,
+      stylePressed: false,
+    };
+
     this.specialties = [
       {
         id: 'vanguard',
@@ -81,6 +92,7 @@ export class WorldScene extends Phaser.Scene {
     this.createUI();
     this.setupCamera();
     this.setupInput();
+    this.createTouchControls();
     this.setupCollisions();
     this.switchSpecialty(this.currentSpecialtyIndex, false);
     this.showChapterToast(`Chapter 1 begins • Visual: ${this.currentArtStyle}`);
@@ -620,6 +632,55 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  createTouchControls() {
+    const { width, height } = this.scale;
+
+    const makeHoldButton = (x, y, label, onDown, onUp, radius = 30, fill = 0x000000) => {
+      const btn = this.add.circle(x, y, radius, fill, 0.35)
+        .setStrokeStyle(2, 0xffffff, 0.28)
+        .setScrollFactor(0)
+        .setDepth(260)
+        .setInteractive({ useHandCursor: false });
+
+      this.add.text(x, y, label, {
+        fontSize: radius >= 40 ? '20px' : '16px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(261);
+
+      btn.on('pointerdown', () => {
+        onDown?.();
+        btn.setFillStyle(0xffffff, 0.32);
+      });
+      btn.on('pointerup', () => {
+        onUp?.();
+        btn.setFillStyle(fill, 0.35);
+      });
+      btn.on('pointerout', () => {
+        onUp?.();
+        btn.setFillStyle(fill, 0.35);
+      });
+
+      return btn;
+    };
+
+    makeHoldButton(95, height - 120, '▲', () => { this.touchState.up = true; }, () => { this.touchState.up = false; });
+    makeHoldButton(95, height - 42, '▼', () => { this.touchState.down = true; }, () => { this.touchState.down = false; });
+    makeHoldButton(35, height - 42, '◀', () => { this.touchState.left = true; }, () => { this.touchState.left = false; });
+    makeHoldButton(155, height - 42, '▶', () => { this.touchState.right = true; }, () => { this.touchState.right = false; });
+
+    makeHoldButton(width - 110, height - 66, 'ATK', () => { this.touchState.attackPressed = true; }, () => {}, 44, 0x7a1818);
+    makeHoldButton(width - 210, height - 66, 'USE', () => { this.touchState.interactPressed = true; }, () => {}, 36, 0x1f3f69);
+    makeHoldButton(width - 292, height - 66, 'SW', () => { this.touchState.switchPressed = true; }, () => {}, 30, 0x5a4577);
+    makeHoldButton(width - 356, height - 66, 'ART', () => { this.touchState.stylePressed = true; }, () => {}, 30, 0x5c4b2c);
+  }
+
+  consumeTouchPress(flag) {
+    if (!this.touchState[flag]) return false;
+    this.touchState[flag] = false;
+    return true;
+  }
+
   setupCollisions() {
     this.physics.add.collider(this.player, this.wallObjects);
     this.npcs.forEach((npc) => {
@@ -897,11 +958,11 @@ export class WorldScene extends Phaser.Scene {
 
   update(time, delta) {
     if (this.dialogActive) {
-      if (Phaser.Input.Keyboard.JustDown(this.wasd.attack)) {
+      if (Phaser.Input.Keyboard.JustDown(this.wasd.attack) || this.consumeTouchPress('attackPressed')) {
         this.hideDialog();
       }
 
-      if (Phaser.Input.Keyboard.JustDown(this.wasd.interact)) {
+      if (Phaser.Input.Keyboard.JustDown(this.wasd.interact) || this.consumeTouchPress('interactPressed')) {
         const nearNPC = this.npcs.find((npc) => Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 60);
         if (nearNPC?.npcData.recruitable && !nearNPC.npcData.recruited) {
           nearNPC.npcData.recruited = true;
@@ -916,7 +977,7 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.victoryShown && this.victoryOverlay.visible) {
       this.player.setVelocity(0, 0);
-      if (Phaser.Input.Keyboard.JustDown(this.wasd.dismissVictory)) {
+      if (Phaser.Input.Keyboard.JustDown(this.wasd.dismissVictory) || this.consumeTouchPress('interactPressed')) {
         this.hideVictoryScreen();
       }
       return;
@@ -931,21 +992,21 @@ export class WorldScene extends Phaser.Scene {
     let vx = 0;
     let vy = 0;
 
-    if (this.cursors.left.isDown || this.wasd.left.isDown) vx = -speed;
-    else if (this.cursors.right.isDown || this.wasd.right.isDown) vx = speed;
-    if (this.cursors.up.isDown || this.wasd.up.isDown) vy = -speed;
-    else if (this.cursors.down.isDown || this.wasd.down.isDown) vy = speed;
+    if (this.cursors.left.isDown || this.wasd.left.isDown || this.touchState.left) vx = -speed;
+    else if (this.cursors.right.isDown || this.wasd.right.isDown || this.touchState.right) vx = speed;
+    if (this.cursors.up.isDown || this.wasd.up.isDown || this.touchState.up) vy = -speed;
+    else if (this.cursors.down.isDown || this.wasd.down.isDown || this.touchState.down) vy = speed;
 
     this.player.setVelocity(vx, vy);
 
     this.playerNameTag.setPosition(this.player.x, this.player.y - 22);
 
-    if (Phaser.Input.Keyboard.JustDown(this.wasd.cycleArt)) {
+    if (Phaser.Input.Keyboard.JustDown(this.wasd.cycleArt) || this.consumeTouchPress('stylePressed')) {
       this.cycleArtStyle();
       return;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.wasd.switchStyle)) {
+    if (Phaser.Input.Keyboard.JustDown(this.wasd.switchStyle) || this.consumeTouchPress('switchPressed')) {
       this.switchSpecialty(this.currentSpecialtyIndex + 1);
     }
     if (Phaser.Input.Keyboard.JustDown(this.wasd.style1)) this.switchSpecialty(0);
@@ -953,7 +1014,7 @@ export class WorldScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.wasd.style3)) this.switchSpecialty(2);
 
     this.attackCooldown -= delta;
-    if (Phaser.Input.Keyboard.JustDown(this.wasd.attack) && this.attackCooldown <= 0) {
+    if ((Phaser.Input.Keyboard.JustDown(this.wasd.attack) || this.consumeTouchPress('attackPressed')) && this.attackCooldown <= 0) {
       this.attackCooldown = 320;
       const style = this.specialties[this.currentSpecialtyIndex];
       this.playSlashFx(style);
@@ -968,7 +1029,7 @@ export class WorldScene extends Phaser.Scene {
       });
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.wasd.interact)) {
+    if (Phaser.Input.Keyboard.JustDown(this.wasd.interact) || this.consumeTouchPress('interactPressed')) {
       this.npcs.forEach((npc) => {
         const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y);
         if (dist < 60) {

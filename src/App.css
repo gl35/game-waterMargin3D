@@ -2,20 +2,10 @@ html, body, #root { width: 100%; height: 100%; margin: 0; background: radial-gra
 * { box-sizing: border-box; }
 .zelda-shell { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px; }
 .zelda-title { color: #f5d06f; font: 700 16px/1.1 serif; letter-spacing: .5px; text-shadow: 0 2px 8px #000; }
-.zelda-frame { width: min(98vw, 1500px); aspect-ratio: 16 / 9; max-height: 78vh; border: 2px solid #f5d06f66; border-radius: 10px; overflow: hidden; box-shadow: 0 18px 64px rgba(0,0,0,.45); background: #111; touch-action: none; -webkit-user-select: none; user-select: none; }
+.zelda-frame { width: min(98vw, 1500px); aspect-ratio: 16 / 9; max-height: 90vh; border: 2px solid #f5d06f66; border-radius: 10px; overflow: hidden; box-shadow: 0 18px 64px rgba(0,0,0,.45); background: #111; touch-action: none; -webkit-user-select: none; user-select: none; }
 .zelda-frame canvas { width: 100% !important; height: 100% !important; image-rendering: auto; display: block; margin: 0 auto; touch-action: none; }
-
-.hud-controls { width: min(98vw, 1500px); display: flex; justify-content: space-between; align-items: center; gap: 14px; }
-.hud-controls button { border: 1px solid #ffffff33; border-radius: 12px; color: #fff; font-weight: 700; background: #141823; min-height: 44px; min-width: 54px; padding: 10px 12px; }
-.hud-controls .dpad { display: grid; grid-template-columns: repeat(4, auto); gap: 8px; }
-.hud-controls .actions { display: grid; grid-template-columns: repeat(3, auto); gap: 8px; }
-.hud-controls .atk { background: #8b1f1f; }
-.hud-controls .use { background: #204c86; }
-.hud-controls .sw { background: #5a3f8d; }
 
 @media (max-width: 720px) {
   .zelda-title { font-size: 14px; }
-  .zelda-frame { max-height: 64vh; }
-  .hud-controls { padding-bottom: env(safe-area-inset-bottom, 0px); }
-  .hud-controls button { min-height: 48px; min-width: 58px; font-size: 14px; }
+  .zelda-frame { max-height: 82vh; }
 }

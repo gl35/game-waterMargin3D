@@ -265,6 +265,40 @@ export class BootScene extends Phaser.Scene {
       ctx.fillRect(18, 26, 4, 6);
     });
 
+    this.makeCanvasTexture(`${style.id}_linchong`, 32, 32, (ctx) => {
+      // Lin Chong inspired silhouette: pale hat, long spear, dark flowing cloak.
+      ctx.strokeStyle = '#c7c7ce';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(4, 30);
+      ctx.lineTo(12, 4);
+      ctx.stroke();
+
+      ctx.fillStyle = '#e8dcc6'; // hat
+      ctx.fillRect(11, 3, 12, 3);
+      ctx.fillRect(13, 2, 8, 2);
+      ctx.fillStyle = '#8d2a2a'; // plume
+      ctx.fillRect(21, 2, 5, 2);
+
+      ctx.fillStyle = '#d8c2a0'; // face
+      ctx.fillRect(14, 6, 6, 5);
+      ctx.fillStyle = '#2a2433'; // armor torso
+      ctx.fillRect(11, 12, 11, 10);
+      ctx.fillStyle = '#4a3b55';
+      ctx.fillRect(12, 14, 9, 6);
+
+      ctx.fillStyle = '#1d1f2e'; // cloak
+      ctx.fillRect(22, 11, 7, 7);
+      ctx.fillRect(24, 14, 7, 4);
+      ctx.fillRect(26, 16, 5, 3);
+
+      ctx.fillStyle = '#6f2a2a'; // robe
+      ctx.fillRect(12, 22, 9, 7);
+      ctx.fillStyle = '#31263a'; // boots
+      ctx.fillRect(12, 29, 3, 3);
+      ctx.fillRect(18, 29, 3, 3);
+    });
+
     this.makeCanvasTexture(`${style.id}_enemy`, 32, 32, (ctx) => {
       ctx.fillStyle = '#2b1b1b';
       ctx.fillRect(10, 13, 12, 13);

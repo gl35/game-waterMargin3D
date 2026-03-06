@@ -188,15 +188,15 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    this.add.image(6 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(1.5);
-    this.add.image(10 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(1.2);
+    this.add.image(6 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(2.0);
+    this.add.image(10 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(1.7);
 
     this.physics.world.setBounds(0, 0, mapWidth * tileSize, mapHeight * tileSize);
   }
 
   createPlayer() {
     this.player = this.physics.add.sprite(9 * 32 + 16, 16 * 32, this.tx('player'));
-    this.player.setScale(1.45);
+    this.player.setScale(1.8);
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body.setSize(24, 24);
@@ -264,7 +264,7 @@ export class WorldScene extends Phaser.Scene {
     npcData.forEach((data) => {
       const npcTexture = data.id === 'linchong' ? this.tx('linchong') : this.tx('npc');
       const npc = this.physics.add.sprite(data.x * 32 + 16, data.y * 32 + 16, npcTexture);
-      npc.setScale(1.3);
+      npc.setScale(1.65);
       npc.setImmovable(true);
       npc.setDepth(9);
       npc.npcData = data;
@@ -289,7 +289,7 @@ export class WorldScene extends Phaser.Scene {
 
   createEnemy(data) {
     const enemy = this.physics.add.sprite(data.x * 32, data.y * 32, this.tx('enemy'));
-    enemy.setScale(1.3);
+    enemy.setScale(1.65);
     enemy.setDepth(9);
     enemy.enemyId = data.id;
     enemy.displayName = data.name;
@@ -311,7 +311,7 @@ export class WorldScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(13);
 
     if (enemy.isMiniBoss) {
-      enemy.setScale(1.65);
+      enemy.setScale(2.1);
       enemy.setTint(0xff9999);
       enemy.enraged = false;
       enemy.chargeState = 'idle';

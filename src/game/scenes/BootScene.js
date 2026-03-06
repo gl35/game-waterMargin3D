@@ -19,8 +19,8 @@ const STYLE_DEFS = {
   ink: {
     id: 'ink',
     name: 'Ink-wash / 水墨',
-    grassA: '#6f7669',
-    grassB: '#4e5448',
+    grassA: '#6fa36a',
+    grassB: '#4f7b4a',
     waterA: '#586879',
     waterB: '#3f4b58',
     pathA: '#b8a890',

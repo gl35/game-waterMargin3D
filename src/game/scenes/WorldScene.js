@@ -86,7 +86,7 @@ export class WorldScene extends Phaser.Scene {
     this.chapterState = {
       chapter: 0,
       stage: 'chapter0_intro',
-      objective: 'Talk to Wu Yong to understand Liangshan\'s cause.',
+      objective: 'You are a stressed student from modern time. Talk to Wu Yong in Liangshan.',
       completed: false,
       raidersDefeated: 0,
       raidersTarget: 3,
@@ -109,6 +109,7 @@ export class WorldScene extends Phaser.Scene {
     this.switchSpecialty(this.currentSpecialtyIndex, false);
     this.showChapterToast(`Chapter ${this.chapterState.chapter} begins • Visual: ${this.currentArtStyle}`);
     this.updateMissionUI();
+    this.playChapter0Prologue();
 
     this.time.addEvent({
       delay: 10000,
@@ -220,7 +221,7 @@ export class WorldScene extends Phaser.Scene {
         y: 8,
         name: '宋江',
         role: 'Song Jiang',
-        dialog: 'Liangshan calls for unity. Prove your resolve and our banner is yours.',
+        dialog: 'Liangshan calls for unity. If your spirit is true, we may help you find your way home.',
         recruitable: true,
       },
       {
@@ -229,7 +230,7 @@ export class WorldScene extends Phaser.Scene {
         y: 7,
         name: '吴用',
         role: 'Wu Yong',
-        dialog: 'Read your battlefield. A sharp mind wins before steel is drawn.',
+        dialog: 'You speak like one not born in this era... Song dynasty history, modern exams, fever dreams. Fate dragged you here.',
         recruitable: false,
       },
       {
@@ -238,7 +239,7 @@ export class WorldScene extends Phaser.Scene {
         y: 10,
         name: '林冲',
         role: 'Lin Chong',
-        dialog: 'Strength is nothing without conviction. Hold your line.',
+        dialog: 'I am Lin Chong. If you seek Liangshan and a road home, I will test your resolve and stand with you.',
         recruitable: true,
       },
       {
@@ -256,7 +257,7 @@ export class WorldScene extends Phaser.Scene {
         y: 12,
         name: 'Tonkey',
         role: 'Wandering Fighter',
-        dialog: 'Name\'s Tonkey. Say the word and I\'ll watch your back in every fight.',
+        dialog: 'Name\'s Tonkey. You look like you just woke from a fever dream. Need backup? I\'ll run with you.',
         recruitable: false,
       },
     ];
@@ -647,6 +648,21 @@ export class WorldScene extends Phaser.Scene {
     this.objectiveText.setText(`Chapter ${this.chapterState.chapter}: ${this.chapterState.objective}`);
   }
 
+  playChapter0Prologue() {
+    if (this.chapterState.stage !== 'chapter0_intro') return;
+
+    this.showChapterToast('Chapter 0: History Class Fever Dream');
+    this.time.delayedCall(900, () => {
+      this.showChapterToast('A stressed high school student crams Song dynasty history for an exam...');
+    });
+    this.time.delayedCall(2400, () => {
+      this.showChapterToast('He collapses with a fever, falls asleep, and wakes in this world.');
+    });
+    this.time.delayedCall(3900, () => {
+      this.showChapterToast('Find Liangshan. If you rewrite fate here, you may return to modern time.');
+    });
+  }
+
   showChapterToast(text) {
     this.chapterToast.setText(text).setAlpha(1).setVisible(true);
     this.tweens.killTweensOf(this.chapterToast);
@@ -864,9 +880,9 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.chapterState.stage === 'chapter0_intro' && npcId === 'wuyong') {
       this.chapterState.stage = 'chapter0_recruit';
-      this.chapterState.objective = 'Recruit Lin Chong and ask Tonkey to join.';
+      this.chapterState.objective = 'Recruit Lin Chong and ask Tonkey to join your Liangshan escort.';
       this.updateMissionUI();
-      this.showChapterToast('Chapter 0 Updated: Build your first squad');
+      this.showChapterToast('Wu Yong: Build a squad before you walk the road of fate.');
       this.saveCheckpoint();
       return;
     }
@@ -876,7 +892,7 @@ export class WorldScene extends Phaser.Scene {
       this.chapterState.stage = 'talk_villager';
       this.chapterState.objective = 'Travel east and speak with Village Elder Liu.';
       this.updateMissionUI();
-      this.showChapterToast('Chapter 1 Begins: Oath at Liangshan');
+      this.showChapterToast('Chapter 1 Begins: Reach Liangshan\'s first true trial.');
       this.saveCheckpoint();
       return;
     }
@@ -909,10 +925,10 @@ export class WorldScene extends Phaser.Scene {
     let text = npc.npcData.dialog;
 
     if (npc.npcData.id === 'wuyong' && this.chapterState.stage === 'chapter0_intro') {
-      text += '\n\n[Chapter 0] Form your first band. Recruit Lin Chong and Tonkey.';
+      text += '\n\n[Chapter 0] You are a modern student lost in Song dynasty chaos. Recruit Lin Chong and Tonkey to survive.';
     }
     if (npc.npcData.id === 'songjiang' && this.chapterState.stage === 'chapter0_ready') {
-      text += '\n\n[Chapter 0] Your squad is ready. Report in to begin Chapter 1.';
+      text += '\n\n[Chapter 0] Your escort is ready. Report in and walk the Liangshan path to find your road home.';
     }
     if (npc.npcData.id === 'villager' && this.chapterState.stage === 'talk_villager') {
       text += '\n\n[Main Mission] Defeat the three named raiders near the roads.';

@@ -301,36 +301,59 @@ export class BootScene extends Phaser.Scene {
 
     this.makeCanvasTexture(`${style.id}_tonkey`, 32, 32, (ctx) => {
       // Tonkey portrait-style sprite inspired by provided photo (suit + mint tie).
-      // Hair
       ctx.fillStyle = '#101216';
       ctx.fillRect(9, 4, 13, 4);
       ctx.fillRect(10, 3, 10, 2);
-
-      // Face
       ctx.fillStyle = '#e4bf9f';
       ctx.fillRect(11, 7, 10, 8);
-
-      // Suit jacket
       ctx.fillStyle = '#1e222c';
       ctx.fillRect(9, 15, 14, 12);
       ctx.fillStyle = '#0f1218';
       ctx.fillRect(8, 16, 4, 11);
       ctx.fillRect(20, 16, 4, 11);
-
-      // Shirt + tie
       ctx.fillStyle = '#f2f4f8';
       ctx.fillRect(13, 16, 6, 6);
       ctx.fillStyle = '#a4e3d0';
       ctx.fillRect(15, 18, 2, 7);
-
-      // Subtle smile line
       ctx.fillStyle = '#c78f74';
       ctx.fillRect(14, 13, 4, 1);
-
-      // Legs
       ctx.fillStyle = '#12151c';
       ctx.fillRect(11, 27, 4, 5);
       ctx.fillRect(17, 27, 4, 5);
+    });
+
+    this.makeCanvasTexture(`${style.id}_songjiang`, 32, 32, (ctx) => {
+      // Song Jiang inspired sprite: black soft hat + dark red robe + gold medallion.
+      ctx.fillStyle = '#151516';
+      ctx.fillRect(9, 3, 14, 4);
+      ctx.fillRect(11, 2, 9, 2);
+      ctx.fillRect(21, 4, 3, 3); // side fold of hat
+
+      ctx.fillStyle = '#d8b292';
+      ctx.fillRect(13, 7, 7, 6); // face
+
+      ctx.fillStyle = '#4a2d1c'; // beard
+      ctx.fillRect(15, 12, 3, 4);
+
+      ctx.fillStyle = '#7f1f26'; // robe
+      ctx.fillRect(10, 14, 12, 16);
+
+      ctx.strokeStyle = '#d7d0cf'; // white collar ring
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(16, 14, 5.2, Math.PI, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#b99655'; // gold chest emblem
+      ctx.beginPath();
+      ctx.arc(16, 21, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#8f6e36';
+      ctx.fillRect(14, 19, 4, 4);
+
+      ctx.fillStyle = '#5e1a20';
+      ctx.fillRect(10, 30, 4, 2);
+      ctx.fillRect(18, 30, 4, 2);
     });
 
     this.makeCanvasTexture(`${style.id}_enemy`, 32, 32, (ctx) => {

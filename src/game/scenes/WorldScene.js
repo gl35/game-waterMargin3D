@@ -184,10 +184,11 @@ export class WorldScene extends Phaser.Scene {
 
   createPlayer() {
     this.player = this.physics.add.sprite(9 * 32 + 16, 16 * 32, this.tx('player'));
+    this.player.setScale(1.45);
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
-    this.player.body.setSize(20, 20);
-    this.player.body.setOffset(6, 10);
+    this.player.body.setSize(24, 24);
+    this.player.body.setOffset(4, 8);
 
     this.playerNameTag = this.add.text(0, 0, '勇士', {
       fontSize: '10px',
@@ -239,6 +240,7 @@ export class WorldScene extends Phaser.Scene {
 
     npcData.forEach((data) => {
       const npc = this.physics.add.sprite(data.x * 32 + 16, data.y * 32 + 16, this.tx('npc'));
+      npc.setScale(1.3);
       npc.setImmovable(true);
       npc.setDepth(9);
       npc.npcData = data;
@@ -257,6 +259,7 @@ export class WorldScene extends Phaser.Scene {
 
   createEnemy(data) {
     const enemy = this.physics.add.sprite(data.x * 32, data.y * 32, this.tx('enemy'));
+    enemy.setScale(1.3);
     enemy.setDepth(9);
     enemy.enemyId = data.id;
     enemy.displayName = data.name;
@@ -278,7 +281,7 @@ export class WorldScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(13);
 
     if (enemy.isMiniBoss) {
-      enemy.setScale(1.2);
+      enemy.setScale(1.65);
       enemy.setTint(0xff9999);
       enemy.enraged = false;
       enemy.chargeState = 'idle';

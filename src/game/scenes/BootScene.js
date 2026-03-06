@@ -299,6 +299,40 @@ export class BootScene extends Phaser.Scene {
       ctx.fillRect(18, 29, 3, 3);
     });
 
+    this.makeCanvasTexture(`${style.id}_tonkey`, 32, 32, (ctx) => {
+      // Tonkey portrait-style sprite inspired by provided photo (suit + mint tie).
+      // Hair
+      ctx.fillStyle = '#101216';
+      ctx.fillRect(9, 4, 13, 4);
+      ctx.fillRect(10, 3, 10, 2);
+
+      // Face
+      ctx.fillStyle = '#e4bf9f';
+      ctx.fillRect(11, 7, 10, 8);
+
+      // Suit jacket
+      ctx.fillStyle = '#1e222c';
+      ctx.fillRect(9, 15, 14, 12);
+      ctx.fillStyle = '#0f1218';
+      ctx.fillRect(8, 16, 4, 11);
+      ctx.fillRect(20, 16, 4, 11);
+
+      // Shirt + tie
+      ctx.fillStyle = '#f2f4f8';
+      ctx.fillRect(13, 16, 6, 6);
+      ctx.fillStyle = '#a4e3d0';
+      ctx.fillRect(15, 18, 2, 7);
+
+      // Subtle smile line
+      ctx.fillStyle = '#c78f74';
+      ctx.fillRect(14, 13, 4, 1);
+
+      // Legs
+      ctx.fillStyle = '#12151c';
+      ctx.fillRect(11, 27, 4, 5);
+      ctx.fillRect(17, 27, 4, 5);
+    });
+
     this.makeCanvasTexture(`${style.id}_enemy`, 32, 32, (ctx) => {
       ctx.fillStyle = '#2b1b1b';
       ctx.fillRect(10, 13, 12, 13);

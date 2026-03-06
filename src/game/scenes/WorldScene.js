@@ -262,7 +262,11 @@ export class WorldScene extends Phaser.Scene {
     ];
 
     npcData.forEach((data) => {
-      const npcTexture = data.id === 'linchong' ? this.tx('linchong') : this.tx('npc');
+      const npcTexture = data.id === 'linchong'
+        ? this.tx('linchong')
+        : data.id === 'tonkey'
+          ? this.tx('tonkey')
+          : this.tx('npc');
       const npc = this.physics.add.sprite(data.x * 32 + 16, data.y * 32 + 16, npcTexture);
       npc.setScale(1.65);
       npc.setImmovable(true);

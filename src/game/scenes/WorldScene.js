@@ -14,6 +14,7 @@ export class WorldScene extends Phaser.Scene {
     this.attackCooldown = 0;
     this.currentInteractingNpc = null;
     this.playerDown = false;
+    this.victoryShown = false;
 
     this.specialties = [
       {
@@ -395,6 +396,67 @@ export class WorldScene extends Phaser.Scene {
     vignette.fillRect(0, this.scale.height - 20, this.scale.width, 20);
     vignette.fillRect(0, 0, 20, this.scale.height);
     vignette.fillRect(this.scale.width - 20, 0, 20, this.scale.height);
+
+    this.victoryOverlay = this.add.container(0, 0).setScrollFactor(0).setDepth(300).setVisible(false);
+    const voBg = this.add.graphics();
+    voBg.fillStyle(0x000000, 0.72);
+    voBg.fillRect(0, 0, this.scale.width, this.scale.height);
+
+    const voPanel = this.add.graphics();
+    const pw = 520;
+    const ph = 250;
+    const px = (this.scale.width - pw) / 2;
+    const py = (this.scale.height - ph) / 2;
+    voPanel.fillStyle(0x1a0f1e, 0.95);
+    voPanel.fillRect(px, py, pw, ph);
+    voPanel.lineStyle(3, 0xd9b36b, 1);
+    voPanel.strokeRect(px, py, pw, ph);
+
+    this.victoryTitle = this.add.text(this.scale.width / 2, py + 56, 'Chapter Complete', {
+      fontSize: '34px',
+      fill: '#f2d59b',
+      fontFamily: 'serif',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 5,
+      align: 'center',
+    }).setOrigin(0.5);
+
+    this.victoryBody = this.add.text(this.scale.width / 2, py + 128, '', {
+      fontSize: '15px',
+      fill: '#eadff9',
+      fontFamily: 'serif',
+      align: 'center',
+    }).setOrigin(0.5);
+
+    this.victoryPrompt = this.add.text(this.scale.width / 2, py + 196, 'Press R to continue Chapter 1 roaming', {
+      fontSize: '12px',
+      fill: '#c9b998',
+      fontFamily: 'serif',
+      align: 'center',
+    }).setOrigin(0.5);
+
+    this.victoryOverlay.add([voBg, voPanel, this.victoryTitle, this.victoryBody, this.victoryPrompt]);
+  }
+
+  showVictoryScreen() {
+    if (this.victoryShown) return;
+    this.victoryShown = true;
+
+    this.player.setVelocity(0, 0);
+    this.victoryBody.setText(`Chapter 1: Oath at Liangshan\nReward: +100 gold\nHeroes Recruited: ${this.heroesRecruited}`);
+    this.victoryOverlay.setVisible(true).setAlpha(0);
+
+    this.tweens.add({
+      targets: this.victoryOverlay,
+      alpha: 1,
+      duration: 350,
+    });
+  }
+
+  hideVictoryScreen() {
+    if (!this.victoryShown) return;
+    this.victoryOverlay.setVisible(false);
   }
 
   updateMissionUI() {
@@ -432,6 +494,7 @@ export class WorldScene extends Phaser.Scene {
       style1: Phaser.Input.Keyboard.KeyCodes.ONE,
       style2: Phaser.Input.Keyboard.KeyCodes.TWO,
       style3: Phaser.Input.Keyboard.KeyCodes.THREE,
+      dismissVictory: Phaser.Input.Keyboard.KeyCodes.R,
     });
   }
 
@@ -478,6 +541,7 @@ export class WorldScene extends Phaser.Scene {
       this.showChapterToast('Chapter 1 Complete: Oath at Liangshan');
       this.playerGold += 100;
       this.goldText.setText(`Gold: ${this.playerGold} 两`);
+      this.showVictoryScreen();
     }
   }
 
@@ -710,6 +774,14 @@ export class WorldScene extends Phaser.Scene {
           this.heroText.setText(`Heroes: ${this.heroesRecruited}/108`);
           this.dialogText.setText(`${nearNPC.npcData.dialog}\n✓ Hero recruited! They have joined Liangshan!`);
         }
+      }
+      return;
+    }
+
+    if (this.victoryShown && this.victoryOverlay.visible) {
+      this.player.setVelocity(0, 0);
+      if (Phaser.Input.Keyboard.JustDown(this.wasd.dismissVictory)) {
+        this.hideVictoryScreen();
       }
       return;
     }

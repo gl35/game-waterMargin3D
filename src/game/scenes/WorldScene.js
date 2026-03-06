@@ -81,6 +81,11 @@ export class WorldScene extends Phaser.Scene {
     const mapHeight = 50;
     const tileSize = 32;
 
+    this.add.tileSprite(0, 0, mapWidth * tileSize, mapHeight * tileSize, 'chapterBackdrop')
+      .setOrigin(0)
+      .setAlpha(0.38)
+      .setDepth(-20);
+
     this.mapData = [];
     for (let y = 0; y < mapHeight; y++) {
       this.mapData[y] = [];
@@ -303,9 +308,11 @@ export class WorldScene extends Phaser.Scene {
     this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(100);
 
     const panel = this.add.graphics();
-    panel.fillStyle(0x000000, 0.72);
+    panel.fillStyle(0x120b16, 0.78);
     panel.fillRect(5, 5, 350, 96);
-    panel.lineStyle(2, 0xc8a96e);
+    panel.fillStyle(0x3a2230, 0.25);
+    panel.fillRect(5, 5, 350, 30);
+    panel.lineStyle(2, 0xd9b36b);
     panel.strokeRect(5, 5, 350, 96);
 
     const title = this.add.text(180, 15, '夢 Dream of Water Margin', {
@@ -381,6 +388,13 @@ export class WorldScene extends Phaser.Scene {
       fontStyle: 'bold',
       align: 'center',
     }).setOrigin(0.5).setDepth(220).setScrollFactor(0).setVisible(false);
+
+    const vignette = this.add.graphics().setScrollFactor(0).setDepth(190);
+    vignette.fillStyle(0x000000, 0.18);
+    vignette.fillRect(0, 0, this.scale.width, 20);
+    vignette.fillRect(0, this.scale.height - 20, this.scale.width, 20);
+    vignette.fillRect(0, 0, 20, this.scale.height);
+    vignette.fillRect(this.scale.width - 20, 0, 20, this.scale.height);
   }
 
   updateMissionUI() {
@@ -513,6 +527,26 @@ export class WorldScene extends Phaser.Scene {
       alpha: 0,
       duration: 800,
       onComplete: () => txt.destroy(),
+    });
+  }
+
+  playSlashFx(style) {
+    const slash = this.add.graphics().setDepth(40);
+    const radius = style.id === 'strategist' ? 34 : 24;
+    slash.lineStyle(3, style.color, 0.9);
+    slash.strokeCircle(this.player.x, this.player.y, radius);
+    if (style.id === 'strategist') {
+      slash.lineStyle(2, 0xffffff, 0.55);
+      slash.strokeCircle(this.player.x, this.player.y, radius + 10);
+    }
+
+    this.tweens.add({
+      targets: slash,
+      alpha: 0,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      duration: 180,
+      onComplete: () => slash.destroy(),
     });
   }
 
@@ -708,6 +742,8 @@ export class WorldScene extends Phaser.Scene {
     this.attackCooldown -= delta;
     if (Phaser.Input.Keyboard.JustDown(this.wasd.attack) && this.attackCooldown <= 0) {
       this.attackCooldown = 320;
+      const style = this.specialties[this.currentSpecialtyIndex];
+      this.playSlashFx(style);
       this.attackNearbyEnemies();
 
       this.tweens.add({

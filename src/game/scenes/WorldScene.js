@@ -527,7 +527,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   createUI() {
-    this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(100);
+    this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(500).setVisible(true);
 
     const theme = this.stylePalette[this.currentArtStyle] || this.stylePalette.wuxia;
 
@@ -577,6 +577,14 @@ export class WorldScene extends Phaser.Scene {
       this.hintText,
       this.objectiveText,
     ]);
+
+    // Fallback mini-HUD (always-on) in case container styling fails on some browsers.
+    this.hudFallback = this.add.text(14, 108, '', {
+      fontSize: '12px',
+      fill: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setScrollFactor(0).setDepth(520);
 
     const gameWidth = this.scale.width;
     const gameHeight = this.scale.height;
@@ -1440,5 +1448,9 @@ export class WorldScene extends Phaser.Scene {
 
     this.updateTonkey(delta);
     this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
+
+    if (this.hudFallback) {
+      this.hudFallback.setText(`HP ${this.playerHP}/${this.playerMaxHP}   Gold ${this.playerGold}   Heroes ${this.heroesRecruited}/108`);
+    }
   }
 }

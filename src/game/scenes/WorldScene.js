@@ -210,6 +210,8 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(11);
 
+    this.playerShadow = this.add.ellipse(this.player.x, this.player.y + 16, 26, 10, 0x000000, 0.24).setDepth(8);
+
     this.lastSafePlayerPos = { x: this.player.x, y: this.player.y };
   }
 
@@ -274,6 +276,8 @@ export class WorldScene extends Phaser.Scene {
       npc.setDepth(9);
       npc.npcData = data;
 
+      npc.shadow = this.add.ellipse(npc.x, npc.y + 14, 24, 9, 0x000000, 0.2).setDepth(8);
+
       if (data.id === 'tonkey') {
         npc.setTint(0xa8ffd2);
       }
@@ -307,6 +311,7 @@ export class WorldScene extends Phaser.Scene {
     enemy.patrolDir = 1;
     enemy.patrolTimer = 0;
 
+    enemy.shadow = this.add.ellipse(enemy.x, enemy.y + 14, enemy.isMiniBoss ? 36 : 24, enemy.isMiniBoss ? 13 : 9, 0x000000, 0.22).setDepth(8);
     enemy.hpBar = this.add.graphics().setDepth(13);
     enemy.nameTag = this.add.text(enemy.x, enemy.y - 32, data.name, {
       fontSize: enemy.isMiniBoss ? '11px' : '9px',
@@ -972,6 +977,27 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  playHitSpark(x, y, color = 0xffcc66) {
+    const spark = this.add.graphics().setDepth(45);
+    spark.fillStyle(color, 0.95);
+
+    for (let i = 0; i < 8; i++) {
+      const a = (Math.PI * 2 * i) / 8;
+      const sx = x + Math.cos(a) * 6;
+      const sy = y + Math.sin(a) * 6;
+      spark.fillCircle(sx, sy, 2);
+    }
+
+    this.tweens.add({
+      targets: spark,
+      alpha: 0,
+      scaleX: 1.8,
+      scaleY: 1.8,
+      duration: 180,
+      onComplete: () => spark.destroy(),
+    });
+  }
+
   playSlashFx(style) {
     const slash = this.add.graphics().setDepth(40);
     const fxRange = style.id === 'strategist' ? 72 : 56;
@@ -1092,6 +1118,7 @@ export class WorldScene extends Phaser.Scene {
     this.showDamageText(enemy.x, enemy.y - 20, `+${enemy.gold} gold`, '#ffdd44');
 
     if (enemy.nameTag) enemy.nameTag.destroy();
+    if (enemy.shadow) enemy.shadow.destroy();
     enemy.hpBar.destroy();
     enemy.destroy();
     this.enemies = this.enemies.filter((e) => e !== enemy);
@@ -1147,6 +1174,7 @@ export class WorldScene extends Phaser.Scene {
 
       enemy.hp -= damage;
       this.showDamageText(enemy.x, enemy.y, `-${damage}`, '#ff4444');
+      this.playHitSpark(enemy.x, enemy.y, style.color);
       this.updateEnemyHPBar(enemy);
       hitCount += 1;
 
@@ -1204,6 +1232,7 @@ export class WorldScene extends Phaser.Scene {
       const dmg = Phaser.Math.Between(6, 10);
       target.hp -= dmg;
       this.showDamageText(target.x, target.y - 12, `Tonkey -${dmg}`, '#9fffc8');
+      this.playHitSpark(target.x, target.y, 0x9fffc8);
       this.updateEnemyHPBar(target);
       this.tonkeyAttackCooldown = 520;
 
@@ -1364,6 +1393,20 @@ export class WorldScene extends Phaser.Scene {
       }
 
       this.updateEnemyHPBar(enemy);
+    });
+
+    if (this.playerShadow) {
+      this.playerShadow.setPosition(this.player.x, this.player.y + 18);
+      this.playerShadow.setScale(1 + Math.sin(time * 0.01) * 0.03, 1);
+    }
+
+    this.npcs.forEach((npc) => {
+      if (npc.shadow) npc.shadow.setPosition(npc.x, npc.y + 14);
+      if (npc.nameTag) npc.nameTag.setPosition(npc.x, npc.y - 24);
+    });
+
+    this.enemies.forEach((enemy) => {
+      if (enemy.shadow) enemy.shadow.setPosition(enemy.x, enemy.y + (enemy.isMiniBoss ? 20 : 14));
     });
 
     this.updateTonkey(delta);

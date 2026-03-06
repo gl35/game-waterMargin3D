@@ -23,7 +23,7 @@ export class WorldScene extends Phaser.Scene {
       ink: { panel: 0xefe6d2, panelTop: 0xd7cbb2, accent: '#4a4337', objective: '#262018', hint: '#555049' },
       wuxia: { panel: 0x120b16, panelTop: 0x3a2230, accent: '#d9b36b', objective: '#cde6ff', hint: '#aaaaaa' },
     };
-    this.currentArtStyle = localStorage.getItem(this.styleKey) || 'wuxia';
+    this.currentArtStyle = localStorage.getItem(this.styleKey) || 'ink';
 
     this.touchState = {
       up: false,

@@ -1101,6 +1101,19 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  tryInteractWithNPC() {
+    const nearNPC = this.npcs
+      .slice()
+      .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y))[0];
+
+    if (!nearNPC) return false;
+    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, nearNPC.x, nearNPC.y);
+    if (dist > 96) return false;
+
+    this.showDialog(nearNPC);
+    return true;
+  }
+
   updateTonkey(delta) {
     if (!this.tonkeyUnlocked || !this.tonkey) return;
 
@@ -1148,9 +1161,11 @@ export class WorldScene extends Phaser.Scene {
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.wasd.interact) || this.consumeTouchPress('interactPressed')) {
-        const nearNPC = this.npcs.find((npc) => Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 60);
+        const nearNPC = this.npcs
+          .slice()
+          .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y))[0];
 
-        if (nearNPC?.npcData.id === 'tonkey' && !this.tonkeyUnlocked) {
+        if (nearNPC && Phaser.Math.Distance.Between(this.player.x, this.player.y, nearNPC.x, nearNPC.y) <= 96 && nearNPC?.npcData.id === 'tonkey' && !this.tonkeyUnlocked) {
           this.tonkeyUnlocked = true;
           this.tonkey.npcData.recruited = true;
           this.tonkey.setPosition(this.player.x - 26, this.player.y + 18);
@@ -1160,7 +1175,7 @@ export class WorldScene extends Phaser.Scene {
           return;
         }
 
-        if (nearNPC?.npcData.recruitable && !nearNPC.npcData.recruited) {
+        if (nearNPC && Phaser.Math.Distance.Between(this.player.x, this.player.y, nearNPC.x, nearNPC.y) <= 96 && nearNPC?.npcData.recruitable && !nearNPC.npcData.recruited) {
           nearNPC.npcData.recruited = true;
           this.heroesRecruited += 1;
           this.heroText.setText(`Heroes: ${this.heroesRecruited}/108`);
@@ -1238,12 +1253,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.wasd.interact) || this.consumeTouchPress('interactPressed')) {
-      this.npcs.forEach((npc) => {
-        const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y);
-        if (dist < 60) {
-          this.showDialog(npc);
-        }
-      });
+      this.tryInteractWithNPC();
     }
 
     this.enemies.forEach((enemy) => {

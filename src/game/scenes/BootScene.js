@@ -205,15 +205,52 @@ export class BootScene extends Phaser.Scene {
     });
 
     this.makeCanvasTexture(`${style.id}_player`, 32, 32, (ctx) => {
-      ctx.fillStyle = '#131318';
-      ctx.fillRect(12, 4, 8, 8);
-      ctx.fillStyle = style.hero;
-      ctx.fillRect(10, 13, 12, 13);
-      ctx.fillStyle = '#e4c39a';
-      ctx.fillRect(12, 6, 8, 6);
-      ctx.fillStyle = '#1a2345';
-      ctx.fillRect(10, 26, 4, 6);
-      ctx.fillRect(18, 26, 4, 6);
+      // Inspired by your reference: white-robed spear wielder silhouette.
+      const robeBase = style.id === 'ink' ? '#f2efe8' : '#f6f4ff';
+      const robeShade = style.id === 'ink' ? '#d9d3c8' : '#d9d4ef';
+
+      // Spear / staff
+      ctx.strokeStyle = '#d7d7dd';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(8, 22);
+      ctx.lineTo(28, 6);
+      ctx.stroke();
+
+      // Flowing robe (main silhouette)
+      ctx.fillStyle = robeBase;
+      ctx.beginPath();
+      ctx.moveTo(11, 10);
+      ctx.lineTo(7, 16);
+      ctx.lineTo(6, 24);
+      ctx.lineTo(10, 31);
+      ctx.lineTo(20, 31);
+      ctx.lineTo(23, 22);
+      ctx.lineTo(22, 14);
+      ctx.lineTo(17, 10);
+      ctx.closePath();
+      ctx.fill();
+
+      // Robe folds
+      ctx.fillStyle = robeShade;
+      ctx.fillRect(10, 16, 2, 12);
+      ctx.fillRect(13, 14, 2, 15);
+      ctx.fillRect(16, 15, 2, 13);
+
+      // Head + hair
+      ctx.fillStyle = '#efcb8f';
+      ctx.fillRect(13, 7, 4, 4);
+      ctx.fillStyle = '#0f1022';
+      ctx.fillRect(11, 5, 7, 4);
+      ctx.fillRect(10, 8, 3, 3);
+
+      // Sash accent (purple ribbon feel)
+      ctx.fillStyle = '#6b58b5';
+      ctx.fillRect(9, 17, 10, 1);
+
+      // Foot hint
+      ctx.fillStyle = '#3a3166';
+      ctx.fillRect(14, 30, 3, 2);
     });
 
     this.makeCanvasTexture(`${style.id}_npc`, 32, 32, (ctx) => {

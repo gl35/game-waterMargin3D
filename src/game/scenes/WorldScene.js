@@ -833,7 +833,8 @@ export class WorldScene extends Phaser.Scene {
     this.currentSpecialtyIndex = Phaser.Math.Wrap(index, 0, this.specialties.length);
     const style = this.specialties[this.currentSpecialtyIndex];
     this.specialtyText.setText(`Style: ${style.name}`);
-    this.player.setTint(style.color);
+    this.specialtyText.setColor(`#${style.color.toString(16).padStart(6, '0')}`);
+    this.player.clearTint();
 
     if (announce) {
       this.showChapterToast(`Switched to ${style.name}`);

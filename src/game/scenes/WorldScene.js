@@ -1254,8 +1254,9 @@ export class WorldScene extends Phaser.Scene {
         const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
         enemy.setVelocity(Math.cos(angle) * enemy.moveSpeed, Math.sin(angle) * enemy.moveSpeed);
 
-        if (dist < 30) {
-          if (!enemy.lastDamageTime || time - enemy.lastDamageTime > 1000) {
+        const enemyMeleeRange = enemy.isMiniBoss ? 62 : 52;
+        if (dist < enemyMeleeRange) {
+          if (!enemy.lastDamageTime || time - enemy.lastDamageTime > 850) {
             enemy.lastDamageTime = time;
             this.damagePlayer(enemy.damage);
           }

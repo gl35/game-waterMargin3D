@@ -42,6 +42,8 @@ export class WorldScene extends Phaser.Scene {
     this.tonkeyUnlocked = false;
     this.tonkeyAttackCooldown = 0;
 
+    this.playerFacing = { x: 1, y: 0 };
+
     this.specialties = [
       {
         id: 'vanguard',
@@ -893,19 +895,34 @@ export class WorldScene extends Phaser.Scene {
 
   playSlashFx(style) {
     const slash = this.add.graphics().setDepth(40);
-    const radius = style.id === 'strategist' ? 34 : 24;
-    slash.lineStyle(3, style.color, 0.9);
-    slash.strokeCircle(this.player.x, this.player.y, radius);
-    if (style.id === 'strategist') {
-      slash.lineStyle(2, 0xffffff, 0.55);
-      slash.strokeCircle(this.player.x, this.player.y, radius + 10);
-    }
+    const fxRange = style.id === 'strategist' ? 72 : 56;
+    const fxWidth = style.id === 'strategist' ? 44 : 28;
+
+    const nx = this.playerFacing.x;
+    const ny = this.playerFacing.y;
+    const px = -ny;
+    const py = nx;
+
+    const startX = this.player.x + nx * 14;
+    const startY = this.player.y + ny * 14;
+    const endX = this.player.x + nx * fxRange;
+    const endY = this.player.y + ny * fxRange;
+
+    slash.fillStyle(style.color, 0.32);
+    slash.beginPath();
+    slash.moveTo(startX + px * (fxWidth * 0.35), startY + py * (fxWidth * 0.35));
+    slash.lineTo(startX - px * (fxWidth * 0.35), startY - py * (fxWidth * 0.35));
+    slash.lineTo(endX - px * (fxWidth * 0.7), endY - py * (fxWidth * 0.7));
+    slash.lineTo(endX + px * (fxWidth * 0.7), endY + py * (fxWidth * 0.7));
+    slash.closePath();
+    slash.fillPath();
+
+    slash.lineStyle(2, style.color, 0.95);
+    slash.strokeLineShape(new Phaser.Geom.Line(startX, startY, endX, endY));
 
     this.tweens.add({
       targets: slash,
       alpha: 0,
-      scaleX: 1.5,
-      scaleY: 1.5,
       duration: 180,
       onComplete: () => slash.destroy(),
     });
@@ -1027,35 +1044,43 @@ export class WorldScene extends Phaser.Scene {
 
     this.enemies.forEach((enemy) => {
       if (!enemy.active) return;
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
-      if (dist <= style.range) {
-        if (!style.splash && hitCount > 0) return;
+      const dx = enemy.x - this.player.x;
+      const dy = enemy.y - this.player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > style.range) return;
 
-        let damage = Phaser.Math.Between(style.minDamage, style.maxDamage);
-        if (style.id === 'vanguard' && dist < 36) {
-          damage += 3;
-        }
-        if (style.id === 'shadow' && Math.random() < (style.critChance || 0)) {
-          damage += 10;
-          this.showDamageText(enemy.x, enemy.y - 15, 'CRIT!', '#ffa2ff');
-        }
+      const dirX = dist > 0 ? dx / dist : 0;
+      const dirY = dist > 0 ? dy / dist : 0;
+      const facingDot = dirX * this.playerFacing.x + dirY * this.playerFacing.y;
+      const inFront = style.splash ? facingDot > -0.05 : facingDot > 0.35;
+      if (!inFront) return;
 
-        enemy.hp -= damage;
-        this.showDamageText(enemy.x, enemy.y, `-${damage}`, '#ff4444');
-        this.updateEnemyHPBar(enemy);
-        hitCount += 1;
+      if (!style.splash && hitCount > 0) return;
 
-        this.tweens.add({
-          targets: enemy,
-          alpha: 0.25,
-          yoyo: true,
-          duration: 80,
-          repeat: 2,
-        });
+      let damage = Phaser.Math.Between(style.minDamage, style.maxDamage);
+      if (style.id === 'vanguard' && dist < 36) {
+        damage += 3;
+      }
+      if (style.id === 'shadow' && Math.random() < (style.critChance || 0)) {
+        damage += 10;
+        this.showDamageText(enemy.x, enemy.y - 15, 'CRIT!', '#ffa2ff');
+      }
 
-        if (enemy.hp <= 0) {
-          this.onEnemyDefeated(enemy);
-        }
+      enemy.hp -= damage;
+      this.showDamageText(enemy.x, enemy.y, `-${damage}`, '#ff4444');
+      this.updateEnemyHPBar(enemy);
+      hitCount += 1;
+
+      this.tweens.add({
+        targets: enemy,
+        alpha: 0.25,
+        yoyo: true,
+        duration: 80,
+        repeat: 2,
+      });
+
+      if (enemy.hp <= 0) {
+        this.onEnemyDefeated(enemy);
       }
     });
   }
@@ -1154,6 +1179,12 @@ export class WorldScene extends Phaser.Scene {
     if (Math.abs(this.touchAxis.x) > 0.05 || Math.abs(this.touchAxis.y) > 0.05) {
       vx = speed * this.touchAxis.x;
       vy = speed * this.touchAxis.y;
+    }
+
+    if (Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01) {
+      const mag = Math.sqrt(vx * vx + vy * vy) || 1;
+      this.playerFacing.x = vx / mag;
+      this.playerFacing.y = vy / mag;
     }
 
     this.player.setVelocity(vx, vy);

@@ -1,3 +1,57 @@
+const STYLE_DEFS = {
+  retro: {
+    id: 'retro',
+    name: 'Retro Pixel',
+    grassA: '#3f7f43',
+    grassB: '#2f5f32',
+    waterA: '#3a74c8',
+    waterB: '#224a8b',
+    pathA: '#b88a52',
+    pathB: '#8e6738',
+    wallA: '#927245',
+    wallB: '#6d5331',
+    uiPanel: '#171717',
+    uiAccent: '#f2ca74',
+    uiText: '#f4f4f4',
+    hero: '#d83f3f',
+    enemy: '#2e7f3f',
+  },
+  ink: {
+    id: 'ink',
+    name: 'Ink-wash / 水墨',
+    grassA: '#6f7669',
+    grassB: '#4e5448',
+    waterA: '#586879',
+    waterB: '#3f4b58',
+    pathA: '#b8a890',
+    pathB: '#96866f',
+    wallA: '#6e6559',
+    wallB: '#4f483f',
+    uiPanel: '#efe6d2',
+    uiAccent: '#4a4337',
+    uiText: '#1f1b17',
+    hero: '#43464e',
+    enemy: '#595246',
+  },
+  wuxia: {
+    id: 'wuxia',
+    name: 'Dark Wuxia',
+    grassA: '#2c5937',
+    grassB: '#1b3524',
+    waterA: '#2d5d99',
+    waterB: '#1f3f69',
+    pathA: '#b18a56',
+    pathB: '#7f5a35',
+    wallA: '#70542d',
+    wallB: '#523a1f',
+    uiPanel: '#120b16',
+    uiAccent: '#d9b36b',
+    uiText: '#eee5d5',
+    hero: '#7f1f1f',
+    enemy: '#7a1f1f',
+  },
+};
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'BootScene' });
@@ -53,20 +107,28 @@ export class BootScene extends Phaser.Scene {
     this.textures.addCanvas(key, canvas);
   }
 
-  generateAssets() {
-    const tileSize = 32;
-
-    this.makeCanvasTexture('chapterBackdrop', 512, 512, (ctx, w, h) => {
+  generateBackdrop(style) {
+    this.makeCanvasTexture(`${style.id}_chapterBackdrop`, 512, 512, (ctx, w, h) => {
       const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, '#120d1c');
-      g.addColorStop(0.45, '#2a203c');
-      g.addColorStop(1, '#5a2e2e');
+      if (style.id === 'retro') {
+        g.addColorStop(0, '#1d2d52');
+        g.addColorStop(0.55, '#203a66');
+        g.addColorStop(1, '#31261f');
+      } else if (style.id === 'ink') {
+        g.addColorStop(0, '#f1ebdd');
+        g.addColorStop(0.55, '#d0c7b6');
+        g.addColorStop(1, '#9f9587');
+      } else {
+        g.addColorStop(0, '#120d1c');
+        g.addColorStop(0.45, '#2a203c');
+        g.addColorStop(1, '#5a2e2e');
+      }
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
 
-      ctx.globalAlpha = 0.35;
+      ctx.globalAlpha = style.id === 'ink' ? 0.25 : 0.35;
       for (let i = 0; i < 8; i++) {
-        ctx.fillStyle = i % 2 === 0 ? '#1e1729' : '#2f1c29';
+        ctx.fillStyle = style.id === 'ink' ? '#5a534a' : i % 2 === 0 ? '#1e1729' : '#2f1c29';
         const baseY = 220 + i * 24;
         ctx.beginPath();
         ctx.moveTo(0, baseY + 40);
@@ -80,215 +142,127 @@ export class BootScene extends Phaser.Scene {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+    });
+  }
 
-      ctx.fillStyle = '#f2cb79';
-      ctx.beginPath();
-      ctx.arc(w - 84, 92, 38, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.2;
-      ctx.fillStyle = '#ffdca4';
-      ctx.beginPath();
-      ctx.arc(w - 84, 92, 66, 0, Math.PI * 2);
-      ctx.fill();
+  generateStyleAssets(style) {
+    const tileSize = 32;
+
+    this.generateBackdrop(style);
+
+    this.makeCanvasTexture(`${style.id}_grass`, tileSize, tileSize, (ctx) => {
+      const g = ctx.createLinearGradient(0, 0, 0, tileSize);
+      g.addColorStop(0, style.grassA);
+      g.addColorStop(1, style.grassB);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, tileSize, tileSize);
+      for (let i = 0; i < 100; i++) {
+        ctx.fillStyle = i % 2 ? style.grassA : style.grassB;
+        ctx.fillRect(Math.random() * tileSize, Math.random() * tileSize, 1, 1);
+      }
+    });
+
+    this.makeCanvasTexture(`${style.id}_water`, tileSize, tileSize, (ctx) => {
+      const g = ctx.createLinearGradient(0, 0, 0, tileSize);
+      g.addColorStop(0, style.waterA);
+      g.addColorStop(1, style.waterB);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, tileSize, tileSize);
+      ctx.strokeStyle = '#9ec6ff';
+      ctx.globalAlpha = style.id === 'ink' ? 0.25 : 0.45;
+      for (let y = 5; y < tileSize; y += 8) {
+        ctx.beginPath();
+        ctx.moveTo(2, y);
+        ctx.quadraticCurveTo(10, y - 3, 16, y);
+        ctx.quadraticCurveTo(24, y + 3, 30, y);
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     });
 
-    this.makeCanvasTexture('grass', tileSize, tileSize, (ctx) => {
+    this.makeCanvasTexture(`${style.id}_path`, tileSize, tileSize, (ctx) => {
       const g = ctx.createLinearGradient(0, 0, 0, tileSize);
-      g.addColorStop(0, '#2c5937');
-      g.addColorStop(1, '#1d3e28');
+      g.addColorStop(0, style.pathA);
+      g.addColorStop(1, style.pathB);
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, tileSize, tileSize);
-
-      for (let i = 0; i < 120; i++) {
-        const x = Math.random() * tileSize;
-        const y = Math.random() * tileSize;
-        const c = Math.random() > 0.5 ? '#3b7645' : '#2f6a3d';
-        ctx.fillStyle = c;
-        ctx.fillRect(x, y, 1, 1);
-      }
-
-      ctx.strokeStyle = '#457f4b';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 7; i++) {
-        const x = Math.floor(Math.random() * tileSize);
-        const y = Math.floor(14 + Math.random() * 16);
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + (Math.random() - 0.5) * 3, y - (4 + Math.random() * 6));
-        ctx.stroke();
-      }
-    });
-
-    this.makeCanvasTexture('water', tileSize, tileSize, (ctx) => {
-      const g = ctx.createLinearGradient(0, 0, 0, tileSize);
-      g.addColorStop(0, '#2d5d99');
-      g.addColorStop(1, '#1f3f69');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, tileSize, tileSize);
-
-      ctx.strokeStyle = '#6da8dd';
-      ctx.lineWidth = 1.4;
-      for (let y = 6; y < tileSize; y += 8) {
-        ctx.beginPath();
-        ctx.moveTo(2, y);
-        for (let x = 2; x <= tileSize - 2; x += 6) {
-          ctx.quadraticCurveTo(x + 2, y - 3, x + 5, y);
-        }
-        ctx.stroke();
-      }
-    });
-
-    this.makeCanvasTexture('path', tileSize, tileSize, (ctx) => {
-      const g = ctx.createLinearGradient(0, 0, 0, tileSize);
-      g.addColorStop(0, '#b18a56');
-      g.addColorStop(1, '#8f6b42');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, tileSize, tileSize);
-
       for (let i = 0; i < 30; i++) {
-        ctx.fillStyle = Math.random() > 0.5 ? '#7a5937' : '#c39c68';
+        ctx.fillStyle = i % 2 ? '#d4b88e' : '#6b5132';
         ctx.fillRect(Math.random() * tileSize, Math.random() * tileSize, 2, 2);
       }
     });
 
-    this.makeCanvasTexture('wall', tileSize, tileSize, (ctx) => {
-      ctx.fillStyle = '#70542d';
+    this.makeCanvasTexture(`${style.id}_wall`, tileSize, tileSize, (ctx) => {
+      ctx.fillStyle = style.wallA;
       ctx.fillRect(0, 0, tileSize, tileSize);
-      ctx.strokeStyle = '#57401f';
+      ctx.strokeStyle = style.wallB;
       for (let y = 0; y < tileSize; y += 8) {
         ctx.beginPath();
         ctx.moveTo(0, y + 0.5);
         ctx.lineTo(tileSize, y + 0.5);
         ctx.stroke();
       }
-      for (let y = 0; y < tileSize; y += 8) {
-        for (let x = (y / 8) % 2 === 0 ? 0 : 8; x < tileSize; x += 16) {
-          ctx.beginPath();
-          ctx.moveTo(x + 0.5, y);
-          ctx.lineTo(x + 0.5, y + 8);
-          ctx.stroke();
-        }
-      }
     });
 
-    this.makeCanvasTexture('player', 32, 32, (ctx) => {
-      ctx.fillStyle = '#0d0d11';
-      ctx.fillRect(12, 4, 8, 9);
-
-      ctx.fillStyle = '#2b2552';
-      ctx.fillRect(8, 10, 16, 4);
-
-      ctx.fillStyle = '#7f1f1f';
-      ctx.fillRect(10, 14, 12, 12);
-      ctx.fillStyle = '#c73434';
-      ctx.fillRect(12, 15, 8, 10);
-
-      ctx.fillStyle = '#141f3d';
+    this.makeCanvasTexture(`${style.id}_player`, 32, 32, (ctx) => {
+      ctx.fillStyle = '#131318';
+      ctx.fillRect(12, 4, 8, 8);
+      ctx.fillStyle = style.hero;
+      ctx.fillRect(10, 13, 12, 13);
+      ctx.fillStyle = '#e4c39a';
+      ctx.fillRect(12, 6, 8, 6);
+      ctx.fillStyle = '#1a2345';
       ctx.fillRect(10, 26, 4, 6);
       ctx.fillRect(18, 26, 4, 6);
-
-      ctx.fillStyle = '#b68a62';
-      ctx.fillRect(7, 16, 3, 7);
-      ctx.fillRect(22, 16, 3, 7);
-
-      ctx.fillStyle = '#e6c79a';
-      ctx.fillRect(12, 6, 8, 6);
     });
 
-    this.makeCanvasTexture('npc', 32, 32, (ctx) => {
+    this.makeCanvasTexture(`${style.id}_npc`, 32, 32, (ctx) => {
       ctx.fillStyle = '#27305d';
       ctx.fillRect(9, 13, 14, 13);
-      ctx.fillStyle = '#3f4f9a';
-      ctx.fillRect(11, 15, 10, 9);
-      ctx.fillStyle = '#cdb18f';
-      ctx.fillRect(12, 5, 8, 7);
+      ctx.fillStyle = '#d8c2a0';
+      ctx.fillRect(12, 6, 8, 6);
       ctx.fillStyle = '#1a1e2e';
       ctx.fillRect(10, 3, 12, 3);
       ctx.fillStyle = '#1c274f';
       ctx.fillRect(10, 26, 4, 6);
       ctx.fillRect(18, 26, 4, 6);
-      ctx.fillStyle = '#2e3f82';
-      ctx.fillRect(6, 15, 3, 9);
-      ctx.fillRect(23, 15, 3, 9);
     });
 
-    this.makeCanvasTexture('enemy', 32, 32, (ctx) => {
-      ctx.fillStyle = '#3a2a2a';
+    this.makeCanvasTexture(`${style.id}_enemy`, 32, 32, (ctx) => {
+      ctx.fillStyle = '#2b1b1b';
       ctx.fillRect(10, 13, 12, 13);
-      ctx.fillStyle = '#7a1f1f';
+      ctx.fillStyle = style.enemy;
       ctx.fillRect(11, 15, 10, 10);
       ctx.fillStyle = '#ddb08f';
-      ctx.fillRect(12, 5, 8, 7);
-      ctx.fillStyle = '#0b0b0f';
+      ctx.fillRect(12, 6, 8, 6);
+      ctx.fillStyle = '#111';
       ctx.fillRect(10, 3, 12, 3);
-      ctx.fillStyle = '#2b1818';
-      ctx.fillRect(10, 26, 4, 6);
-      ctx.fillRect(18, 26, 4, 6);
-      ctx.fillStyle = '#6d1b1b';
-      ctx.fillRect(6, 15, 3, 9);
-      ctx.fillRect(23, 15, 3, 9);
-
       ctx.fillStyle = '#bcbcbc';
       ctx.fillRect(25, 10, 2, 14);
-      ctx.fillStyle = '#7d5e35';
-      ctx.fillRect(24, 22, 4, 4);
     });
 
-    this.makeCanvasTexture('building', 64, 64, (ctx) => {
+    this.makeCanvasTexture(`${style.id}_building`, 64, 64, (ctx) => {
       ctx.fillStyle = '#b58556';
       ctx.fillRect(0, 20, 64, 44);
-
       ctx.fillStyle = '#6f3a2f';
       ctx.beginPath();
       ctx.moveTo(0, 22);
       ctx.lineTo(32, 0);
       ctx.lineTo(64, 22);
       ctx.fill();
-
-      ctx.fillStyle = '#d4ba91';
-      for (let y = 23; y < 62; y += 8) {
-        ctx.fillRect(2, y, 60, 1);
-      }
-
       ctx.fillStyle = '#4c2f14';
       ctx.fillRect(24, 38, 16, 26);
-      ctx.fillStyle = '#8d6a3b';
-      ctx.fillRect(30, 50, 2, 10);
-
       ctx.fillStyle = '#9cc7db';
       ctx.fillRect(8, 29, 12, 10);
       ctx.fillRect(44, 29, 12, 10);
     });
   }
 
+  generateAssets() {
+    Object.values(STYLE_DEFS).forEach((style) => this.generateStyleAssets(style));
+  }
+
   create() {
-    const splashBg = this.add.image(this.scale.width / 2, this.scale.height / 2, 'chapterBackdrop')
-      .setDisplaySize(this.scale.width, this.scale.height)
-      .setDepth(1);
-
-    const title = this.add.text(this.scale.width / 2, this.scale.height / 2 - 16, 'Chapter 1\nOath at Liangshan', {
-      fontSize: '30px',
-      align: 'center',
-      fill: '#f1d19a',
-      stroke: '#000000',
-      strokeThickness: 6,
-      fontFamily: 'serif',
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(2);
-
-    const subtitle = this.add.text(this.scale.width / 2, this.scale.height / 2 + 62, 'Rally heroes. Break the raiders. Face the chain captain.', {
-      fontSize: '12px',
-      fill: '#d8cde8',
-      fontFamily: 'serif',
-    }).setOrigin(0.5).setDepth(2);
-
-    this.tweens.add({
-      targets: [splashBg, title, subtitle],
-      alpha: 0,
-      delay: 750,
-      duration: 450,
-      onComplete: () => this.scene.start('WorldScene'),
-    });
+    this.scene.start('WorldScene');
   }
 }

@@ -16,6 +16,14 @@ export class WorldScene extends Phaser.Scene {
     this.playerDown = false;
     this.victoryShown = false;
     this.saveKey = 'dowm.chapter1.save.v1';
+    this.styleKey = 'dowm.artStyle.v1';
+    this.styleOrder = ['retro', 'ink', 'wuxia'];
+    this.stylePalette = {
+      retro: { panel: 0x171717, panelTop: 0x2a2a2a, accent: '#f2ca74', objective: '#f4f4f4', hint: '#b9b9b9' },
+      ink: { panel: 0xefe6d2, panelTop: 0xd7cbb2, accent: '#4a4337', objective: '#262018', hint: '#555049' },
+      wuxia: { panel: 0x120b16, panelTop: 0x3a2230, accent: '#d9b36b', objective: '#cde6ff', hint: '#aaaaaa' },
+    };
+    this.currentArtStyle = localStorage.getItem(this.styleKey) || 'wuxia';
 
     this.specialties = [
       {
@@ -75,7 +83,7 @@ export class WorldScene extends Phaser.Scene {
     this.setupInput();
     this.setupCollisions();
     this.switchSpecialty(this.currentSpecialtyIndex, false);
-    this.showChapterToast('Chapter 1: Oath at Liangshan begins.');
+    this.showChapterToast(`Chapter 1 begins • Visual: ${this.currentArtStyle}`);
     this.updateMissionUI();
 
     this.time.addEvent({
@@ -85,12 +93,16 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  tx(name) {
+    return `${this.currentArtStyle}_${name}`;
+  }
+
   createWorld() {
     const mapWidth = 50;
     const mapHeight = 50;
     const tileSize = 32;
 
-    this.add.tileSprite(0, 0, mapWidth * tileSize, mapHeight * tileSize, 'chapterBackdrop')
+    this.add.tileSprite(0, 0, mapWidth * tileSize, mapHeight * tileSize, this.tx('chapterBackdrop'))
       .setOrigin(0)
       .setAlpha(0.38)
       .setDepth(-20);
@@ -134,32 +146,32 @@ export class WorldScene extends Phaser.Scene {
         const py = y * tileSize;
 
         if (tile === 0) {
-          this.add.image(px, py, 'grass').setOrigin(0);
+          this.add.image(px, py, this.tx('grass')).setOrigin(0);
         } else if (tile === 1) {
-          this.add.image(px, py, 'water').setOrigin(0);
-          const waterBlock = this.wallObjects.create(px + 16, py + 16, 'water');
+          this.add.image(px, py, this.tx('water')).setOrigin(0);
+          const waterBlock = this.wallObjects.create(px + 16, py + 16, this.tx('water'));
           waterBlock.setAlpha(0);
           waterBlock.refreshBody();
         } else if (tile === 2) {
-          this.add.image(px, py, 'grass').setOrigin(0);
-          this.add.image(px, py, 'path').setOrigin(0).setAlpha(0.8);
+          this.add.image(px, py, this.tx('grass')).setOrigin(0);
+          this.add.image(px, py, this.tx('path')).setOrigin(0).setAlpha(0.8);
         } else if (tile === 3) {
-          this.add.image(px, py, 'wall').setOrigin(0);
-          const wallBlock = this.wallObjects.create(px + 16, py + 16, 'wall');
+          this.add.image(px, py, this.tx('wall')).setOrigin(0);
+          const wallBlock = this.wallObjects.create(px + 16, py + 16, this.tx('wall'));
           wallBlock.setAlpha(0);
           wallBlock.refreshBody();
         }
       }
     }
 
-    this.add.image(6 * tileSize, 5 * tileSize, 'building').setOrigin(0).setScale(1.5);
-    this.add.image(10 * tileSize, 5 * tileSize, 'building').setOrigin(0).setScale(1.2);
+    this.add.image(6 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(1.5);
+    this.add.image(10 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(1.2);
 
     this.physics.world.setBounds(0, 0, mapWidth * tileSize, mapHeight * tileSize);
   }
 
   createPlayer() {
-    this.player = this.physics.add.sprite(9 * 32 + 16, 16 * 32, 'player');
+    this.player = this.physics.add.sprite(9 * 32 + 16, 16 * 32, this.tx('player'));
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
     this.player.body.setSize(20, 20);
@@ -214,7 +226,7 @@ export class WorldScene extends Phaser.Scene {
     ];
 
     npcData.forEach((data) => {
-      const npc = this.physics.add.sprite(data.x * 32 + 16, data.y * 32 + 16, 'npc');
+      const npc = this.physics.add.sprite(data.x * 32 + 16, data.y * 32 + 16, this.tx('npc'));
       npc.setImmovable(true);
       npc.setDepth(9);
       npc.npcData = data;
@@ -232,7 +244,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   createEnemy(data) {
-    const enemy = this.physics.add.sprite(data.x * 32, data.y * 32, 'enemy');
+    const enemy = this.physics.add.sprite(data.x * 32, data.y * 32, this.tx('enemy'));
     enemy.setDepth(9);
     enemy.enemyId = data.id;
     enemy.displayName = data.name;
@@ -415,16 +427,18 @@ export class WorldScene extends Phaser.Scene {
   createUI() {
     this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(100);
 
+    const theme = this.stylePalette[this.currentArtStyle] || this.stylePalette.wuxia;
+
     const panel = this.add.graphics();
-    panel.fillStyle(0x120b16, 0.78);
+    panel.fillStyle(theme.panel, this.currentArtStyle === 'ink' ? 0.9 : 0.78);
     panel.fillRect(5, 5, 350, 96);
-    panel.fillStyle(0x3a2230, 0.25);
+    panel.fillStyle(theme.panelTop, this.currentArtStyle === 'ink' ? 0.5 : 0.25);
     panel.fillRect(5, 5, 350, 30);
-    panel.lineStyle(2, 0xd9b36b);
+    panel.lineStyle(2, Phaser.Display.Color.HexStringToColor(theme.accent).color);
     panel.strokeRect(5, 5, 350, 96);
 
     const title = this.add.text(180, 15, '夢 Dream of Water Margin', {
-      fontSize: '11px', fill: '#c8a96e', fontFamily: 'serif',
+      fontSize: '11px', fill: theme.accent, fontFamily: 'serif',
     }).setOrigin(0.5);
 
     this.hpText = this.add.text(15, 32, `HP: ${this.playerHP}/${this.playerMaxHP}`, {
@@ -443,12 +457,12 @@ export class WorldScene extends Phaser.Scene {
       fontSize: '12px', fill: '#9fe7ff',
     });
 
-    this.hintText = this.add.text(140, 50, 'Q / 1-3: Switch style   Space: Attack   E: Talk', {
-      fontSize: '9px', fill: '#aaaaaa',
+    this.hintText = this.add.text(140, 50, 'Q/1-3: Specialties   T: Art style   Space: Attack', {
+      fontSize: '9px', fill: theme.hint,
     });
 
     this.objectiveText = this.add.text(140, 68, '', {
-      fontSize: '10px', fill: '#cde6ff', wordWrap: { width: 205 },
+      fontSize: '10px', fill: theme.objective, wordWrap: { width: 205 },
     });
 
     this.uiContainer.add([
@@ -601,6 +615,7 @@ export class WorldScene extends Phaser.Scene {
       style1: Phaser.Input.Keyboard.KeyCodes.ONE,
       style2: Phaser.Input.Keyboard.KeyCodes.TWO,
       style3: Phaser.Input.Keyboard.KeyCodes.THREE,
+      cycleArt: Phaser.Input.Keyboard.KeyCodes.T,
       dismissVictory: Phaser.Input.Keyboard.KeyCodes.R,
     });
   }
@@ -614,6 +629,13 @@ export class WorldScene extends Phaser.Scene {
       this.physics.add.collider(this.player, enemy);
       this.physics.add.collider(enemy, this.wallObjects);
     });
+  }
+
+  cycleArtStyle() {
+    const currentIndex = this.styleOrder.indexOf(this.currentArtStyle);
+    this.currentArtStyle = this.styleOrder[(currentIndex + 1) % this.styleOrder.length];
+    localStorage.setItem(this.styleKey, this.currentArtStyle);
+    this.scene.restart();
   }
 
   switchSpecialty(index, announce = true) {
@@ -917,6 +939,11 @@ export class WorldScene extends Phaser.Scene {
     this.player.setVelocity(vx, vy);
 
     this.playerNameTag.setPosition(this.player.x, this.player.y - 22);
+
+    if (Phaser.Input.Keyboard.JustDown(this.wasd.cycleArt)) {
+      this.cycleArtStyle();
+      return;
+    }
 
     if (Phaser.Input.Keyboard.JustDown(this.wasd.switchStyle)) {
       this.switchSpecialty(this.currentSpecialtyIndex + 1);

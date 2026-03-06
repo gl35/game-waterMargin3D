@@ -38,6 +38,10 @@ export class WorldScene extends Phaser.Scene {
     this.touchAxis = { x: 0, y: 0 };
     this.lastTouchAttack = 0;
 
+    this.tonkey = null;
+    this.tonkeyUnlocked = false;
+    this.tonkeyAttackCooldown = 0;
+
     this.specialties = [
       {
         id: 'vanguard',
@@ -238,6 +242,15 @@ export class WorldScene extends Phaser.Scene {
         dialog: 'Magistrate raiders burned our granary! Their captain still stalks the road.',
         recruitable: false,
       },
+      {
+        id: 'tonkey',
+        x: 12,
+        y: 12,
+        name: 'Tonkey',
+        role: 'Wandering Fighter',
+        dialog: 'Name\'s Tonkey. Say the word and I\'ll watch your back in every fight.',
+        recruitable: false,
+      },
     ];
 
     npcData.forEach((data) => {
@@ -247,9 +260,13 @@ export class WorldScene extends Phaser.Scene {
       npc.setDepth(9);
       npc.npcData = data;
 
+      if (data.id === 'tonkey') {
+        npc.setTint(0xa8ffd2);
+      }
+
       const tag = this.add.text(data.x * 32 + 16, data.y * 32 - 4, data.name, {
         fontSize: '9px',
-        fill: '#ffff88',
+        fill: data.id === 'tonkey' ? '#9fffc8' : '#ffff88',
         stroke: '#000000',
         strokeThickness: 2,
       }).setOrigin(0.5).setDepth(12);
@@ -257,6 +274,22 @@ export class WorldScene extends Phaser.Scene {
       npc.nameTag = tag;
       this.npcs.push(npc);
     });
+
+    this.tonkey = this.physics.add.sprite(0, 0, this.tx('npc'));
+    this.tonkey.setScale(1.25);
+    this.tonkey.setTint(0x9fffc8);
+    this.tonkey.setDepth(9);
+    this.tonkey.body.setSize(20, 22);
+    this.tonkey.body.setOffset(6, 8);
+    this.tonkey.setVisible(false);
+    this.tonkey.setActive(false);
+
+    this.tonkeyNameTag = this.add.text(0, 0, 'Tonkey', {
+      fontSize: '9px',
+      fill: '#9fffc8',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(12).setVisible(false);
   }
 
   createEnemy(data) {
@@ -317,6 +350,11 @@ export class WorldScene extends Phaser.Scene {
           specialtyIndex: this.currentSpecialtyIndex,
         },
         chapterState: this.chapterState,
+        tonkey: {
+          unlocked: this.tonkeyUnlocked,
+          x: this.tonkey?.x,
+          y: this.tonkey?.y,
+        },
         npcs: this.npcs.map((npc) => ({
           id: npc.npcData.id,
           recruited: !!npc.npcData.recruited,
@@ -360,8 +398,17 @@ export class WorldScene extends Phaser.Scene {
         ...saveData.chapterState,
       };
 
+      this.tonkeyUnlocked = !!saveData?.tonkey?.unlocked;
+
       if (typeof saveData.player.x === 'number' && typeof saveData.player.y === 'number') {
         this.player.setPosition(saveData.player.x, saveData.player.y);
+      }
+
+      if (this.tonkeyUnlocked && this.tonkey) {
+        const tx = typeof saveData?.tonkey?.x === 'number' ? saveData.tonkey.x : this.player.x - 24;
+        const ty = typeof saveData?.tonkey?.y === 'number' ? saveData.tonkey.y : this.player.y + 16;
+        this.tonkey.setActive(true).setVisible(true).setPosition(tx, ty);
+        this.tonkeyNameTag.setVisible(true);
       }
 
       const recruitedMap = new Map((saveData.npcs || []).map((n) => [n.id, !!n.recruited]));
@@ -738,6 +785,11 @@ export class WorldScene extends Phaser.Scene {
       this.physics.add.collider(this.player, enemy);
       this.physics.add.collider(enemy, this.wallObjects);
     });
+
+    if (this.tonkey) {
+      this.physics.add.collider(this.tonkey, this.wallObjects);
+      this.physics.add.collider(this.tonkey, this.player);
+    }
   }
 
   cycleArtStyle() {
@@ -802,6 +854,10 @@ export class WorldScene extends Phaser.Scene {
     }
     if (npc.npcData.id === 'songjiang' && this.chapterState.stage === 'return_songjiang') {
       text += '\n\n[Main Mission] You returned victorious. Report and claim your reward.';
+    }
+
+    if (npc.npcData.id === 'tonkey' && !this.tonkeyUnlocked) {
+      text += '\n[Press E/USE to ask Tonkey to join your party.]';
     }
 
     if (npc.npcData.recruitable && !npc.npcData.recruited) {
@@ -1004,6 +1060,42 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  updateTonkey(delta) {
+    if (!this.tonkeyUnlocked || !this.tonkey?.active) return;
+
+    const followDist = Phaser.Math.Distance.Between(this.tonkey.x, this.tonkey.y, this.player.x, this.player.y);
+    if (followDist > 26) {
+      const angle = Phaser.Math.Angle.Between(this.tonkey.x, this.tonkey.y, this.player.x, this.player.y);
+      this.tonkey.setVelocity(Math.cos(angle) * 120, Math.sin(angle) * 120);
+    } else {
+      this.tonkey.setVelocity(0, 0);
+    }
+
+    this.tonkeyNameTag.setPosition(this.tonkey.x, this.tonkey.y - 24).setVisible(true);
+
+    this.tonkeyAttackCooldown -= delta;
+    if (this.tonkeyAttackCooldown > 0) return;
+
+    const target = this.enemies
+      .filter((e) => e.active)
+      .sort((a, b) => Phaser.Math.Distance.Between(this.tonkey.x, this.tonkey.y, a.x, a.y) - Phaser.Math.Distance.Between(this.tonkey.x, this.tonkey.y, b.x, b.y))[0];
+
+    if (!target) return;
+
+    const d = Phaser.Math.Distance.Between(this.tonkey.x, this.tonkey.y, target.x, target.y);
+    if (d <= 56) {
+      const dmg = Phaser.Math.Between(6, 10);
+      target.hp -= dmg;
+      this.showDamageText(target.x, target.y - 12, `Tonkey -${dmg}`, '#9fffc8');
+      this.updateEnemyHPBar(target);
+      this.tonkeyAttackCooldown = 520;
+
+      if (target.hp <= 0) {
+        this.onEnemyDefeated(target);
+      }
+    }
+  }
+
   update(time, delta) {
     this.updateTouchFallback();
 
@@ -1014,6 +1106,18 @@ export class WorldScene extends Phaser.Scene {
 
       if (Phaser.Input.Keyboard.JustDown(this.wasd.interact) || this.consumeTouchPress('interactPressed')) {
         const nearNPC = this.npcs.find((npc) => Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 60);
+
+        if (nearNPC?.npcData.id === 'tonkey' && !this.tonkeyUnlocked) {
+          this.tonkeyUnlocked = true;
+          this.tonkey.setActive(true).setVisible(true);
+          this.tonkey.setPosition(this.player.x - 26, this.player.y + 18);
+          this.tonkeyNameTag.setVisible(true);
+          this.dialogText.setText('Tonkey: I\'m in. Stay sharp — I\'ll cut down anyone who gets too close.\n✓ Tonkey now follows and fights for you.');
+          this.showChapterToast('Companion Joined: Tonkey');
+          this.saveCheckpoint();
+          return;
+        }
+
         if (nearNPC?.npcData.recruitable && !nearNPC.npcData.recruited) {
           nearNPC.npcData.recruited = true;
           this.heroesRecruited += 1;
@@ -1122,6 +1226,7 @@ export class WorldScene extends Phaser.Scene {
       this.updateEnemyHPBar(enemy);
     });
 
+    this.updateTonkey(delta);
     this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
   }
 }

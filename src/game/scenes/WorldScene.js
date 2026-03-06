@@ -112,6 +112,7 @@ export class WorldScene extends Phaser.Scene {
     this.showChapterToast(`Chapter ${this.chapterState.chapter} begins • Visual: ${this.currentArtStyle}`);
     this.updateMissionUI();
     this.playChapter0Prologue();
+    this.playChapter0IntroCinematic();
 
     this.time.addEvent({
       delay: 10000,
@@ -713,6 +714,95 @@ export class WorldScene extends Phaser.Scene {
     this.time.delayedCall(3900, () => {
       this.showChapterToast('Find Liangshan. If you rewrite fate here, you may return to modern time.');
     });
+  }
+
+  playChapter0IntroCinematic() {
+    if (this.chapterState.stage !== 'chapter0_intro') return;
+
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const overlay = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
+
+    const bg = this.add.rectangle(0, 0, w, h, 0x000000, 0.88).setOrigin(0);
+    const title = this.add.text(w / 2, h * 0.22, 'Chapter 0\nFever Dream of Liangshan', {
+      fontSize: '28px',
+      align: 'center',
+      fill: '#f3d8a0',
+      fontFamily: 'serif',
+      stroke: '#000000',
+      strokeThickness: 6,
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    const lines = [
+      'Night before the Song dynasty exam.',
+      'A high school student studies until dawn, burning with fever.',
+      'He collapses on his desk... and opens his eyes in Liangshan.',
+      'To return to modern time, he must survive this era and reach the heroes.',
+    ];
+
+    const body = this.add.text(w / 2, h * 0.52, '', {
+      fontSize: '16px',
+      align: 'center',
+      fill: '#e6e6f6',
+      fontFamily: 'serif',
+      wordWrap: { width: Math.min(760, w - 100), useAdvancedWrap: true },
+      lineSpacing: 6,
+    }).setOrigin(0.5);
+
+    const skip = this.add.text(w / 2, h * 0.84, 'Tap / Press Space to skip', {
+      fontSize: '13px',
+      fill: '#bbbbbb',
+      fontFamily: 'sans-serif',
+    }).setOrigin(0.5);
+
+    overlay.add([bg, title, body, skip]);
+
+    let idx = 0;
+    body.setText(lines[idx]);
+
+    const nextLine = () => {
+      idx += 1;
+      if (idx >= lines.length) {
+        this.tweens.add({
+          targets: overlay,
+          alpha: 0,
+          duration: 380,
+          onComplete: () => overlay.destroy(),
+        });
+        return;
+      }
+      this.tweens.add({
+        targets: body,
+        alpha: 0,
+        duration: 180,
+        onComplete: () => {
+          body.setText(lines[idx]);
+          this.tweens.add({ targets: body, alpha: 1, duration: 220 });
+        },
+      });
+    };
+
+    const lineTimer = this.time.addEvent({
+      delay: 2100,
+      loop: true,
+      callback: nextLine,
+    });
+
+    const endNow = () => {
+      lineTimer.remove(false);
+      if (overlay.active) {
+        this.tweens.add({
+          targets: overlay,
+          alpha: 0,
+          duration: 220,
+          onComplete: () => overlay.destroy(),
+        });
+      }
+    };
+
+    this.input.keyboard.once('keydown-SPACE', endNow);
+    this.input.once('pointerdown', endNow);
   }
 
   syncStoryProgress() {

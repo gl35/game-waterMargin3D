@@ -43,6 +43,8 @@ export class WorldScene extends Phaser.Scene {
     this.tonkeyUnlocked = false;
     this.tonkeyAttackCooldown = 0;
 
+    this.enemyRespawnCooldown = 0;
+
     this.playerFacing = { x: 1, y: 0 };
     this.lastSafePlayerPos = { x: 0, y: 0 };
     this.isSwitchingArtStyle = false;
@@ -333,6 +335,11 @@ export class WorldScene extends Phaser.Scene {
 
     this.updateEnemyHPBar(enemy);
     this.enemies.push(enemy);
+
+    if (this.player && this.wallObjects) {
+      this.physics.add.collider(this.player, enemy);
+      this.physics.add.collider(enemy, this.wallObjects);
+    }
   }
 
   createEnemies() {
@@ -456,6 +463,30 @@ export class WorldScene extends Phaser.Scene {
     } catch (err) {
       console.warn('Checkpoint clear failed', err);
     }
+  }
+
+  spawnEnemyWave(count = 3) {
+    const points = [
+      { x: 32, y: 10 }, { x: 35, y: 15 }, { x: 38, y: 8 },
+      { x: 40, y: 12 }, { x: 34, y: 20 }, { x: 28, y: 18 },
+      { x: 42, y: 24 }, { x: 30, y: 28 },
+    ];
+
+    for (let i = 0; i < count; i++) {
+      const p = points[Phaser.Math.Between(0, points.length - 1)];
+      this.createEnemy({
+        id: `raider-wave-${Date.now()}-${i}`,
+        name: ['Night Pike Ren', 'Ash Saber Mo', 'River Fang Qiu'][Phaser.Math.Between(0, 2)],
+        x: p.x,
+        y: p.y,
+        hp: Phaser.Math.Between(30, 42),
+        speed: Phaser.Math.Between(58, 70),
+        damage: Phaser.Math.Between(6, 9),
+        gold: Phaser.Math.Between(10, 18),
+      });
+    }
+
+    this.showChapterToast('New enemy wave sighted!');
   }
 
   spawnMiniBoss() {
@@ -1427,6 +1458,13 @@ export class WorldScene extends Phaser.Scene {
     this.enemies.forEach((enemy) => {
       if (enemy.shadow) enemy.shadow.setPosition(enemy.x, enemy.y + (enemy.isMiniBoss ? 20 : 14));
     });
+
+    this.enemyRespawnCooldown -= delta;
+    const canRespawnFreeRoam = this.chapterState.stage === 'complete' || this.chapterState.stage === 'return_songjiang';
+    if (canRespawnFreeRoam && this.enemies.filter((e) => e.active).length === 0 && this.enemyRespawnCooldown <= 0) {
+      this.enemyRespawnCooldown = 5000;
+      this.spawnEnemyWave(4);
+    }
 
     this.updateTonkey(delta);
     this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);

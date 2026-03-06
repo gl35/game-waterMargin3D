@@ -701,6 +701,25 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  syncStoryProgress() {
+    const linchong = this.npcs.find((n) => n.npcData.id === 'linchong');
+    const hasLinchong = !!linchong?.npcData?.recruited;
+    const hasTonkey = !!this.tonkeyUnlocked;
+
+    if (this.chapterState.stage === 'chapter0_recruit' && hasLinchong && hasTonkey) {
+      this.chapterState.stage = 'chapter0_ready';
+      this.chapterState.objective = 'Report to Song Jiang to begin Chapter 1.';
+      this.updateMissionUI();
+      this.showChapterToast('Chapter 0 Updated: Report to Song Jiang');
+      this.saveCheckpoint();
+    }
+
+    if (this.chapterState.chapter === 1 && this.chapterState.stage === 'clear_raiders' && this.chapterState.raidersDefeated >= this.chapterState.raidersTarget && !this.chapterState.minibossSpawned) {
+      this.spawnMiniBoss();
+      this.saveCheckpoint();
+    }
+  }
+
   showChapterToast(text) {
     this.chapterToast.setText(text).setAlpha(1).setVisible(true);
     this.tweens.killTweensOf(this.chapterToast);
@@ -1293,6 +1312,7 @@ export class WorldScene extends Phaser.Scene {
   update(time, delta) {
     this.playerMaxHP = 100;
     this.playerHP = Phaser.Math.Clamp(this.playerHP, 0, this.playerMaxHP);
+    this.syncStoryProgress();
     this.updateTouchFallback();
 
     if (this.dialogActive) {

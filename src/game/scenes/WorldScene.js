@@ -611,7 +611,7 @@ export class WorldScene extends Phaser.Scene {
   setupCamera() {
     this.cameras.main.setBounds(0, 0, 50 * 32, 50 * 32);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setZoom(1.45);
+    this.cameras.main.setZoom(1.75);
   }
 
   setupInput() {

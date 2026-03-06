@@ -43,6 +43,7 @@ export class WorldScene extends Phaser.Scene {
     this.tonkeyAttackCooldown = 0;
 
     this.playerFacing = { x: 1, y: 0 };
+    this.lastSafePlayerPos = { x: 0, y: 0 };
 
     this.specialties = [
       {
@@ -204,6 +205,8 @@ export class WorldScene extends Phaser.Scene {
       stroke: '#000000',
       strokeThickness: 2,
     }).setOrigin(0.5).setDepth(11);
+
+    this.lastSafePlayerPos = { x: this.player.x, y: this.player.y };
   }
 
   createNPCs() {
@@ -788,6 +791,20 @@ export class WorldScene extends Phaser.Scene {
     this.touchState.down = this.touchAxis.y > 0.22;
   }
 
+  keepPlayerOutOfBlockedTiles() {
+    if (!this.player?.body) return;
+
+    const overlappingBlocked = this.physics.overlap(this.player, this.wallObjects);
+    if (!overlappingBlocked) {
+      this.lastSafePlayerPos.x = this.player.x;
+      this.lastSafePlayerPos.y = this.player.y;
+      return;
+    }
+
+    this.player.setPosition(this.lastSafePlayerPos.x, this.lastSafePlayerPos.y);
+    this.player.setVelocity(0, 0);
+  }
+
   setupCollisions() {
     this.physics.add.collider(this.player, this.wallObjects);
     this.npcs.forEach((npc) => {
@@ -1198,6 +1215,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.player.setVelocity(vx, vy);
+    this.keepPlayerOutOfBlockedTiles();
 
     this.playerNameTag.setPosition(this.player.x, this.player.y - 22);
 

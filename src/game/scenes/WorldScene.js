@@ -580,10 +580,10 @@ export class WorldScene extends Phaser.Scene {
 
     const gameWidth = this.scale.width;
     const gameHeight = this.scale.height;
-    const boxWidth = Math.min(gameWidth - 56, 760);
+    const boxWidth = Math.min(gameWidth - 120, 620);
     const boxX = Math.round((gameWidth - boxWidth) / 2);
-    const boxHeight = 156;
-    const safeBottom = Math.max(18, Math.round(gameHeight * 0.12));
+    const boxHeight = 196;
+    const safeBottom = Math.max(28, Math.round(gameHeight * 0.18));
     const boxY = gameHeight - boxHeight - safeBottom;
 
     this.dialogBox = this.add.container(0, 0).setScrollFactor(0).setDepth(200).setVisible(false);
@@ -593,15 +593,15 @@ export class WorldScene extends Phaser.Scene {
     dialogBg.lineStyle(2, 0xc8a96e);
     dialogBg.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
-    this.dialogNameText = this.add.text(boxX + 16, boxY + 12, '', {
-      fontSize: '13px', fill: '#c8a96e', fontFamily: 'serif', fontStyle: 'bold',
+    this.dialogNameText = this.add.text(boxX + 16, boxY + 10, '', {
+      fontSize: '12px', fill: '#c8a96e', fontFamily: 'serif', fontStyle: 'bold',
     });
-    this.dialogText = this.add.text(boxX + 16, boxY + 36, '', {
-      fontSize: '12px', fill: '#ffffff', wordWrap: { width: boxWidth - 32, useAdvancedWrap: true },
-      lineSpacing: 2,
+    this.dialogText = this.add.text(boxX + 16, boxY + 32, '', {
+      fontSize: '11px', fill: '#ffffff', wordWrap: { width: boxWidth - 32, useAdvancedWrap: true },
+      lineSpacing: 3,
     });
-    this.dialogPrompt = this.add.text(boxX + boxWidth - 130, boxY + boxHeight - 18, '[SPACE to close]', {
-      fontSize: '11px', fill: '#888888',
+    this.dialogPrompt = this.add.text(boxX + boxWidth - 122, boxY + boxHeight - 22, '[SPACE to close]', {
+      fontSize: '10px', fill: '#aaaaaa',
     });
 
     this.dialogBox.add([dialogBg, this.dialogNameText, this.dialogText, this.dialogPrompt]);

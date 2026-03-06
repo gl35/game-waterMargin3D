@@ -35,6 +35,8 @@ export class WorldScene extends Phaser.Scene {
       switchPressed: false,
       stylePressed: false,
     };
+    this.touchAxis = { x: 0, y: 0 };
+    this.lastTouchAttack = 0;
 
     this.specialties = [
       {
@@ -636,6 +638,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   createTouchControls() {
+    this.input.addPointer(3);
     const { width, height } = this.scale;
 
     const makeHoldButton = (x, y, label, onDown, onUp, radius = 30, fill = 0x000000) => {
@@ -682,6 +685,48 @@ export class WorldScene extends Phaser.Scene {
     if (!this.touchState[flag]) return false;
     this.touchState[flag] = false;
     return true;
+  }
+
+  updateTouchFallback() {
+    const { width, height } = this.scale;
+    this.touchAxis.x = 0;
+    this.touchAxis.y = 0;
+
+    const pointers = this.input.manager.pointers || [];
+    let bestMag = 0;
+
+    for (const p of pointers) {
+      if (!p.isDown) continue;
+
+      if (p.x <= width * 0.58) {
+        const cx = width * 0.2;
+        const cy = height * 0.82;
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        const maxR = Math.max(40, width * 0.12);
+        const nx = Phaser.Math.Clamp(dx / maxR, -1, 1);
+        const ny = Phaser.Math.Clamp(dy / maxR, -1, 1);
+        const mag = Math.sqrt(nx * nx + ny * ny);
+        if (mag > bestMag) {
+          bestMag = mag;
+          this.touchAxis.x = nx;
+          this.touchAxis.y = ny;
+        }
+      } else {
+        if (p.justDown && this.time.now - this.lastTouchAttack > 220) {
+          this.lastTouchAttack = this.time.now;
+          this.touchState.attackPressed = true;
+        }
+        if (p.justDown && p.y < height * 0.45) {
+          this.touchState.interactPressed = true;
+        }
+      }
+    }
+
+    this.touchState.left = this.touchAxis.x < -0.22;
+    this.touchState.right = this.touchAxis.x > 0.22;
+    this.touchState.up = this.touchAxis.y < -0.22;
+    this.touchState.down = this.touchAxis.y > 0.22;
   }
 
   setupCollisions() {
@@ -960,6 +1005,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    this.updateTouchFallback();
+
     if (this.dialogActive) {
       if (Phaser.Input.Keyboard.JustDown(this.wasd.attack) || this.consumeTouchPress('attackPressed')) {
         this.hideDialog();
@@ -999,6 +1046,11 @@ export class WorldScene extends Phaser.Scene {
     else if (this.cursors.right.isDown || this.wasd.right.isDown || this.touchState.right) vx = speed;
     if (this.cursors.up.isDown || this.wasd.up.isDown || this.touchState.up) vy = -speed;
     else if (this.cursors.down.isDown || this.wasd.down.isDown || this.touchState.down) vy = speed;
+
+    if (Math.abs(this.touchAxis.x) > 0.05 || Math.abs(this.touchAxis.y) > 0.05) {
+      vx = speed * this.touchAxis.x;
+      vy = speed * this.touchAxis.y;
+    }
 
     this.player.setVelocity(vx, vy);
 

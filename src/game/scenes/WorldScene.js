@@ -380,7 +380,7 @@ export class WorldScene extends Phaser.Scene {
       const saveData = JSON.parse(raw);
       if (!saveData?.player || !saveData?.chapterState) return;
 
-      this.playerHP = saveData.player.hp ?? this.playerHP;
+      this.playerHP = Phaser.Math.Clamp(saveData.player.hp ?? this.playerHP, 0, 100);
       this.playerGold = saveData.player.gold ?? this.playerGold;
       this.heroesRecruited = saveData.player.heroesRecruited ?? this.heroesRecruited;
       this.currentSpecialtyIndex = saveData.player.specialtyIndex ?? this.currentSpecialtyIndex;
@@ -972,7 +972,7 @@ export class WorldScene extends Phaser.Scene {
     this.showChapterToast('You were defeated. Retreating to Liangshan...');
 
     this.time.delayedCall(1200, () => {
-      this.playerHP = this.playerMaxHP;
+      this.playerHP = 100;
       this.player.setPosition(9 * 32 + 16, 16 * 32);
       this.player.setAlpha(1);
       this.playerDown = false;
@@ -1138,6 +1138,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    this.playerMaxHP = 100;
+    this.playerHP = Phaser.Math.Clamp(this.playerHP, 0, this.playerMaxHP);
     this.updateTouchFallback();
 
     if (this.dialogActive) {

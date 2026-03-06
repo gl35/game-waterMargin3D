@@ -45,6 +45,8 @@ export class WorldScene extends Phaser.Scene {
 
     this.playerFacing = { x: 1, y: 0 };
     this.lastSafePlayerPos = { x: 0, y: 0 };
+    this.isSwitchingArtStyle = false;
+    this.lastArtSwitchAt = 0;
 
     this.specialties = [
       {
@@ -811,10 +813,20 @@ export class WorldScene extends Phaser.Scene {
   }
 
   cycleArtStyle() {
+    if (this.isSwitchingArtStyle) return;
+    if (this.time.now - this.lastArtSwitchAt < 500) return;
+
+    this.isSwitchingArtStyle = true;
+    this.lastArtSwitchAt = this.time.now;
+
     const currentIndex = this.styleOrder.indexOf(this.currentArtStyle);
     this.currentArtStyle = this.styleOrder[(currentIndex + 1) % this.styleOrder.length];
     localStorage.setItem(this.styleKey, this.currentArtStyle);
-    this.scene.restart();
+
+    this.showChapterToast(`Visual style: ${this.currentArtStyle}`);
+    this.time.delayedCall(120, () => {
+      this.scene.restart();
+    });
   }
 
   switchSpecialty(index, announce = true) {

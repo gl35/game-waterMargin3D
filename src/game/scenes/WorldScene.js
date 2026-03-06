@@ -816,13 +816,11 @@ export class WorldScene extends Phaser.Scene {
           this.touchAxis.y = ny;
         }
       } else {
-        if (p.isDown && p.y > height * 0.5 && this.time.now - this.lastTouchAttack > 260) {
+        // Right side touch = attack only. Interact is now tap-NPC (or keyboard E)
+        // to avoid accidental dialog popups while steering on phone edges.
+        if (p.isDown && this.time.now - this.lastTouchAttack > 260) {
           this.lastTouchAttack = this.time.now;
           this.touchState.attackPressed = true;
-        }
-        if (p.isDown && p.y <= height * 0.5 && this.time.now - this.lastTouchInteract > 320) {
-          this.lastTouchInteract = this.time.now;
-          this.touchState.interactPressed = true;
         }
       }
     }

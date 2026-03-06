@@ -1144,6 +1144,22 @@ export class WorldScene extends Phaser.Scene {
     this.saveCheckpoint();
   }
 
+  autoAimAtNearestEnemy(maxRange = 220) {
+    const target = this.enemies
+      .filter((e) => e.active)
+      .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y) - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y))[0];
+
+    if (!target) return;
+    const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
+    if (d > maxRange) return;
+
+    const dx = target.x - this.player.x;
+    const dy = target.y - this.player.y;
+    const mag = Math.sqrt(dx * dx + dy * dy) || 1;
+    this.playerFacing.x = dx / mag;
+    this.playerFacing.y = dy / mag;
+  }
+
   attackNearbyEnemies() {
     const style = this.specialties[this.currentSpecialtyIndex];
     let hitCount = 0;
@@ -1348,6 +1364,7 @@ export class WorldScene extends Phaser.Scene {
     this.attackCooldown -= delta;
     if ((Phaser.Input.Keyboard.JustDown(this.wasd.attack) || this.consumeTouchPress('attackPressed')) && this.attackCooldown <= 0) {
       this.attackCooldown = 320;
+      this.autoAimAtNearestEnemy();
       const style = this.specialties[this.currentSpecialtyIndex];
       this.playSlashFx(style);
       this.attackNearbyEnemies();

@@ -15,6 +15,7 @@ export class WorldScene extends Phaser.Scene {
     this.currentInteractingNpc = null;
     this.playerDown = false;
     this.victoryShown = false;
+    this.saveKey = 'dowm.chapter1.save.v1';
 
     this.specialties = [
       {
@@ -68,13 +69,20 @@ export class WorldScene extends Phaser.Scene {
     this.createPlayer();
     this.createNPCs();
     this.createEnemies();
+    this.loadCheckpoint();
     this.createUI();
     this.setupCamera();
     this.setupInput();
     this.setupCollisions();
-    this.switchSpecialty(0, false);
+    this.switchSpecialty(this.currentSpecialtyIndex, false);
     this.showChapterToast('Chapter 1: Oath at Liangshan begins.');
     this.updateMissionUI();
+
+    this.time.addEvent({
+      delay: 10000,
+      loop: true,
+      callback: () => this.saveCheckpoint(),
+    });
   }
 
   createWorld() {
@@ -266,6 +274,105 @@ export class WorldScene extends Phaser.Scene {
     ];
 
     raiders.forEach((raider) => this.createEnemy(raider));
+  }
+
+  saveCheckpoint() {
+    try {
+      const saveData = {
+        player: {
+          x: this.player?.x,
+          y: this.player?.y,
+          hp: this.playerHP,
+          gold: this.playerGold,
+          heroesRecruited: this.heroesRecruited,
+          specialtyIndex: this.currentSpecialtyIndex,
+        },
+        chapterState: this.chapterState,
+        npcs: this.npcs.map((npc) => ({
+          id: npc.npcData.id,
+          recruited: !!npc.npcData.recruited,
+        })),
+        enemies: this.enemies.filter((e) => e.active).map((enemy) => ({
+          id: enemy.enemyId,
+          name: enemy.displayName,
+          x: Math.round(enemy.x / 32),
+          y: Math.round(enemy.y / 32),
+          hp: Math.max(1, Math.round(enemy.hp)),
+          speed: enemy.moveSpeed,
+          damage: enemy.damage,
+          gold: enemy.gold,
+          isMiniBoss: !!enemy.isMiniBoss,
+          enraged: !!enemy.enraged,
+        })),
+        timestamp: Date.now(),
+      };
+
+      localStorage.setItem(this.saveKey, JSON.stringify(saveData));
+    } catch (err) {
+      console.warn('Checkpoint save failed', err);
+    }
+  }
+
+  loadCheckpoint() {
+    try {
+      const raw = localStorage.getItem(this.saveKey);
+      if (!raw) return;
+
+      const saveData = JSON.parse(raw);
+      if (!saveData?.player || !saveData?.chapterState) return;
+
+      this.playerHP = saveData.player.hp ?? this.playerHP;
+      this.playerGold = saveData.player.gold ?? this.playerGold;
+      this.heroesRecruited = saveData.player.heroesRecruited ?? this.heroesRecruited;
+      this.currentSpecialtyIndex = saveData.player.specialtyIndex ?? this.currentSpecialtyIndex;
+
+      this.chapterState = {
+        ...this.chapterState,
+        ...saveData.chapterState,
+      };
+
+      if (typeof saveData.player.x === 'number' && typeof saveData.player.y === 'number') {
+        this.player.setPosition(saveData.player.x, saveData.player.y);
+      }
+
+      const recruitedMap = new Map((saveData.npcs || []).map((n) => [n.id, !!n.recruited]));
+      this.npcs.forEach((npc) => {
+        npc.npcData.recruited = recruitedMap.get(npc.npcData.id) || false;
+      });
+
+      this.enemies.forEach((enemy) => {
+        if (enemy.nameTag) enemy.nameTag.destroy();
+        if (enemy.hpBar) enemy.hpBar.destroy();
+        enemy.destroy();
+      });
+      this.enemies = [];
+
+      (saveData.enemies || []).forEach((enemyData) => {
+        this.createEnemy({
+          id: enemyData.id,
+          name: enemyData.name,
+          x: enemyData.x,
+          y: enemyData.y,
+          hp: enemyData.hp,
+          speed: enemyData.speed,
+          damage: enemyData.damage,
+          gold: enemyData.gold,
+          isMiniBoss: !!enemyData.isMiniBoss,
+        });
+      });
+
+      this.chapterState.minibossSpawned = this.enemies.some((e) => e.isMiniBoss) || this.chapterState.minibossDefeated;
+    } catch (err) {
+      console.warn('Checkpoint load failed', err);
+    }
+  }
+
+  clearCheckpoint() {
+    try {
+      localStorage.removeItem(this.saveKey);
+    } catch (err) {
+      console.warn('Checkpoint clear failed', err);
+    }
   }
 
   spawnMiniBoss() {
@@ -528,11 +635,13 @@ export class WorldScene extends Phaser.Scene {
       this.chapterState.objective = 'Travel east and speak with Village Elder Liu.';
       this.updateMissionUI();
       this.showChapterToast('Mission Updated: Meet Village Elder Liu');
+      this.saveCheckpoint();
     } else if (this.chapterState.stage === 'talk_villager' && npcId === 'villager') {
       this.chapterState.stage = 'clear_raiders';
       this.chapterState.objective = `Defeat named raiders (${this.chapterState.raidersDefeated}/${this.chapterState.raidersTarget}).`;
       this.updateMissionUI();
       this.showChapterToast('Mission Updated: Clear the named raiders');
+      this.saveCheckpoint();
     } else if (this.chapterState.stage === 'return_songjiang' && npcId === 'songjiang') {
       this.chapterState.stage = 'complete';
       this.chapterState.completed = true;
@@ -542,6 +651,7 @@ export class WorldScene extends Phaser.Scene {
       this.playerGold += 100;
       this.goldText.setText(`Gold: ${this.playerGold} 两`);
       this.showVictoryScreen();
+      this.saveCheckpoint();
     }
   }
 
@@ -650,6 +760,7 @@ export class WorldScene extends Phaser.Scene {
       this.goldText.setText(`Gold: ${this.playerGold} 两`);
       this.hpText.setText(`HP: ${this.playerHP}/${this.playerMaxHP}`);
       this.showChapterToast('Recovered at Liangshan (-20 gold).');
+      this.saveCheckpoint();
     });
   }
 
@@ -719,6 +830,8 @@ export class WorldScene extends Phaser.Scene {
       this.updateMissionUI();
       this.showChapterToast('Captain Zhao defeated! Return to Song Jiang.');
     }
+
+    this.saveCheckpoint();
   }
 
   attackNearbyEnemies() {
@@ -773,6 +886,7 @@ export class WorldScene extends Phaser.Scene {
           this.heroesRecruited += 1;
           this.heroText.setText(`Heroes: ${this.heroesRecruited}/108`);
           this.dialogText.setText(`${nearNPC.npcData.dialog}\n✓ Hero recruited! They have joined Liangshan!`);
+          this.saveCheckpoint();
         }
       }
       return;

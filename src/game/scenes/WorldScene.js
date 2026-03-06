@@ -690,15 +690,17 @@ export class WorldScene extends Phaser.Scene {
     this.input.addPointer(3);
     const { width, height } = this.scale;
 
+    const uiScale = this.scale.width >= 1400 ? 2.1 : 1.3;
+
     const makeHoldButton = (x, y, label, onDown, onUp, radius = 30, fill = 0x000000) => {
-      const btn = this.add.circle(x, y, radius, fill, 0.35)
+      const btn = this.add.circle(x, y, radius * uiScale, fill, 0.45)
         .setStrokeStyle(2, 0xffffff, 0.28)
         .setScrollFactor(0)
         .setDepth(260)
         .setInteractive({ useHandCursor: false });
 
       this.add.text(x, y, label, {
-        fontSize: radius >= 40 ? '20px' : '16px',
+        fontSize: `${Math.round((radius >= 40 ? 20 : 16) * uiScale)}px`,
         color: '#ffffff',
         fontStyle: 'bold',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(261);
@@ -719,15 +721,23 @@ export class WorldScene extends Phaser.Scene {
       return btn;
     };
 
-    makeHoldButton(95, height - 120, '▲', () => { this.touchState.up = true; }, () => { this.touchState.up = false; });
-    makeHoldButton(95, height - 42, '▼', () => { this.touchState.down = true; }, () => { this.touchState.down = false; });
-    makeHoldButton(35, height - 42, '◀', () => { this.touchState.left = true; }, () => { this.touchState.left = false; });
-    makeHoldButton(155, height - 42, '▶', () => { this.touchState.right = true; }, () => { this.touchState.right = false; });
+    makeHoldButton(120, height - 180, '▲', () => { this.touchState.up = true; }, () => { this.touchState.up = false; }, 40, 0x111111);
+    makeHoldButton(120, height - 68, '▼', () => { this.touchState.down = true; }, () => { this.touchState.down = false; }, 40, 0x111111);
+    makeHoldButton(36, height - 68, '◀', () => { this.touchState.left = true; }, () => { this.touchState.left = false; }, 40, 0x111111);
+    makeHoldButton(204, height - 68, '▶', () => { this.touchState.right = true; }, () => { this.touchState.right = false; }, 40, 0x111111);
 
-    makeHoldButton(width - 110, height - 66, 'ATK', () => { this.touchState.attackPressed = true; }, () => {}, 44, 0x7a1818);
-    makeHoldButton(width - 210, height - 66, 'USE', () => { this.touchState.interactPressed = true; }, () => {}, 36, 0x1f3f69);
-    makeHoldButton(width - 292, height - 66, 'SW', () => { this.touchState.switchPressed = true; }, () => {}, 30, 0x5a4577);
-    makeHoldButton(width - 356, height - 66, 'ART', () => { this.touchState.stylePressed = true; }, () => {}, 30, 0x5c4b2c);
+    makeHoldButton(width - 136, height - 96, 'ATK', () => { this.touchState.attackPressed = true; }, () => {}, 64, 0xb32424);
+    makeHoldButton(width - 300, height - 96, 'USE', () => { this.touchState.interactPressed = true; }, () => {}, 52, 0x2b5d9a);
+    makeHoldButton(width - 430, height - 96, 'SW', () => { this.touchState.switchPressed = true; }, () => {}, 44, 0x6c4bb5);
+    makeHoldButton(width - 542, height - 96, 'ART', () => { this.touchState.stylePressed = true; }, () => {}, 44, 0x8a6b2e);
+
+    this.add.text(width - 146, height - 182, 'Tap ATK', {
+      fontSize: `${Math.round(18 * uiScale)}px`,
+      color: '#ffd6d6',
+      stroke: '#000000',
+      strokeThickness: 4,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(262);
   }
 
   consumeTouchPress(flag) {

@@ -583,7 +583,8 @@ export class WorldScene extends Phaser.Scene {
     const boxX = 20;
     const boxWidth = gameWidth - 40;
     const boxHeight = 140;
-    const boxY = gameHeight - boxHeight - 16;
+    const safeBottom = Math.max(18, Math.round(gameHeight * 0.12));
+    const boxY = gameHeight - boxHeight - safeBottom;
 
     this.dialogBox = this.add.container(0, 0).setScrollFactor(0).setDepth(200).setVisible(false);
     const dialogBg = this.add.graphics();
@@ -803,17 +804,19 @@ export class WorldScene extends Phaser.Scene {
       return btn;
     };
 
-    makeHoldButton(120, height - 180, '▲', () => { this.touchState.up = true; }, () => { this.touchState.up = false; }, 40, 0x111111);
-    makeHoldButton(120, height - 68, '▼', () => { this.touchState.down = true; }, () => { this.touchState.down = false; }, 40, 0x111111);
-    makeHoldButton(36, height - 68, '◀', () => { this.touchState.left = true; }, () => { this.touchState.left = false; }, 40, 0x111111);
-    makeHoldButton(204, height - 68, '▶', () => { this.touchState.right = true; }, () => { this.touchState.right = false; }, 40, 0x111111);
+    const bottomPad = Math.max(56, Math.round(height * 0.14));
 
-    makeHoldButton(width - 136, height - 96, 'ATK', () => { this.touchState.attackPressed = true; }, () => {}, 64, 0xb32424);
-    makeHoldButton(width - 300, height - 96, 'USE', () => { this.touchState.interactPressed = true; }, () => {}, 52, 0x2b5d9a);
-    makeHoldButton(width - 430, height - 96, 'SW', () => { this.touchState.switchPressed = true; }, () => {}, 44, 0x6c4bb5);
-    makeHoldButton(width - 542, height - 96, 'ART', () => { this.touchState.stylePressed = true; }, () => {}, 44, 0x8a6b2e);
+    makeHoldButton(120, height - (180 + bottomPad), '▲', () => { this.touchState.up = true; }, () => { this.touchState.up = false; }, 40, 0x111111);
+    makeHoldButton(120, height - (68 + bottomPad), '▼', () => { this.touchState.down = true; }, () => { this.touchState.down = false; }, 40, 0x111111);
+    makeHoldButton(36, height - (68 + bottomPad), '◀', () => { this.touchState.left = true; }, () => { this.touchState.left = false; }, 40, 0x111111);
+    makeHoldButton(204, height - (68 + bottomPad), '▶', () => { this.touchState.right = true; }, () => { this.touchState.right = false; }, 40, 0x111111);
 
-    this.add.text(width - 146, height - 182, 'Tap ATK', {
+    makeHoldButton(width - 136, height - (96 + bottomPad), 'ATK', () => { this.touchState.attackPressed = true; }, () => {}, 64, 0xb32424);
+    makeHoldButton(width - 300, height - (96 + bottomPad), 'USE', () => { this.touchState.interactPressed = true; }, () => {}, 52, 0x2b5d9a);
+    makeHoldButton(width - 430, height - (96 + bottomPad), 'SW', () => { this.touchState.switchPressed = true; }, () => {}, 44, 0x6c4bb5);
+    makeHoldButton(width - 542, height - (96 + bottomPad), 'ART', () => { this.touchState.stylePressed = true; }, () => {}, 44, 0x8a6b2e);
+
+    this.add.text(width - 146, height - (182 + bottomPad), 'Tap ATK', {
       fontSize: `${Math.round(18 * uiScale)}px`,
       color: '#ffd6d6',
       stroke: '#000000',

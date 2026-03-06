@@ -559,7 +559,7 @@ export class WorldScene extends Phaser.Scene {
       fontSize: '12px', fill: '#9fe7ff',
     });
 
-    this.hintText = this.add.text(140, 50, 'Q/1-3: Specialties   T: Art style   Space: Attack', {
+    this.hintText = this.add.text(140, 50, 'Q/1-3: Specialties   Space: Attack   E: Talk', {
       fontSize: '9px', fill: theme.hint,
     });
 
@@ -732,7 +732,6 @@ export class WorldScene extends Phaser.Scene {
       style1: Phaser.Input.Keyboard.KeyCodes.ONE,
       style2: Phaser.Input.Keyboard.KeyCodes.TWO,
       style3: Phaser.Input.Keyboard.KeyCodes.THREE,
-      cycleArt: Phaser.Input.Keyboard.KeyCodes.T,
       dismissVictory: Phaser.Input.Keyboard.KeyCodes.R,
     });
 
@@ -1382,7 +1381,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.playerNameTag.setPosition(this.player.x, this.player.y - 22);
 
-    if (Phaser.Input.Keyboard.JustDown(this.wasd.cycleArt) || this.consumeTouchPress('stylePressed')) {
+    if (this.consumeTouchPress('stylePressed')) {
       this.cycleArtStyle();
       return;
     }

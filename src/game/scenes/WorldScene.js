@@ -132,8 +132,18 @@ export class WorldScene extends Phaser.Scene {
 
     this.add.tileSprite(0, 0, mapWidth * tileSize, mapHeight * tileSize, this.tx('chapterBackdrop'))
       .setOrigin(0)
-      .setAlpha(0.38)
-      .setDepth(-20);
+      .setAlpha(0.52)
+      .setDepth(-30);
+
+    this.add.tileSprite(0, 44, mapWidth * tileSize, 220, this.tx('mountains'))
+      .setOrigin(0)
+      .setAlpha(0.62)
+      .setDepth(-28);
+
+    this.add.tileSprite(0, 12, mapWidth * tileSize, 96, this.tx('clouds'))
+      .setOrigin(0)
+      .setAlpha(0.55)
+      .setDepth(-27);
 
     this.mapData = [];
     for (let y = 0; y < mapHeight; y++) {
@@ -191,6 +201,9 @@ export class WorldScene extends Phaser.Scene {
         }
       }
     }
+
+    const haze = this.add.rectangle(mapWidth * tileSize * 0.5, 130, mapWidth * tileSize, 180, 0x9bc8f4, 0.15);
+    haze.setDepth(-12);
 
     this.add.image(6 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(2.0);
     this.add.image(10 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(1.7);

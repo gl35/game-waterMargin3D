@@ -1,24 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls as ThreeOrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as THREE from 'three';
-
-function OrbitController({ minPolar = 0.4, maxPolar = 0.9, minDistance = 25, maxDistance = 60 }) {
-  const { camera, gl } = useThree();
-  const controls = useMemo(() => new ThreeOrbitControls(camera, gl.domElement), [camera, gl]);
-
-  useEffect(() => {
-    controls.enablePan = false;
-    controls.minPolarAngle = minPolar;
-    controls.maxPolarAngle = maxPolar;
-    controls.minDistance = minDistance;
-    controls.maxDistance = maxDistance;
-    return () => controls.dispose();
-  }, [controls, minPolar, maxPolar, minDistance, maxDistance]);
-
-  useFrame(() => controls.update());
-  return null;
-}
 
 function Terrain() {
   const geometry = useMemo(() => {
@@ -94,14 +76,67 @@ function TreeField() {
   );
 }
 
-function HeroAvatar() {
-  const group = useRef();
-  useFrame((state) => {
-    const t = state.clock.getElapsedTime();
-    if (group.current) {
-      group.current.position.y = -0.6 + Math.sin(t * 2) * 0.25;
-      group.current.rotation.y = Math.sin(t * 0.4) * 0.18;
+function useMovementControls() {
+  const stateRef = useRef({ forward: false, backward: false, left: false, right: false });
+  useEffect(() => {
+    const handle = (pressed) => (event) => {
+      switch (event.code) {
+        case 'KeyW':
+        case 'ArrowUp':
+          stateRef.current.forward = pressed;
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          stateRef.current.backward = pressed;
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          stateRef.current.left = pressed;
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          stateRef.current.right = pressed;
+          break;
+        default:
+      }
+    };
+    const handleDown = handle(true);
+    const handleUp = handle(false);
+    window.addEventListener('keydown', handleDown);
+    window.addEventListener('keyup', handleUp);
+    return () => {
+      window.removeEventListener('keydown', handleDown);
+      window.removeEventListener('keyup', handleUp);
+    };
+  }, []);
+  return stateRef;
+}
+
+function HeroAvatar({ heroRef }) {
+  const group = heroRef;
+  const controls = useMovementControls();
+  const velocity = useRef(new THREE.Vector3());
+
+  useFrame((state, delta) => {
+    if (!group.current) return;
+    const dir = new THREE.Vector3(
+      (controls.current.left ? -1 : 0) + (controls.current.right ? 1 : 0),
+      0,
+      (controls.current.forward ? -1 : 0) + (controls.current.backward ? 1 : 0),
+    );
+    if (dir.lengthSq() > 0) {
+      dir.normalize();
+      velocity.current.lerp(dir.multiplyScalar(18), 0.2);
+      group.current.rotation.y = Math.atan2(dir.x, -dir.z);
+    } else {
+      velocity.current.lerp(new THREE.Vector3(), 0.15);
     }
+
+    group.current.position.addScaledVector(velocity.current, delta);
+    group.current.position.x = THREE.MathUtils.clamp(group.current.position.x, -28, 28);
+    group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, -12, 35);
+
+    group.current.position.y = -0.6 + Math.sin(state.clock.getElapsedTime() * 2 + group.current.position.x * 0.2) * 0.1;
   });
 
   return (
@@ -228,7 +263,22 @@ function SkyDome() {
   );
 }
 
+function CameraRig({ target }) {
+  const { camera } = useThree();
+  const offset = useMemo(() => new THREE.Vector3(0, 12, 26), []);
+  useFrame((state, delta) => {
+    if (!target.current) return;
+    const desired = target.current.position.clone().add(offset);
+    camera.position.lerp(desired, 1 - Math.pow(0.001, delta));
+    const lookAt = target.current.position.clone();
+    lookAt.y += 3;
+    camera.lookAt(lookAt);
+  });
+  return null;
+}
+
 function SceneContent() {
+  const heroRef = useRef();
   return (
     <>
       <primitive attach="fog" object={new THREE.Fog(0xb8e4ff, 40, 200)} />
@@ -238,8 +288,9 @@ function SceneContent() {
       <Terrain />
       <PathRibbon />
       <TreeField />
-      <HeroAvatar />
+      <HeroAvatar heroRef={heroRef} />
       <FloatingRune />
+      <CameraRig target={heroRef} />
     </>
   );
 }
@@ -248,7 +299,6 @@ export function GameCanvas() {
   return (
     <Canvas camera={{ position: [0, 12, 32], fov: 48 }} shadows>
       <SceneContent />
-      <OrbitController />
     </Canvas>
   );
 }

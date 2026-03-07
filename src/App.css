@@ -433,6 +433,12 @@ html, body, #root {
   .circle-btn { width: 64px; height: 64px; }
   .dialog-overlay { width: 92vw; font-size: 14px; }
 
+  .hud-bottom {
+    bottom: 120px;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
   .hud-mobile-controls {
     display: flex;
     position: absolute;
@@ -446,8 +452,8 @@ html, body, #root {
   }
 
   .dpad {
-    width: 140px;
-    height: 140px;
+    width: 120px;
+    height: 120px;
     position: relative;
     pointer-events: auto;
   }

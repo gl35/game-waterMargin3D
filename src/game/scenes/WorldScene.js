@@ -162,7 +162,7 @@ export class WorldScene extends Phaser.Scene {
     ridge.closePath();
     ridge.fillPath();
 
-    const plateau = this.add.graphics().setDepth(-25);
+    const plateau = this.add.graphics().setDepth(-25).setScrollFactor(0.85);
     plateau.fillStyle(0xc9f4bf, 0.85);
     plateau.beginPath();
     plateau.moveTo(120, 280);
@@ -234,18 +234,33 @@ export class WorldScene extends Phaser.Scene {
     }
 
     for (let i = 0; i < 220; i++) {
-      const x = Phaser.Math.Between(2, mapWidth - 3);
-      const y = Phaser.Math.Between(2, mapHeight - 3);
+      const x = Phaser.Math.Between(3, mapWidth - 4);
+      const y = Phaser.Math.Between(4, mapHeight - 4);
       if (this.mapData[y][x] !== 0) continue;
       if ((x >= 5 && x <= 16 && y >= 3 && y <= 15) || (x > 18 && x < 32 && y > 18 && y < 32)) continue;
-      if (Phaser.Math.Between(0, 100) < 65) {
-        this.add.image(x * tileSize + 16, y * tileSize + 18, this.tx('tree')).setDepth(7).setScale(Phaser.Math.FloatBetween(0.9, 1.18));
+      if (Phaser.Math.Between(0, 100) < 70) {
+        this.add.image(x * tileSize + 16, y * tileSize + 18, this.tx('tree')).setDepth(Phaser.Math.Between(5, 8)).setScale(Phaser.Math.FloatBetween(0.85, 1.25));
       } else {
-        this.add.image(x * tileSize + 16, y * tileSize + 20, this.tx('rock')).setDepth(6).setScale(Phaser.Math.FloatBetween(0.8, 1.25));
+        this.add.image(x * tileSize + 16, y * tileSize + 20, this.tx('rock')).setDepth(6).setScale(Phaser.Math.FloatBetween(0.7, 1.15));
       }
     }
 
-    const haze = this.add.rectangle(mapWidth * tileSize * 0.5, 130, mapWidth * tileSize, 180, 0x9bc8f4, 0.19);
+    const clusters = [
+      { x: 30, y: 32, count: 30 },
+      { x: 20, y: 28, count: 18 },
+      { x: 36, y: 24, count: 24 },
+    ];
+    clusters.forEach((cluster) => {
+      for (let i = 0; i < cluster.count; i++) {
+        const jitterX = Phaser.Math.Between(-3, 3);
+        const jitterY = Phaser.Math.Between(-3, 3);
+        this.add.image((cluster.x + jitterX) * tileSize + 16, (cluster.y + jitterY) * tileSize + 18, this.tx('tree'))
+          .setDepth(7)
+          .setScale(Phaser.Math.FloatBetween(0.9, 1.3));
+      }
+    });
+
+    const haze = this.add.rectangle(mapWidth * tileSize * 0.5, 150, mapWidth * tileSize, 220, 0x9ad8ff, 0.25);
     haze.setDepth(-12);
 
     this.add.image(6 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(2.0);
@@ -895,7 +910,7 @@ export class WorldScene extends Phaser.Scene {
   setupCamera() {
     this.cameras.main.setBounds(0, 0, 50 * 32, 50 * 32);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setZoom(0.88);
+    this.cameras.main.setZoom(0.8);
   }
 
   setupInput() {

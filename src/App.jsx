@@ -21,9 +21,9 @@ const INTERACT_PROMPT = 'Press E to interact';
 const TAVERN_CREW = [
   {
     id: 'scout',
-    name: 'Gene',
-    title: 'Summit Scout',
-    line: '“If we survive midterms and Liangshan, drinks are on me.”',
+    name: 'Tonkey',
+    title: 'Summit Escort',
+    line: '“If I hauled you here, I can haul you home. Eat up.”',
     color: 'linear-gradient(135deg, #ffecd2, #fcb69f)',
   },
   {
@@ -89,9 +89,16 @@ export default function App() {
     setMobileMove((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const clearMobileMove = useCallback(() => {
-    setMobileMove({ forward: false, backward: false, left: false, right: false });
+  const handleDirectionPointer = useCallback((key, value) => (event) => {
+    event.preventDefault();
+    setMobileMove((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  const handleInteractPointer = useCallback((event) => {
+    event.preventDefault();
+    if (dialog) dismissDialog();
+    else attemptInteraction();
+  }, [dialog, dismissDialog, attemptInteraction]);
 
   const handleHeroMove = useCallback((pos) => {
     heroPosition.current = pos;
@@ -224,36 +231,33 @@ export default function App() {
         <div className="dpad">
           <button
             className="dpad-btn up"
-            onTouchStart={() => setMoveKey('forward', true)}
-            onTouchEnd={() => setMoveKey('forward', false)}
-            onTouchCancel={() => setMoveKey('forward', false)}
+            onPointerDown={handleDirectionPointer('forward', true)}
+            onPointerUp={handleDirectionPointer('forward', false)}
+            onPointerLeave={handleDirectionPointer('forward', false)}
           >↑</button>
           <button
             className="dpad-btn left"
-            onTouchStart={() => setMoveKey('left', true)}
-            onTouchEnd={() => setMoveKey('left', false)}
-            onTouchCancel={() => setMoveKey('left', false)}
+            onPointerDown={handleDirectionPointer('left', true)}
+            onPointerUp={handleDirectionPointer('left', false)}
+            onPointerLeave={handleDirectionPointer('left', false)}
           >←</button>
           <button
             className="dpad-btn right"
-            onTouchStart={() => setMoveKey('right', true)}
-            onTouchEnd={() => setMoveKey('right', false)}
-            onTouchCancel={() => setMoveKey('right', false)}
+            onPointerDown={handleDirectionPointer('right', true)}
+            onPointerUp={handleDirectionPointer('right', false)}
+            onPointerLeave={handleDirectionPointer('right', false)}
           >→</button>
           <button
             className="dpad-btn down"
-            onTouchStart={() => setMoveKey('backward', true)}
-            onTouchEnd={() => setMoveKey('backward', false)}
-            onTouchCancel={() => setMoveKey('backward', false)}
+            onPointerDown={handleDirectionPointer('backward', true)}
+            onPointerUp={handleDirectionPointer('backward', false)}
+            onPointerLeave={handleDirectionPointer('backward', false)}
           >↓</button>
         </div>
         <button
           className="mobile-action"
-          onTouchStart={() => {
-            if (dialog) dismissDialog();
-            else attemptInteraction();
-          }}
-          onTouchEnd={clearMobileMove}
+          onPointerDown={handleInteractPointer}
+          onPointerUp={(event) => event.preventDefault()}
         >
           Interact
         </button>

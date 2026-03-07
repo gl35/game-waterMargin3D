@@ -1,3 +1,5 @@
+import { INITIAL_CHAPTER_STATE, NPCS, SPECIALTIES } from '../../core/story/config';
+
 export class WorldScene extends Phaser.Scene {
   constructor() {
     super({ key: 'WorldScene' });
@@ -50,51 +52,10 @@ export class WorldScene extends Phaser.Scene {
     this.isSwitchingArtStyle = false;
     this.lastArtSwitchAt = 0;
 
-    this.specialties = [
-      {
-        id: 'vanguard',
-        name: 'Vanguard Spear',
-        color: 0xffc26b,
-        description: 'Steady duelist. Bonus damage at close range.',
-        minDamage: 10,
-        maxDamage: 16,
-        range: 52,
-        splash: false,
-      },
-      {
-        id: 'strategist',
-        name: 'Strategist Fan',
-        color: 0x7bc7ff,
-        description: 'Wide strike. Hits all nearby enemies.',
-        minDamage: 7,
-        maxDamage: 11,
-        range: 65,
-        splash: true,
-      },
-      {
-        id: 'shadow',
-        name: 'Shadow Blades',
-        color: 0xd89cff,
-        description: 'Short reach. High crit chance.',
-        minDamage: 8,
-        maxDamage: 14,
-        range: 42,
-        splash: false,
-        critChance: 0.3,
-      },
-    ];
+    this.specialties = SPECIALTIES.map((style) => ({ ...style }));
     this.currentSpecialtyIndex = 0;
 
-    this.chapterState = {
-      chapter: 0,
-      stage: 'chapter0_intro',
-      objective: 'You are a stressed student from modern time. Talk to Wu Yong in Liangshan.',
-      completed: false,
-      raidersDefeated: 0,
-      raidersTarget: 3,
-      minibossSpawned: false,
-      minibossDefeated: false,
-    };
+    this.chapterState = { ...INITIAL_CHAPTER_STATE };
   }
 
   create() {
@@ -290,53 +251,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   createNPCs() {
-    const npcData = [
-      {
-        id: 'songjiang',
-        x: 7,
-        y: 8,
-        name: '宋江',
-        role: 'Song Jiang',
-        dialog: 'Liangshan calls for unity. If your spirit is true, we may help you find your way home.',
-        recruitable: true,
-      },
-      {
-        id: 'wuyong',
-        x: 11,
-        y: 7,
-        name: '吴用',
-        role: 'Wu Yong',
-        dialog: 'You speak like one not born in this era... Song dynasty history, modern exams, fever dreams. Fate dragged you here.',
-        recruitable: false,
-      },
-      {
-        id: 'linchong',
-        x: 9,
-        y: 10,
-        name: '林冲',
-        role: 'Lin Chong',
-        dialog: 'I am Lin Chong. If you seek Liangshan and a road home, I will test your resolve and stand with you.',
-        recruitable: true,
-      },
-      {
-        id: 'villager',
-        x: 30,
-        y: 10,
-        name: '刘村民',
-        role: 'Village Elder Liu',
-        dialog: 'Magistrate raiders burned our granary! Their captain still stalks the road.',
-        recruitable: false,
-      },
-      {
-        id: 'tonkey',
-        x: 12,
-        y: 12,
-        name: 'Tonkey',
-        role: 'Wandering Fighter',
-        dialog: 'Name\'s Tonkey. You look like you just woke from a fever dream. Need backup? I\'ll run with you.',
-        recruitable: false,
-      },
-    ];
+    const npcData = NPCS;
 
     npcData.forEach((data) => {
       const npcTexture = data.id === 'songjiang'

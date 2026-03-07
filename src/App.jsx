@@ -1,33 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import './App.css';
-import { startGame } from './game/Game';
+import { GameCanvas } from './three/Scene';
 
 export default function App() {
-  const mountRef = useRef(null);
-  const gameRef = useRef(null);
-  const [hud, setHud] = useState({ hp: 100, maxHp: 100, gold: 0, heroes: 0, objective: '' });
-
-  useEffect(() => {
-    if (gameRef.current || !mountRef.current) return;
-    gameRef.current = startGame(mountRef.current);
-
-    const onHud = (e) => {
-      if (e?.detail) setHud(e.detail);
-    };
-    window.addEventListener('dowm:hud', onHud);
-
-    return () => {
-      window.removeEventListener('dowm:hud', onHud);
-      gameRef.current?.destroy(true);
-      gameRef.current = null;
-    };
-  }, []);
-
-  const hpPct = Math.max(0, Math.min(100, Math.round((hud.hp / (hud.maxHp || 100)) * 100)));
+  const hud = useMemo(() => ({ hp: 128, maxHp: 160, gold: 320, heroes: 4, objective: 'Reach the summit beacon and repel the raiders.' }), []);
+  const hpPct = Math.round((hud.hp / hud.maxHp) * 100);
 
   return (
     <div className="hud-shell">
-      <div className="hud-frame" ref={mountRef} />
+      <div className="hud-frame">
+        <GameCanvas />
+      </div>
 
       <div className="hud-top">
         <div className="stat-block">
@@ -40,9 +23,9 @@ export default function App() {
         <div className="stat-block">
           <div className="stat-label"><span className="icon bolt" /> Energy</div>
           <div className="bar energy">
-            <div className="fill" style={{ width: `${Math.min(100, Math.max(0, hpPct + 8))}%` }} />
+            <div className="fill" style={{ width: `${Math.min(100, hpPct + 10)}%` }} />
           </div>
-          <div className="stat-value">{Math.max(40, Math.min(100, hpPct + 8))}%</div>
+          <div className="stat-value">{Math.min(100, hpPct + 10)}%</div>
         </div>
         <div className="stat-block mini">
           <div className="stat-label"><span className="icon bag" /></div>
@@ -51,7 +34,7 @@ export default function App() {
       </div>
 
       <div className="hud-objective" aria-live="polite">
-        {hud.objective || 'Explore the summit ridge.'}
+        {hud.objective}
       </div>
 
       <div className="hud-top-right">

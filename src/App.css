@@ -291,6 +291,118 @@ html, body, #root {
   transform: translateY(1px);
 }
 
+.cutscene-trigger {
+  position: absolute;
+  left: clamp(14px, 4vw, 60px);
+  bottom: clamp(120px, 14vh, 220px);
+  border: none;
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #082032;
+  background: linear-gradient(135deg, #fdfbfb, #ebedee);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.cutscene-trigger:active {
+  transform: translateY(1px);
+}
+
+.tavern-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 7, 12, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.tavern-panel {
+  width: min(90vw, 720px);
+  padding: 28px;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #1c1f2b, #2a2f44);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+  color: #fff8ef;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tavern-header {
+  text-align: center;
+}
+
+.tavern-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.tavern-sub {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #c6d2ff;
+}
+
+.tavern-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.tavern-card {
+  border-radius: 16px;
+  padding: 14px;
+  color: #0c0d13;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.tavern-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.tavern-role {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(12, 13, 19, 0.7);
+  margin-bottom: 8px;
+}
+
+.tavern-line {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tavern-footer {
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #b6c5ff;
+}
+
+.tavern-close {
+  align-self: center;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+  color: #1b1b1b;
+  cursor: pointer;
+}
+
+.tavern-close:active {
+  transform: translateY(1px);
+}
+
 .icon {
   display: inline-block;
 }
@@ -309,6 +421,8 @@ html, body, #root {
 .icon.jump::before { content: '🌀'; }
 .icon.block::before { content: '🛡️'; }
 
+.hud-mobile-controls { display: none; }
+
 @media (max-width: 720px) {
   .hud-top { flex-direction: column; gap: 10px; }
   .stat-value { min-width: 64px; }
@@ -318,4 +432,53 @@ html, body, #root {
   .slot { width: 48px; height: 48px; }
   .circle-btn { width: 64px; height: 64px; }
   .dialog-overlay { width: 92vw; font-size: 14px; }
+
+  .hud-mobile-controls {
+    display: flex;
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 14px;
+    z-index: 2500;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: none;
+  }
+
+  .dpad {
+    width: 140px;
+    height: 140px;
+    position: relative;
+    pointer-events: auto;
+  }
+
+  .dpad-btn {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.5);
+    background: rgba(13, 36, 58, 0.75);
+    color: #fff;
+    font-size: 22px;
+    touch-action: none;
+  }
+
+  .dpad-btn.up { left: 46px; top: 0; }
+  .dpad-btn.left { left: 0; top: 46px; }
+  .dpad-btn.right { right: 0; top: 46px; }
+  .dpad-btn.down { left: 46px; bottom: 0; }
+
+  .mobile-action {
+    pointer-events: auto;
+    width: 94px;
+    height: 94px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.65);
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.85), rgba(86,133,177,.85));
+    color: #0e1a25;
+    font-weight: 700;
+    font-size: 14px;
+    touch-action: manipulation;
+  }
 }

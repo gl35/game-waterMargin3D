@@ -149,7 +149,7 @@ function useMovementControls() {
   return stateRef;
 }
 
-function HeroAvatar({ heroRef, onMove, heroSkin }) {
+function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
   const group = heroRef || useRef();
   const controls = useMovementControls();
   const velocity = useRef(new THREE.Vector3());
@@ -173,10 +173,11 @@ function HeroAvatar({ heroRef, onMove, heroSkin }) {
 
   useFrame((state, delta) => {
     if (!group.current) return;
+    const input = moveInput || {};
     const dir = new THREE.Vector3(
-      (controls.current.left ? -1 : 0) + (controls.current.right ? 1 : 0),
+      (controls.current.left || input.left ? -1 : 0) + (controls.current.right || input.right ? 1 : 0),
       0,
-      (controls.current.forward ? -1 : 0) + (controls.current.backward ? 1 : 0),
+      (controls.current.forward || input.forward ? -1 : 0) + (controls.current.backward || input.backward ? 1 : 0),
     );
     if (dir.lengthSq() > 0) {
       dir.normalize();
@@ -364,7 +365,7 @@ function CameraRig({ target }) {
   return null;
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, heroSkin }) {
+function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput }) {
   const heroRef = useRef();
   return (
     <>
@@ -376,17 +377,17 @@ function SceneContent({ onHeroMove, highlightedNpcId, heroSkin }) {
       <PathRibbon />
       <TreeField />
       <NpcField highlightedNpcId={highlightedNpcId} />
-      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} />
+      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} />
       <FloatingRune />
       <CameraRig target={heroRef} />
     </>
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin, moveInput }) {
   return (
     <Canvas camera={{ position: [0, 12, 32], fov: 48 }} shadows>
-      <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} />
+      <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={moveInput} />
     </Canvas>
   );
 }

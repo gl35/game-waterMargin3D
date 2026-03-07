@@ -1,17 +1,17 @@
 const STYLE_DEFS = {
   retro: {
     id: 'retro',
-    name: 'Retro Pixel',
-    grassA: '#67ba66',
-    grassB: '#46904a',
-    waterA: '#6db4ff',
-    waterB: '#3f79cc',
-    pathA: '#cda168',
-    pathB: '#9a7244',
-    wallA: '#9a7a4d',
-    wallB: '#745735',
-    uiPanel: '#1b1b1f',
-    uiAccent: '#f7d884',
+    name: 'Summit Valley',
+    grassA: '#b6f1a9',
+    grassB: '#69c08a',
+    waterA: '#8ce7ff',
+    waterB: '#4fb2ea',
+    pathA: '#f7d7a1',
+    pathB: '#e0a966',
+    wallA: '#d7d0c2',
+    wallB: '#b5a38a',
+    uiPanel: '#1f2f4b',
+    uiAccent: '#f7ffba',
     uiText: '#f4f4f4',
     hero: '#d83f3f',
     enemy: '#2e7f3f',
@@ -19,14 +19,14 @@ const STYLE_DEFS = {
   ink: {
     id: 'ink',
     name: 'Ink-wash / 水墨',
-    grassA: '#8fc88d',
-    grassB: '#659f63',
-    waterA: '#7fa2c7',
-    waterB: '#587498',
-    pathA: '#c6b59b',
-    pathB: '#a18f76',
-    wallA: '#7e7467',
-    wallB: '#5e554b',
+    grassA: '#cce9c0',
+    grassB: '#75b78c',
+    waterA: '#a8dcff',
+    waterB: '#6ea9d5',
+    pathA: '#f6ddc0',
+    pathB: '#dba86e',
+    wallA: '#d1c5b2',
+    wallB: '#b39c7c',
     uiPanel: '#efe6d2',
     uiAccent: '#4a4337',
     uiText: '#1f1b17',
@@ -35,15 +35,15 @@ const STYLE_DEFS = {
   },
   wuxia: {
     id: 'wuxia',
-    name: 'Dark Wuxia',
-    grassA: '#4e9b64',
-    grassB: '#2d603f',
-    waterA: '#5f9fe2',
-    waterB: '#356ca8',
-    pathA: '#c29a63',
-    pathB: '#8b653e',
-    wallA: '#7b5d36',
-    wallB: '#5a4125',
+    name: 'Azure Highlands',
+    grassA: '#b8f0c2',
+    grassB: '#5cb27a',
+    waterA: '#9de7ff',
+    waterB: '#5ab8ea',
+    pathA: '#f6d8a8',
+    pathB: '#e0a86a',
+    wallA: '#d8c7a8',
+    wallB: '#b09373',
     uiPanel: '#120b16',
     uiAccent: '#d9b36b',
     uiText: '#eee5d5',
@@ -110,34 +110,34 @@ export class BootScene extends Phaser.Scene {
   generateBackdrop(style) {
     this.makeCanvasTexture(`${style.id}_chapterBackdrop`, 512, 512, (ctx, w, h) => {
       const g = ctx.createLinearGradient(0, 0, 0, h);
-      if (style.id === 'retro') {
-        g.addColorStop(0, '#8ed4ff');
-        g.addColorStop(0.55, '#71b6ea');
-        g.addColorStop(1, '#95b9e3');
-      } else if (style.id === 'ink') {
-        g.addColorStop(0, '#e8f2ff');
-        g.addColorStop(0.55, '#dce7f0');
-        g.addColorStop(1, '#c5d2df');
-      } else {
-        g.addColorStop(0, '#70b7ff');
-        g.addColorStop(0.45, '#5d93cf');
-        g.addColorStop(1, '#5f8cc4');
-      }
+      g.addColorStop(0, '#c6f4ff');
+      g.addColorStop(0.45, '#94d8ff');
+      g.addColorStop(0.8, '#79bff0');
+      g.addColorStop(1, '#9dc6f2');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
 
-      ctx.globalAlpha = 0.26;
-      for (let i = 0; i < 8; i++) {
-        ctx.fillStyle = style.id === 'ink' ? '#8ca2b7' : i % 2 === 0 ? '#6a93bf' : '#5a82ad';
-        const baseY = 230 + i * 24;
+      ctx.save();
+      const sun = ctx.createRadialGradient(w * 0.75, 90, 10, w * 0.75, 90, 140);
+      sun.addColorStop(0, 'rgba(255,255,255,0.8)');
+      sun.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sun;
+      ctx.beginPath();
+      ctx.arc(w * 0.75, 90, 160, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.globalAlpha = 0.25;
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#b9dbf8' : '#a2c9eb';
+        const baseY = 240 + i * 32;
         ctx.beginPath();
-        ctx.moveTo(0, baseY + 40);
-        for (let x = 0; x <= w; x += 32) {
-          const wave = Math.sin((x + i * 33) * 0.03) * (10 + i * 2);
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 48) {
+          const wave = Math.sin((x + i * 50) * 0.025) * (14 + i * 3);
           ctx.lineTo(x, baseY - wave);
         }
         ctx.lineTo(w, h);
-        ctx.lineTo(0, h);
         ctx.closePath();
         ctx.fill();
       }
@@ -149,38 +149,38 @@ export class BootScene extends Phaser.Scene {
     this.makeCanvasTexture(`${style.id}_mountains`, 512, 220, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h);
 
-      const far = ctx.createLinearGradient(0, 0, 0, h);
-      far.addColorStop(0, style.id === 'ink' ? '#a9bccf' : '#84a8ca');
-      far.addColorStop(1, style.id === 'ink' ? '#8ea5bc' : '#658aaf');
-      ctx.fillStyle = far;
-      ctx.beginPath();
-      ctx.moveTo(0, h);
-      for (let x = 0; x <= w; x += 48) {
-        const y = 80 + Math.sin(x * 0.022) * 18 + Math.cos(x * 0.009) * 20;
-        ctx.lineTo(x, y);
-      }
-      ctx.lineTo(w, h);
-      ctx.closePath();
-      ctx.fill();
+      const layers = [
+        { colorA: '#d2f2ff', colorB: '#a7d9f5', height: 70, wave: 20 },
+        { colorA: '#b9e1f5', colorB: '#8bbfda', height: 110, wave: 32 },
+        { colorA: '#8db1cf', colorB: '#6d95b8', height: 150, wave: 38 },
+      ];
 
-      ctx.globalAlpha = 0.8;
-      ctx.fillStyle = style.id === 'ink' ? '#6c8098' : '#4f6d8c';
-      ctx.beginPath();
-      ctx.moveTo(0, h);
-      for (let x = 0; x <= w; x += 34) {
-        const y = 118 + Math.sin((x + 60) * 0.03) * 25 + Math.cos(x * 0.014) * 14;
-        ctx.lineTo(x, y);
-      }
-      ctx.lineTo(w, h);
-      ctx.closePath();
-      ctx.fill();
+      layers.forEach((layer, idx) => {
+        ctx.globalAlpha = 0.9 - idx * 0.2;
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, layer.colorA);
+        grad.addColorStop(1, layer.colorB);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 36) {
+          const y = layer.height + Math.sin((x + idx * 20) * 0.02) * layer.wave + Math.cos(x * 0.015) * 14;
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+      });
       ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_clouds`, 256, 96, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h);
       const drawCloud = (x, y, s = 1) => {
-        ctx.fillStyle = 'rgba(255,255,255,0.70)';
+        const gradient = ctx.createLinearGradient(x - 20 * s, y - 5 * s, x + 20 * s, y + 5 * s);
+        gradient.addColorStop(0, 'rgba(255,255,255,0.95)');
+        gradient.addColorStop(1, 'rgba(255,255,255,0.55)');
+        ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.ellipse(x, y, 26 * s, 14 * s, 0, 0, Math.PI * 2);
         ctx.ellipse(x + 20 * s, y - 4 * s, 18 * s, 12 * s, 0, 0, Math.PI * 2);
@@ -188,9 +188,9 @@ export class BootScene extends Phaser.Scene {
         ctx.fill();
       };
 
-      drawCloud(50, 36, 1.1);
-      drawCloud(130, 46, 0.95);
-      drawCloud(206, 34, 1.05);
+      drawCloud(50, 36, 1.2);
+      drawCloud(130, 46, 1.05);
+      drawCloud(206, 34, 1.3);
     });
   }
 
@@ -420,11 +420,11 @@ export class BootScene extends Phaser.Scene {
     });
 
     this.makeCanvasTexture(`${style.id}_tree`, 36, 46, (ctx) => {
-      ctx.fillStyle = '#6e5636';
+      ctx.fillStyle = '#8f6a40';
       ctx.fillRect(15, 31, 6, 13);
 
-      const pineA = style.id === 'ink' ? '#4b7b5e' : '#3a8b60';
-      const pineB = style.id === 'ink' ? '#3f6a52' : '#2f6f4c';
+      const pineA = '#d4ffd2';
+      const pineB = '#7dd9a0';
       ctx.fillStyle = pineA;
       ctx.beginPath();
       ctx.moveTo(18, 4);

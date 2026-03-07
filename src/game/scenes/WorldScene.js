@@ -132,18 +132,49 @@ export class WorldScene extends Phaser.Scene {
 
     this.add.tileSprite(0, 0, mapWidth * tileSize, mapHeight * tileSize, this.tx('chapterBackdrop'))
       .setOrigin(0)
-      .setAlpha(0.52)
-      .setDepth(-30);
+      .setAlpha(0.85)
+      .setDepth(-32);
 
-    this.add.tileSprite(0, 44, mapWidth * tileSize, 220, this.tx('mountains'))
+    this.add.tileSprite(0, 6, mapWidth * tileSize, 220, this.tx('mountains'))
       .setOrigin(0)
-      .setAlpha(0.62)
-      .setDepth(-28);
+      .setAlpha(0.8)
+      .setDepth(-30)
+      .setScrollFactor(0.5);
 
-    this.add.tileSprite(0, 12, mapWidth * tileSize, 96, this.tx('clouds'))
+    this.add.tileSprite(0, -12, mapWidth * tileSize, 96, this.tx('clouds'))
       .setOrigin(0)
-      .setAlpha(0.55)
-      .setDepth(-27);
+      .setAlpha(0.6)
+      .setDepth(-29)
+      .setScrollFactor(0.4);
+
+    const ridge = this.add.graphics().setDepth(-26).setScrollFactor(0.6);
+    ridge.fillStyle(0xbbead3, 0.8);
+    ridge.beginPath();
+    ridge.moveTo(0, 210);
+    ridge.lineTo(200, 150);
+    ridge.lineTo(420, 180);
+    ridge.lineTo(640, 120);
+    ridge.lineTo(920, 175);
+    ridge.lineTo(1200, 140);
+    ridge.lineTo(mapWidth * tileSize, 210);
+    ridge.lineTo(mapWidth * tileSize, 260);
+    ridge.lineTo(0, 260);
+    ridge.closePath();
+    ridge.fillPath();
+
+    const plateau = this.add.graphics().setDepth(-25);
+    plateau.fillStyle(0xc9f4bf, 0.85);
+    plateau.beginPath();
+    plateau.moveTo(120, 280);
+    plateau.lineTo(360, 260);
+    plateau.lineTo(520, 320);
+    plateau.lineTo(840, 280);
+    plateau.lineTo(1100, 330);
+    plateau.lineTo(mapWidth * tileSize, 360);
+    plateau.lineTo(mapWidth * tileSize, 420);
+    plateau.lineTo(0, 420);
+    plateau.closePath();
+    plateau.fillPath();
 
     this.mapData = [];
     for (let y = 0; y < mapHeight; y++) {
@@ -864,7 +895,7 @@ export class WorldScene extends Phaser.Scene {
   setupCamera() {
     this.cameras.main.setBounds(0, 0, 50 * 32, 50 * 32);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setZoom(0.94);
+    this.cameras.main.setZoom(0.88);
   }
 
   setupInput() {

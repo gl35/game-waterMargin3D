@@ -23,33 +23,64 @@ export default function App() {
     };
   }, []);
 
+  const hpPct = Math.max(0, Math.min(100, Math.round((hud.hp / (hud.maxHp || 100)) * 100)));
+
   return (
-    <div className="zelda-shell">
-      <div className="zelda-frame-wrap">
-        <div className="hud-top-left" aria-live="polite">
-          <div><span>💚</span> {hud.hp}/{hud.maxHp}</div>
-          <div><span>⚡</span> {Math.max(40, Math.min(100, Math.round(hud.hp * 0.8)))}</div>
-          <div><span>🪙</span> {hud.gold}</div>
+    <div className="hud-shell">
+      <div className="hud-frame" ref={mountRef} />
+
+      <div className="hud-top">
+        <div className="stat-block">
+          <div className="stat-label"><span className="icon heart" /> HP</div>
+          <div className="bar">
+            <div className="fill" style={{ width: `${hpPct}%` }} />
+          </div>
+          <div className="stat-value">{hud.hp}/{hud.maxHp}</div>
         </div>
-
-        <div className="hud-objective">{hud.objective}</div>
-
-        <div className="hud-right-actions" aria-hidden="true">
-          <button className="round-btn">🏃</button>
-          <button className="round-btn">🗡️</button>
-          <button className="round-btn">✊</button>
+        <div className="stat-block">
+          <div className="stat-label"><span className="icon bolt" /> Energy</div>
+          <div className="bar energy">
+            <div className="fill" style={{ width: `${Math.min(100, Math.max(0, hpPct + 8))}%` }} />
+          </div>
+          <div className="stat-value">{Math.max(40, Math.min(100, hpPct + 8))}%</div>
         </div>
-
-        <div className="hud-bottom-bar" aria-hidden="true">
-          <button className="joy-btn">◉</button>
-          <div className="item-slot">🧪</div>
-          <div className="item-slot">🪓</div>
-          <div className="item-slot active">⛏️</div>
-          <div className="item-slot">🌿</div>
-          <div className="item-slot">⚒️</div>
+        <div className="stat-block mini">
+          <div className="stat-label"><span className="icon bag" /></div>
+          <div className="stat-value">{hud.gold}</div>
         </div>
+      </div>
 
-        <div className="zelda-frame" ref={mountRef} />
+      <div className="hud-objective" aria-live="polite">
+        {hud.objective || 'Explore the summit ridge.'}
+      </div>
+
+      <div className="hud-top-right">
+        <div className="mini-pill">
+          <span className="icon tribe" /> {hud.heroes}
+        </div>
+        <div className="mini-pill">
+          <span className="icon coin" /> {hud.gold}
+        </div>
+      </div>
+
+      <div className="hud-joystick">
+        <div className="ring outer">
+          <div className="ring inner" />
+        </div>
+      </div>
+
+      <div className="hud-bottom">
+        {['gourd', 'staff', 'axe', 'glove', 'camp'].map((slot, idx) => (
+          <div key={slot} className={`slot ${idx === 2 ? 'active' : ''}`}>
+            <span className={`icon ${slot}`} />
+          </div>
+        ))}
+      </div>
+
+      <div className="hud-right">
+        <button className="circle-btn big"><span className="icon slash" /></button>
+        <button className="circle-btn"><span className="icon jump" /></button>
+        <button className="circle-btn"><span className="icon block" /></button>
       </div>
     </div>
   );

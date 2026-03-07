@@ -4,6 +4,7 @@ import { GameCanvas } from './three/Scene';
 import { NPCS } from './core/story/config';
 import { tileToWorldPosition } from './core/story/coordinates';
 import { createStoryProgress, handleNpcDialog } from './core/story/stateMachine';
+import { HERO_SKINS } from './core/hero/skins';
 
 const npcWorld = NPCS.map((npc) => ({ ...npc, world: tileToWorldPosition(npc) }));
 
@@ -34,7 +35,10 @@ export default function App() {
   const [story, setStory] = useState(() => createStoryProgress());
   const [dialog, setDialog] = useState(null);
   const [highlightedNpcId, setHighlightedNpcId] = useState(null);
+  const [heroSkinIndex, setHeroSkinIndex] = useState(0);
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
+
+  const heroSkin = HERO_SKINS[heroSkinIndex];
 
   const hud = useMemo(() => ({
     hp: story.player.hp,
@@ -46,6 +50,10 @@ export default function App() {
 
   const updateStory = useCallback((next) => {
     setStory(next);
+  }, []);
+
+  const cycleHeroSkin = useCallback(() => {
+    setHeroSkinIndex((prev) => (prev + 1) % HERO_SKINS.length);
   }, []);
 
   const handleHeroMove = useCallback((pos) => {
@@ -102,7 +110,7 @@ export default function App() {
   return (
     <div className="hud-shell">
       <div className="hud-frame">
-        <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} />
+        <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} />
         {highlightedNpcId && !dialog && (
           <div className="interact-prompt">{INTERACT_PROMPT}</div>
         )}
@@ -140,6 +148,11 @@ export default function App() {
         <div className="mini-pill">
           <span className="icon coin" /> {hud.gold}
         </div>
+      </div>
+
+      <div className="skin-selector">
+        <span className="skin-name">Skin: {heroSkin.name}</span>
+        <button onClick={cycleHeroSkin}>Switch</button>
       </div>
 
       <div className="hud-joystick">

@@ -261,6 +261,36 @@ html, body, #root {
   color: #b4c9ff;
 }
 
+.skin-selector {
+  position: absolute;
+  top: clamp(12px, 2.6vw, 34px);
+  right: clamp(12px, 3vw, 40px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(13, 26, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  font-size: 13px;
+  color: #f2fbff;
+}
+
+.skin-selector button {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0e1a25;
+  background: linear-gradient(135deg, #ffdd47, #ff8a3d);
+  cursor: pointer;
+}
+
+.skin-selector button:active {
+  transform: translateY(1px);
+}
+
 .icon {
   display: inline-block;
 }

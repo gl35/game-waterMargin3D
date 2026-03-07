@@ -4,6 +4,18 @@ import * as THREE from 'three';
 import { NPCS } from '../core/story/config';
 import { tileToWorldPosition } from '../core/story/coordinates';
 
+const DEFAULT_COLORS = {
+  tunic: '#33233a',
+  cloak: '#f5f4ff',
+  headband: '#6f3bb5',
+  hatBrim: '#8b6240',
+  hatCrown: '#9f7c55',
+  spearTip: '#f7d99a',
+  tasselTop: '#df8f3c',
+  tasselCord: '#f04573',
+  tasselBottom: '#f4c13f',
+};
+
 function Terrain() {
   const geometry = useMemo(() => {
     const geo = new THREE.PlaneGeometry(220, 220, 140, 140);
@@ -137,11 +149,24 @@ function useMovementControls() {
   return stateRef;
 }
 
-function HeroAvatar({ heroRef, onMove }) {
+function HeroAvatar({ heroRef, onMove, heroSkin }) {
   const group = heroRef || useRef();
   const controls = useMovementControls();
   const velocity = useRef(new THREE.Vector3());
   const moveCallback = useRef(onMove);
+  const palette = heroSkin?.colors || DEFAULT_COLORS;
+  const accessories = heroSkin?.accessories || {};
+  const flowerOffsets = useMemo(() => (
+    accessories.shirtPattern
+      ? [
+          { key: 'f1', position: [1.4, 2.2, 0.8], color: '#ff6b6b' },
+          { key: 'f2', position: [-1.6, 2.5, 0.9], color: '#ffe66d' },
+          { key: 'f3', position: [0.2, 1.6, 1.0], color: '#2ec4b6' },
+          { key: 'f4', position: [1.1, 3.0, 0.5], color: '#ff9f1c' },
+          { key: 'f5', position: [-0.8, 3.2, 0.4], color: '#ff6b6b' },
+        ]
+      : []
+  ), [accessories.shirtPattern]);
   useEffect(() => {
     moveCallback.current = onMove;
   }, [onMove]);
@@ -179,13 +204,13 @@ function HeroAvatar({ heroRef, onMove }) {
       {/* Inner tunic */}
       <mesh castShadow position={[0, 1, 0]}>
         <cylinderGeometry args={[1.3, 1.1, 4.2, 12]} />
-        <meshStandardMaterial color="#33233a" />
+        <meshStandardMaterial color={palette.tunic} />
       </mesh>
 
-      {/* Cloak */}
+      {/* Cloak / shirt */}
       <mesh castShadow position={[0, 2.5, -0.1]}>
         <planeGeometry args={[7, 9, 16, 16]} />
-        <meshStandardMaterial color="#f5f4ff" roughness={0.9} metalness={0.05} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={palette.cloak} roughness={0.9} metalness={0.05} side={THREE.DoubleSide} />
       </mesh>
 
       {/* Head */}
@@ -197,19 +222,19 @@ function HeroAvatar({ heroRef, onMove }) {
       {/* Hat brim */}
       <mesh position={[0, 5, -0.3]} rotation={[0.1, 0, 0]}>
         <cylinderGeometry args={[2.8, 2.8, 0.35, 32]} />
-        <meshStandardMaterial color="#8b6240" />
+        <meshStandardMaterial color={palette.hatBrim} />
       </mesh>
 
       {/* Hat crown */}
       <mesh position={[0, 5.8, -0.3]} rotation={[0.1, 0, 0]}>
         <coneGeometry args={[1.9, 2.6, 24]} />
-        <meshStandardMaterial color="#9f7c55" />
+        <meshStandardMaterial color={palette.hatCrown} />
       </mesh>
 
-      {/* Sash */}
+      {/* Sash / headband */}
       <mesh position={[0, 2.2, 0]}>
         <torusGeometry args={[1.6, 0.25, 12, 32]} />
-        <meshStandardMaterial color="#6f3bb5" />
+        <meshStandardMaterial color={palette.headband} />
       </mesh>
 
       {/* Spear */}
@@ -219,22 +244,49 @@ function HeroAvatar({ heroRef, onMove }) {
       </mesh>
       <mesh position={[7.4, 7.4, -3.4]} rotation={[Math.PI / 10, -Math.PI / 4, Math.PI / 2]}>
         <coneGeometry args={[0.45, 1.8, 8]} />
-        <meshStandardMaterial color="#f7d99a" />
+        <meshStandardMaterial color={palette.spearTip} />
       </mesh>
 
       {/* Tassel */}
       <mesh position={[-6.6, 6.1, 1]}>
         <sphereGeometry args={[0.7, 12, 12]} />
-        <meshStandardMaterial color="#df8f3c" emissive="#d86a28" emissiveIntensity={0.2} />
+        <meshStandardMaterial color={palette.tasselTop} emissive={palette.tasselTop} emissiveIntensity={0.2} />
       </mesh>
       <mesh position={[-5.4, 6.5, 1]}>
         <cylinderGeometry args={[0.05, 0.05, 2.6, 8]} />
-        <meshStandardMaterial color="#f04573" />
+        <meshStandardMaterial color={palette.tasselCord} />
       </mesh>
       <mesh position={[-4.2, 7.5, 1]}>
         <sphereGeometry args={[0.55, 12, 12]} />
-        <meshStandardMaterial color="#f4c13f" />
+        <meshStandardMaterial color={palette.tasselBottom} />
       </mesh>
+
+      {accessories.lei && (
+        <mesh position={[0, 3.3, 0]}>
+          <torusGeometry args={[1.8, 0.35, 12, 24]} />
+          <meshStandardMaterial color="#ff7eb9" emissive="#ff9bcf" emissiveIntensity={0.35} />
+        </mesh>
+      )}
+
+      {accessories.sunglasses && (
+        <>
+          <mesh position={[0, 4.4, 0.9]}>
+            <boxGeometry args={[2.4, 0.55, 0.25]} />
+            <meshStandardMaterial color="#111" metalness={0.2} roughness={0.2} />
+          </mesh>
+          <mesh position={[0, 4.4, 0.9]}>
+            <torusGeometry args={[1.5, 0.04, 8, 24]} />
+            <meshStandardMaterial color="#333" />
+          </mesh>
+        </>
+      )}
+
+      {flowerOffsets.map((flower) => (
+        <mesh key={flower.key} position={[flower.position[0], flower.position[1], flower.position[2]]}>
+          <sphereGeometry args={[0.3, 8, 8]} />
+          <meshStandardMaterial color={flower.color} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -312,7 +364,7 @@ function CameraRig({ target }) {
   return null;
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId }) {
+function SceneContent({ onHeroMove, highlightedNpcId, heroSkin }) {
   const heroRef = useRef();
   return (
     <>
@@ -324,17 +376,17 @@ function SceneContent({ onHeroMove, highlightedNpcId }) {
       <PathRibbon />
       <TreeField />
       <NpcField highlightedNpcId={highlightedNpcId} />
-      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} />
+      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} />
       <FloatingRune />
       <CameraRig target={heroRef} />
     </>
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin }) {
   return (
     <Canvas camera={{ position: [0, 12, 32], fov: 48 }} shadows>
-      <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} />
+      <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} />
     </Canvas>
   );
 }

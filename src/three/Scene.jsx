@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { NPCS } from '../core/story/config';
+import { tileToWorldPosition } from '../core/story/coordinates';
 
 function Terrain() {
   const geometry = useMemo(() => {
@@ -76,6 +78,29 @@ function TreeField() {
   );
 }
 
+function NpcField({ highlightedNpcId }) {
+  return (
+    <group>
+      {NPCS.map((npc) => {
+        const { x, z } = tileToWorldPosition(npc);
+        const glow = npc.id === highlightedNpcId;
+        return (
+          <group key={npc.id} position={[x, -2.4, z]}>
+            <mesh castShadow>
+              <cylinderGeometry args={[0.85, 0.95, 3.4, 10]} />
+              <meshStandardMaterial color={glow ? '#ffe28a' : '#4f4a63'} />
+            </mesh>
+            <mesh position={[0, 2.1, 0]}>
+              <sphereGeometry args={[0.9, 16, 16]} />
+              <meshStandardMaterial color={glow ? '#fff1cf' : '#f2cfa6'} />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function useMovementControls() {
   const stateRef = useRef({ forward: false, backward: false, left: false, right: false });
   useEffect(() => {
@@ -112,10 +137,14 @@ function useMovementControls() {
   return stateRef;
 }
 
-function HeroAvatar({ heroRef }) {
-  const group = heroRef;
+function HeroAvatar({ heroRef, onMove }) {
+  const group = heroRef || useRef();
   const controls = useMovementControls();
   const velocity = useRef(new THREE.Vector3());
+  const moveCallback = useRef(onMove);
+  useEffect(() => {
+    moveCallback.current = onMove;
+  }, [onMove]);
 
   useFrame((state, delta) => {
     if (!group.current) return;
@@ -137,6 +166,12 @@ function HeroAvatar({ heroRef }) {
     group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, -12, 35);
 
     group.current.position.y = -0.6 + Math.sin(state.clock.getElapsedTime() * 2 + group.current.position.x * 0.2) * 0.1;
+
+    moveCallback.current?.({
+      x: group.current.position.x,
+      y: group.current.position.y,
+      z: group.current.position.z,
+    });
   });
 
   return (
@@ -277,7 +312,7 @@ function CameraRig({ target }) {
   return null;
 }
 
-function SceneContent() {
+function SceneContent({ onHeroMove, highlightedNpcId }) {
   const heroRef = useRef();
   return (
     <>
@@ -288,17 +323,18 @@ function SceneContent() {
       <Terrain />
       <PathRibbon />
       <TreeField />
-      <HeroAvatar heroRef={heroRef} />
+      <NpcField highlightedNpcId={highlightedNpcId} />
+      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} />
       <FloatingRune />
       <CameraRig target={heroRef} />
     </>
   );
 }
 
-export function GameCanvas() {
+export function GameCanvas({ onHeroMove, highlightedNpcId }) {
   return (
     <Canvas camera={{ position: [0, 12, 32], fov: 48 }} shadows>
-      <SceneContent />
+      <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} />
     </Canvas>
   );
 }

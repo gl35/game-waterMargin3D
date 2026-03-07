@@ -419,6 +419,58 @@ export class BootScene extends Phaser.Scene {
       ctx.fillRect(25, 10, 2, 14);
     });
 
+    this.makeCanvasTexture(`${style.id}_tree`, 36, 46, (ctx) => {
+      ctx.fillStyle = '#6e5636';
+      ctx.fillRect(15, 31, 6, 13);
+
+      const pineA = style.id === 'ink' ? '#4b7b5e' : '#3a8b60';
+      const pineB = style.id === 'ink' ? '#3f6a52' : '#2f6f4c';
+      ctx.fillStyle = pineA;
+      ctx.beginPath();
+      ctx.moveTo(18, 4);
+      ctx.lineTo(4, 24);
+      ctx.lineTo(32, 24);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = pineB;
+      ctx.beginPath();
+      ctx.moveTo(18, 10);
+      ctx.lineTo(3, 30);
+      ctx.lineTo(33, 30);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255,255,255,.45)';
+      ctx.fillRect(13, 11, 3, 3);
+      ctx.fillRect(21, 16, 3, 3);
+    });
+
+    this.makeCanvasTexture(`${style.id}_rock`, 42, 28, (ctx) => {
+      const rockA = style.id === 'ink' ? '#9ea9b1' : '#aab8c2';
+      const rockB = style.id === 'ink' ? '#7e8a92' : '#8090a0';
+      ctx.fillStyle = rockA;
+      ctx.beginPath();
+      ctx.moveTo(4, 20);
+      ctx.lineTo(10, 9);
+      ctx.lineTo(20, 4);
+      ctx.lineTo(32, 6);
+      ctx.lineTo(38, 15);
+      ctx.lineTo(35, 24);
+      ctx.lineTo(16, 26);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = rockB;
+      ctx.beginPath();
+      ctx.moveTo(19, 5);
+      ctx.lineTo(31, 7);
+      ctx.lineTo(34, 13);
+      ctx.lineTo(25, 14);
+      ctx.closePath();
+      ctx.fill();
+    });
+
     this.makeCanvasTexture(`${style.id}_building`, 64, 64, (ctx) => {
       ctx.fillStyle = '#b58556';
       ctx.fillRect(0, 20, 64, 44);

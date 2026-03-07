@@ -25,15 +25,30 @@ export default function App() {
 
   return (
     <div className="zelda-shell">
-      <div className="zelda-title">Dream of Water Margin — Chapter 1: Oath at Liangshan</div>
-
       <div className="zelda-frame-wrap">
-        <div className="hud-overlay" aria-live="polite">
-          <div>HP: {hud.hp}/{hud.maxHp}</div>
-          <div>Gold: {hud.gold} 两</div>
-          <div>Heroes: {hud.heroes}/108</div>
-          <div className="objective">{hud.objective}</div>
+        <div className="hud-top-left" aria-live="polite">
+          <div><span>💚</span> {hud.hp}/{hud.maxHp}</div>
+          <div><span>⚡</span> {Math.max(40, Math.min(100, Math.round(hud.hp * 0.8)))}</div>
+          <div><span>🪙</span> {hud.gold}</div>
         </div>
+
+        <div className="hud-objective">{hud.objective}</div>
+
+        <div className="hud-right-actions" aria-hidden="true">
+          <button className="round-btn">🏃</button>
+          <button className="round-btn">🗡️</button>
+          <button className="round-btn">✊</button>
+        </div>
+
+        <div className="hud-bottom-bar" aria-hidden="true">
+          <button className="joy-btn">◉</button>
+          <div className="item-slot">🧪</div>
+          <div className="item-slot">🪓</div>
+          <div className="item-slot active">⛏️</div>
+          <div className="item-slot">🌿</div>
+          <div className="item-slot">⚒️</div>
+        </div>
+
         <div className="zelda-frame" ref={mountRef} />
       </div>
     </div>

@@ -16,9 +16,16 @@ const DEFAULT_COLORS = {
   tasselBottom: '#f4c13f',
 };
 
+const WORLD_BOUNDS = {
+  minX: -95,
+  maxX: 95,
+  minZ: -95,
+  maxZ: 150,
+};
+
 function Terrain() {
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(220, 220, 140, 140);
+    const geo = new THREE.PlaneGeometry(560, 560, 220, 220);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
@@ -41,16 +48,16 @@ function Terrain() {
 function PathRibbon() {
   return (
     <mesh rotation-x={-Math.PI / 2} position={[0, -3.3, 0]} receiveShadow>
-      <planeGeometry args={[34, 140]} />
+      <planeGeometry args={[50, 320]} />
       <meshStandardMaterial color="#f7d39f" roughness={0.7} metalness={0} />
     </mesh>
   );
 }
 
 function MountainBackdrop() {
-  const geometry = useMemo(() => new THREE.PlaneGeometry(400, 140, 40, 10), []);
+  const geometry = useMemo(() => new THREE.PlaneGeometry(900, 220, 60, 16), []);
   return (
-    <group position={[0, 35, -90]}>
+    <group position={[0, 55, -220]}>
       {[0, 1, -1].map((offset, idx) => (
         <mesh key={`mountain-${idx}`} geometry={geometry} position={[offset * 14, idx * 10, idx * -6]}>
           <meshBasicMaterial color={idx === 0 ? '#cfe9ff' : '#a7cfe8'} transparent opacity={0.8 - idx * 0.15} />
@@ -61,7 +68,7 @@ function MountainBackdrop() {
 }
 
 function TreeField() {
-  const treeCount = 250;
+  const treeCount = 520;
   const mesh = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
@@ -69,7 +76,7 @@ function TreeField() {
     if (!mesh.current) return;
     for (let i = 0; i < treeCount; i++) {
       const angle = (i / treeCount) * Math.PI * 2;
-      const radius = 25 + Math.random() * 60;
+      const radius = 70 + Math.random() * 160;
       const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 10;
       const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 10;
       const scale = 0.8 + Math.random() * 0.9;
@@ -193,8 +200,8 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
     }
 
     group.current.position.addScaledVector(velocity.current, delta);
-    group.current.position.x = THREE.MathUtils.clamp(group.current.position.x, -28, 28);
-    group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, -12, 35);
+    group.current.position.x = THREE.MathUtils.clamp(group.current.position.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX);
+    group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ);
 
     group.current.position.y = -0.6 + Math.sin(state.clock.getElapsedTime() * 2 + group.current.position.x * 0.2) * 0.1;
 
@@ -350,7 +357,7 @@ function SkyDome() {
 
   return (
     <mesh position={[0, -50, 0]}>
-      <sphereGeometry args={[260, 32, 32]} />
+      <sphereGeometry args={[520, 32, 32]} />
       <meshBasicMaterial side={THREE.BackSide} map={texture} />
     </mesh>
   );
@@ -358,7 +365,7 @@ function SkyDome() {
 
 function CameraRig({ target }) {
   const { camera } = useThree();
-  const offset = useMemo(() => new THREE.Vector3(0, 12, 26), []);
+  const offset = useMemo(() => new THREE.Vector3(0, 16, 34), []);
   useFrame((state, delta) => {
     if (!target.current) return;
     const desired = target.current.position.clone().add(offset);
@@ -374,7 +381,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpc
   const heroRef = useRef();
   return (
     <>
-      <primitive attach="fog" object={new THREE.Fog(0xb8e4ff, 40, 200)} />
+      <primitive attach="fog" object={new THREE.Fog(0xb8e4ff, 90, 430)} />
       <SkyDome />
       <Lights />
       <MountainBackdrop />
@@ -392,7 +399,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpc
 export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpcTap }) {
   return (
     <Canvas
-      camera={{ position: [0, 12, 32], fov: 48, near: 0.1, far: 500 }}
+      camera={{ position: [0, 18, 42], fov: 52, near: 0.1, far: 900 }}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       dpr={[1, 1.75]}
       shadows

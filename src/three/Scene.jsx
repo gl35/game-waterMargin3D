@@ -17,15 +17,15 @@ const DEFAULT_COLORS = {
 };
 
 const WORLD_BOUNDS = {
-  minX: -220,
-  maxX: 220,
-  minZ: -220,
-  maxZ: 260,
+  minX: -170,
+  maxX: 170,
+  minZ: -170,
+  maxZ: 220,
 };
 
 function Terrain() {
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(1200, 1200, 280, 280);
+    const geo = new THREE.PlaneGeometry(900, 900, 180, 180);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
@@ -48,7 +48,7 @@ function Terrain() {
 function PathRibbon() {
   return (
     <mesh rotation-x={-Math.PI / 2} position={[0, -3.3, 0]} receiveShadow>
-      <planeGeometry args={[80, 760]} />
+      <planeGeometry args={[70, 520]} />
       <meshStandardMaterial color="#f7d39f" roughness={0.7} metalness={0} />
     </mesh>
   );
@@ -68,7 +68,7 @@ function MountainBackdrop() {
 }
 
 function TreeField() {
-  const treeCount = 860;
+  const treeCount = 420;
   const mesh = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
@@ -76,7 +76,7 @@ function TreeField() {
     if (!mesh.current) return;
     for (let i = 0; i < treeCount; i++) {
       const angle = (i / treeCount) * Math.PI * 2;
-      const radius = 110 + Math.random() * 280;
+      const radius = 90 + Math.random() * 180;
       const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 10;
       const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 10;
       const scale = 0.8 + Math.random() * 0.9;
@@ -362,8 +362,8 @@ function Lights() {
         position={[40, 80, 20]}
         intensity={1.5}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
       />
       <hemisphereLight args={[0xcff6ff, 0x89c09a, 0.6]} />
     </>

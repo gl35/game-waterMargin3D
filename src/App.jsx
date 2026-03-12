@@ -3,7 +3,7 @@ import './App.css';
 import { GameCanvas } from './three/Scene';
 import { NPCS } from './core/story/config';
 import { tileToWorldPosition } from './core/story/coordinates';
-import { createStoryProgress, handleNpcDialog } from './core/story/stateMachine';
+import { createStoryProgress, handleNpcDialog, saveStoryProgress } from './core/story/stateMachine';
 import {
   advanceQuestByNpc,
   claimQuestReward,
@@ -25,6 +25,14 @@ const DIALOG_HINTS = {
 };
 
 const INTERACT_PROMPT = 'Press E to interact';
+
+const ACTION_SLOTS = [
+  { id: 'gourd', label: 'Heal Brew', cooldownMs: 12000 },
+  { id: 'staff', label: 'Scout Ping', cooldownMs: 9000 },
+  { id: 'axe', label: 'Forage', cooldownMs: 10000 },
+  { id: 'glove', label: 'Focus', cooldownMs: 15000 },
+  { id: 'camp', label: 'Camp Rest', cooldownMs: 22000 },
+];
 
 const TAVERN_CREW = [
   {
@@ -73,6 +81,8 @@ export default function App() {
   const [heroSkinIndex, setHeroSkinIndex] = useState(0);
   const [showTavernScene, setShowTavernScene] = useState(false);
   const [mobileMove, setMobileMove] = useState({ forward: false, backward: false, left: false, right: false });
+  const [slotCooldowns, setSlotCooldowns] = useState({});
+  const [interactRadius, setInteractRadius] = useState(6);
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
 
   const heroSkin = HERO_SKINS[heroSkinIndex];
@@ -170,6 +180,79 @@ export default function App() {
     setQuestNotice(`Quest reward claimed: +${reward.gold || 0} gold, +${reward.hpRestore || 0} HP (${reward.title})`);
   }, [questProgress, story]);
 
+  const handleActionSlot = useCallback((slotId) => {
+    const now = Date.now();
+    const slot = ACTION_SLOTS.find((entry) => entry.id === slotId);
+    if (!slot) return;
+
+    const readyAt = slotCooldowns[slotId] || 0;
+    if (readyAt > now) {
+      const secLeft = Math.ceil((readyAt - now) / 1000);
+      setQuestNotice(`${slot.label} cooldown: ${secLeft}s`);
+      return;
+    }
+
+    if (slotId === 'gourd') {
+      const maxHp = story.player.hpMax || 100;
+      if (story.player.hp >= maxHp) {
+        setQuestNotice('HP already full.');
+      } else {
+        const healed = Math.min(30, maxHp - story.player.hp);
+        setStory((prev) => ({
+          ...prev,
+          player: { ...prev.player, hp: Math.min(maxHp, prev.player.hp + 30) },
+        }));
+        setQuestNotice(`Used Heal Brew: +${healed} HP`);
+      }
+    }
+
+    if (slotId === 'staff') {
+      const nearest = npcWorld.reduce((best, npc) => {
+        const dx = npc.world.x - heroPosition.current.x;
+        const dz = npc.world.z - heroPosition.current.z;
+        const dist = Math.hypot(dx, dz);
+        if (!best || dist < best.dist) return { npc, dist };
+        return best;
+      }, null);
+
+      if (nearest) {
+        setHighlightedNpcId(nearest.npc.id);
+        setQuestNotice(`Scout Ping: nearest NPC is ${nearest.npc.name}`);
+      } else {
+        setQuestNotice('Scout Ping found nothing nearby.');
+      }
+    }
+
+    if (slotId === 'axe') {
+      const goldFound = 15;
+      setStory((prev) => ({
+        ...prev,
+        player: { ...prev.player, gold: prev.player.gold + goldFound },
+      }));
+      setQuestNotice(`Forage success: +${goldFound} gold`);
+    }
+
+    if (slotId === 'glove') {
+      setInteractRadius(10);
+      setQuestNotice('Focus active: easier NPC interaction for 12s');
+      window.setTimeout(() => setInteractRadius(6), 12000);
+    }
+
+    if (slotId === 'camp') {
+      const maxHp = story.player.hpMax || 100;
+      const nextStory = {
+        ...story,
+        player: { ...story.player, hp: maxHp },
+      };
+      setStory(nextStory);
+      saveStoryProgress(nextStory);
+      saveQuestProgress(questProgress);
+      setQuestNotice('Camp Rest: HP restored and progress saved');
+    }
+
+    setSlotCooldowns((prev) => ({ ...prev, [slotId]: now + slot.cooldownMs }));
+  }, [questProgress, slotCooldowns, story]);
+
   const handleDirectionPointer = useCallback((key, value) => (event) => {
     event.preventDefault();
     setMobileMove((prev) => ({ ...prev, [key]: value }));
@@ -193,12 +276,12 @@ export default function App() {
       return closest;
     }, null) || {};
 
-    if (npc && distance < 6) {
+    if (npc && distance < interactRadius) {
       setHighlightedNpcId(npc.id);
     } else {
       setHighlightedNpcId(null);
     }
-  }, []);
+  }, [interactRadius]);
 
   useEffect(() => {
     try {
@@ -337,11 +420,23 @@ export default function App() {
       </div>
 
       <div className="hud-bottom">
-        {['gourd', 'staff', 'axe', 'glove', 'camp'].map((slot, idx) => (
-          <div key={slot} className={`slot ${idx === 2 ? 'active' : ''}`}>
-            <span className={`icon ${slot}`} />
-          </div>
-        ))}
+        {ACTION_SLOTS.map((slot) => {
+          const cooldownMs = Math.max(0, (slotCooldowns[slot.id] || 0) - Date.now());
+          const cooling = cooldownMs > 0;
+          const secLeft = Math.ceil(cooldownMs / 1000);
+          return (
+            <button
+              key={slot.id}
+              className={`slot ${cooling ? 'cooling' : ''}`}
+              onClick={() => handleActionSlot(slot.id)}
+              disabled={cooling}
+              title={slot.label}
+            >
+              <span className={`icon ${slot.id}`} />
+              {cooling && <span className="slot-cd">{secLeft}s</span>}
+            </button>
+          );
+        })}
       </div>
 
       <div className="hud-mobile-controls">

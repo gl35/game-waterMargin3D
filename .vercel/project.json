@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_Wnucpv9LwA7cWmCEkFhETUcgaCQi",
+  "orgId": "team_w21aL8spowiqgbheemCZW55S",
+  "projectName": "game",
+  "settings": {
+    "createdAt": 1772691473724,
+    "framework": "vite",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}

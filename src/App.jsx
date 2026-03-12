@@ -247,7 +247,7 @@ export default function App() {
   }, [attemptInteraction, dialog, dismissDialog, showTavernScene, closeTavernScene]);
 
   return (
-    <div className="hud-shell">
+    <div className={`hud-shell ${dialog ? 'dialog-open' : ''}`}>
       <div className="hud-frame">
         {webglSupported ? (
           <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={mobileMove} />

@@ -620,8 +620,11 @@ html, body, #root {
     left: calc(8px + var(--safe-left));
     transform: none;
     bottom: calc(8px + var(--safe-bottom));
-    font-size: 13px;
+    font-size: 14px;
+    line-height: 1.45;
     padding: 12px;
+    background: rgba(5, 17, 30, 0.95);
+    border-color: rgba(195, 234, 255, 0.45);
   }
 
   .interact-prompt {
@@ -676,5 +679,28 @@ html, body, #root {
     font-weight: 700;
     font-size: 14px;
     touch-action: manipulation;
+  }
+
+  .hud-shell.dialog-open .hud-bottom {
+    display: none;
+  }
+
+  .hud-shell.dialog-open .dpad {
+    display: none;
+  }
+
+  .hud-shell.dialog-open .dialog-overlay {
+    bottom: calc(116px + var(--safe-bottom));
+  }
+
+  .hud-shell.dialog-open .mobile-action {
+    width: 74px;
+    height: 74px;
+    font-size: 13px;
+  }
+
+  .hud-shell.dialog-open .hud-objective,
+  .hud-shell.dialog-open .quest-panel {
+    opacity: 0.22;
   }
 }

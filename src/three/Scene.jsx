@@ -89,8 +89,15 @@ function TreeField() {
     mesh.current.instanceMatrix.needsUpdate = true;
   }, [dummy, treeCount]);
 
+  useEffect(() => {
+    if (!mesh.current) return;
+    mesh.current.frustumCulled = false;
+    mesh.current.geometry.computeBoundingSphere();
+    mesh.current.geometry.boundingSphere.radius = 9999;
+  }, []);
+
   return (
-    <instancedMesh ref={mesh} args={[null, null, treeCount]} castShadow receiveShadow>
+    <instancedMesh ref={mesh} args={[null, null, treeCount]} castShadow receiveShadow frustumCulled={false}>
       <coneGeometry args={[2.8, 8, 6]} />
       <meshStandardMaterial color="#3e8554" flatShading />
     </instancedMesh>

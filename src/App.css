@@ -756,10 +756,17 @@ html, body, #root {
     pointer-events: none;
   }
 
+  .mobile-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+  }
+
   .mobile-action {
     pointer-events: auto;
-    width: 92px;
-    height: 92px;
+    width: 86px;
+    height: 86px;
     border-radius: 50%;
     border: 2px solid rgba(255,255,255,.65);
     background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.9), rgba(86,133,177,.9));
@@ -767,6 +774,19 @@ html, body, #root {
     font-weight: 700;
     font-size: 14px;
     touch-action: manipulation;
+  }
+
+  .attack-btn {
+    font-size: 26px;
+    background: radial-gradient(circle at 30% 30%, #ffe8c4, #ff8d5e);
+  }
+
+  .attack-btn.enemy-near {
+    box-shadow: 0 0 16px rgba(255, 130, 86, 0.95);
+  }
+
+  .interact-btn {
+    font-size: 16px;
   }
 
   .hud-shell.dialog-open .hud-bottom {

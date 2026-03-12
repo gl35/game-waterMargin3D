@@ -668,13 +668,22 @@ export default function App() {
             style={{ transform: `translate(${joystickState.knobX}px, ${joystickState.knobY}px)` }}
           />
         </div>
-        <button
-          className="mobile-action"
-          onPointerDown={handleInteractPointer}
-          onPointerUp={(event) => event.preventDefault()}
-        >
-          {highlightedEnemyId && !highlightedNpcId ? 'Attack' : 'Interact'}
-        </button>
+        <div className="mobile-btns">
+          <button
+            className={`mobile-action attack-btn ${highlightedEnemyId ? 'enemy-near' : ''}`}
+            onPointerDown={(e) => { e.preventDefault(); handleAttack(); }}
+            onPointerUp={(e) => e.preventDefault()}
+          >
+            ⚔️
+          </button>
+          <button
+            className="mobile-action interact-btn"
+            onPointerDown={handleInteractPointer}
+            onPointerUp={(e) => e.preventDefault()}
+          >
+            {highlightedNpcId ? 'Talk' : 'E'}
+          </button>
+        </div>
       </div>
 
       <div className="hud-right">

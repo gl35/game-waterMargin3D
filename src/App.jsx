@@ -13,7 +13,7 @@ import {
   tryAcceptQuest,
 } from './core/quests/questSystem';
 import { HERO_SKINS } from './core/hero/skins';
-import { createEnemies, damageEnemy, getClosestLiveEnemy } from './core/combat/enemies';
+import { createEnemies, damageEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
 
 const npcWorld = NPCS.map((npc) => ({ ...npc, world: tileToWorldPosition(npc) }));
 
@@ -87,6 +87,7 @@ export default function App() {
   const [enemies, setEnemies] = useState(() => createEnemies());
   const [highlightedEnemyId, setHighlightedEnemyId] = useState(null);
   const [combatXp, setCombatXp] = useState(0);
+  const [lastEnemyHitAt, setLastEnemyHitAt] = useState(0);
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
 
   const heroSkin = HERO_SKINS[heroSkinIndex];
@@ -101,6 +102,9 @@ export default function App() {
     heroes: story.stats.heroesRecruited,
     objective: story.chapterState.objective,
   }), [story]);
+
+  const playerLevel = useMemo(() => 1 + Math.floor(combatXp / 120), [combatXp]);
+  const nextLevelXp = useMemo(() => playerLevel * 120, [playerLevel]);
 
   const questLog = useMemo(() => getQuestLog(questProgress), [questProgress]);
   const activeQuest = useMemo(
@@ -335,8 +339,8 @@ export default function App() {
       return;
     }
 
-    const baseDamage = 12 + Math.floor(Math.random() * 12);
-    const { enemies: nextEnemies, killed, enemy } = damageEnemy(enemies, target.id, baseDamage);
+    const baseDamage = 10 + playerLevel * 2 + Math.floor(Math.random() * 10);
+    const { enemies: nextEnemies, killed, enemy } = damageEnemy(enemies, target.id, baseDamage, Date.now());
     setEnemies(nextEnemies);
 
     if (!enemy) return;
@@ -363,7 +367,7 @@ export default function App() {
         player: { ...prev.player, hp: Math.max(0, prev.player.hp - retaliate) },
       }));
     }
-  }, [enemies, highlightedEnemyId]);
+  }, [enemies, highlightedEnemyId, playerLevel]);
 
   const handleInteractPointer = useCallback((event) => {
     event.preventDefault();
@@ -440,19 +444,17 @@ export default function App() {
 
   useEffect(() => {
     let raf = 0;
-    const tick = () => {
-      const t = performance.now() * 0.001;
-      setEnemies((prev) => prev.map((enemy, idx) => {
-        if (enemy.dead) return enemy;
-        const radius = enemy.type === 'captain' ? 10 : enemy.type === 'raider' ? 7 : 5;
-        const speed = enemy.type === 'captain' ? 0.35 : enemy.type === 'raider' ? 0.7 : 0.95;
-        const angle = t * speed + idx * 0.9;
-        return {
-          ...enemy,
-          x: enemy.patrolOriginX + Math.cos(angle) * radius,
-          z: enemy.patrolOriginZ + Math.sin(angle * 0.9) * radius,
-        };
-      }));
+    let last = performance.now();
+    const tick = (nowMs) => {
+      const dt = Math.min(0.05, (nowMs - last) / 1000);
+      last = nowMs;
+      const nowSec = nowMs * 0.001;
+
+      setEnemies((prev) => {
+        const moved = stepEnemies(prev, heroPosition.current, nowSec, dt);
+        return respawnEnemies(moved, Date.now());
+      });
+
       raf = window.requestAnimationFrame(tick);
     };
     raf = window.requestAnimationFrame(tick);
@@ -462,7 +464,36 @@ export default function App() {
   useEffect(() => {
     const nearestEnemy = getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 22);
     setHighlightedEnemyId(nearestEnemy?.id || null);
-  }, [enemies]);
+
+    if (!nearestEnemy) return;
+    const now = Date.now();
+    if (now - lastEnemyHitAt < 1200) return;
+
+    const dist = Math.hypot(nearestEnemy.x - heroPosition.current.x, nearestEnemy.z - heroPosition.current.z);
+    if (dist < 3.1) {
+      const hit = Math.max(2, Math.floor(nearestEnemy.damage * 0.45));
+      setStory((prev) => ({
+        ...prev,
+        player: { ...prev.player, hp: Math.max(0, prev.player.hp - hit) },
+      }));
+      setLastEnemyHitAt(now);
+      setQuestNotice(`You were hit by ${nearestEnemy.label} (-${hit} HP)`);
+    }
+  }, [enemies, lastEnemyHitAt]);
+
+  useEffect(() => {
+    if (story.player.hp > 0) return;
+    const timer = window.setTimeout(() => {
+      setStory((prev) => ({
+        ...prev,
+        player: { ...prev.player, hp: prev.player.hpMax || 100 },
+      }));
+      setQuestNotice('You were defeated. Respawned at camp.');
+      heroPosition.current = { x: 0, y: 0, z: 12 };
+      setEnemies(createEnemies());
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [story.player.hp]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -566,7 +597,7 @@ export default function App() {
           <span className="icon coin" /> {hud.gold}
         </div>
         <div className="mini-pill">
-          <span className="icon bolt" /> XP {combatXp}
+          <span className="icon bolt" /> Lv {playerLevel} • XP {combatXp}/{nextLevelXp}
         </div>
         {highlightedEnemyId && (() => {
           const enemy = enemies.find((entry) => entry.id === highlightedEnemyId && !entry.dead);

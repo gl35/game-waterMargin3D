@@ -23,9 +23,15 @@ const WORLD_BOUNDS = {
   maxZ: 220,
 };
 
+function isMobile() {
+  return typeof window !== 'undefined'
+    && (window.innerWidth < 900 || navigator.maxTouchPoints > 0);
+}
+
 function Terrain() {
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(900, 900, 180, 180);
+    const mobile = isMobile();
+    const geo = new THREE.PlaneGeometry(900, 900, mobile ? 110 : 180, mobile ? 110 : 180);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
@@ -68,7 +74,8 @@ function MountainBackdrop() {
 }
 
 function TreeField() {
-  const treeCount = 420;
+  const mobile = isMobile();
+  const treeCount = mobile ? 160 : 420;
   const mesh = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
@@ -354,18 +361,18 @@ function FloatingRune() {
   );
 }
 
-function Lights() {
+function Lights({ mobile = false }) {
   return (
     <>
-      <ambientLight intensity={0.65} />
+      <ambientLight intensity={mobile ? 0.75 : 0.65} />
       <directionalLight
         position={[40, 80, 20]}
-        intensity={1.5}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        intensity={mobile ? 1.1 : 1.5}
+        castShadow={!mobile}
+        shadow-mapSize-width={mobile ? 512 : 1024}
+        shadow-mapSize-height={mobile ? 512 : 1024}
       />
-      <hemisphereLight args={[0xcff6ff, 0x89c09a, 0.6]} />
+      <hemisphereLight args={[0xcff6ff, 0x89c09a, mobile ? 0.72 : 0.6]} />
     </>
   );
 }
@@ -413,11 +420,12 @@ function CameraRig({ target }) {
 
 function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies }) {
   const heroRef = useRef();
+  const mobile = isMobile();
   return (
     <>
-      <primitive attach="fog" object={new THREE.Fog(0xb8e4ff, 90, 430)} />
+      <primitive attach="fog" object={new THREE.Fog(0xb8e4ff, mobile ? 70 : 90, mobile ? 320 : 430)} />
       <SkyDome />
-      <Lights />
+      <Lights mobile={mobile} />
       <MountainBackdrop />
       <Terrain />
       <PathRibbon />
@@ -432,12 +440,13 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
 }
 
 export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies }) {
+  const mobile = isMobile();
   return (
     <Canvas
       camera={{ position: [0, 18, 42], fov: 52, near: 0.1, far: 900 }}
-      gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
-      dpr={[1, 1.75]}
-      shadows
+      gl={{ antialias: !mobile, alpha: false, powerPreference: 'high-performance' }}
+      dpr={mobile ? [1, 1.25] : [1, 1.75]}
+      shadows={!mobile}
       onCreated={({ gl, scene }) => {
         gl.setClearColor('#7eb6e8', 1);
         scene.background = new THREE.Color('#7eb6e8');

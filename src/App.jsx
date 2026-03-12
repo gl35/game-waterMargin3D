@@ -3,7 +3,7 @@ import './App.css';
 import { GameCanvas } from './three/Scene';
 import { NPCS } from './core/story/config';
 import { tileToWorldPosition } from './core/story/coordinates';
-import { createStoryProgress, handleNpcDialog, saveStoryProgress } from './core/story/stateMachine';
+import { createStoryProgress, handleNpcDialog, recordMiniBossDefeat, recordRaiderKill, saveStoryProgress } from './core/story/stateMachine';
 import {
   advanceQuestByNpc,
   claimQuestReward,
@@ -13,6 +13,7 @@ import {
   tryAcceptQuest,
 } from './core/quests/questSystem';
 import { HERO_SKINS } from './core/hero/skins';
+import { createEnemies, damageEnemy, getClosestLiveEnemy } from './core/combat/enemies';
 
 const npcWorld = NPCS.map((npc) => ({ ...npc, world: tileToWorldPosition(npc) }));
 
@@ -83,6 +84,9 @@ export default function App() {
   const [mobileMove, setMobileMove] = useState({ forward: false, backward: false, left: false, right: false });
   const [slotCooldowns, setSlotCooldowns] = useState({});
   const [interactRadius, setInteractRadius] = useState(6);
+  const [enemies, setEnemies] = useState(() => createEnemies());
+  const [highlightedEnemyId, setHighlightedEnemyId] = useState(null);
+  const [combatXp, setCombatXp] = useState(0);
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
 
   const heroSkin = HERO_SKINS[heroSkinIndex];
@@ -321,9 +325,20 @@ export default function App() {
 
   const handleInteractPointer = useCallback((event) => {
     event.preventDefault();
-    if (dialog) dismissDialog();
-    else attemptInteraction();
-  }, [dialog, dismissDialog, attemptInteraction]);
+    if (dialog) {
+      dismissDialog();
+      return;
+    }
+    if (highlightedNpcId) {
+      attemptInteraction();
+      return;
+    }
+    if (highlightedEnemyId) {
+      handleAttack();
+      return;
+    }
+    attemptInteraction();
+  }, [attemptInteraction, dialog, dismissDialog, handleAttack, highlightedEnemyId, highlightedNpcId]);
 
   const handleNpcTap = useCallback((npcId) => {
     if (dialog) {
@@ -333,6 +348,50 @@ export default function App() {
     setHighlightedNpcId(npcId);
     interactWithNpc(npcId);
   }, [dialog, dismissDialog, interactWithNpc]);
+
+  const handleEnemyTap = useCallback((enemyId) => {
+    setHighlightedEnemyId(enemyId);
+  }, []);
+
+  const handleAttack = useCallback(() => {
+    const target = highlightedEnemyId
+      ? enemies.find((enemy) => enemy.id === highlightedEnemyId && !enemy.dead)
+      : getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 14);
+
+    if (!target) {
+      setQuestNotice('No enemy in range.');
+      return;
+    }
+
+    const baseDamage = 12 + Math.floor(Math.random() * 12);
+    const { enemies: nextEnemies, killed, enemy } = damageEnemy(enemies, target.id, baseDamage);
+    setEnemies(nextEnemies);
+
+    if (!enemy) return;
+
+    if (killed) {
+      setStory((prev) => {
+        const rewardStory = {
+          ...prev,
+          player: { ...prev.player, gold: prev.player.gold + enemy.goldDrop },
+        };
+        if (enemy.type === 'captain') {
+          return recordMiniBossDefeat(rewardStory);
+        }
+        return recordRaiderKill(rewardStory);
+      });
+      setCombatXp((xp) => xp + enemy.xp);
+      setQuestNotice(`Defeated ${enemy.label}: +${enemy.goldDrop} gold, +${enemy.xp} XP`);
+      setHighlightedEnemyId(null);
+    } else {
+      setQuestNotice(`Hit ${enemy.label} for ${baseDamage} (${enemy.hp}/${enemy.maxHp} HP)`);
+      const retaliate = Math.floor(3 + Math.random() * enemy.damage * 0.6);
+      setStory((prev) => ({
+        ...prev,
+        player: { ...prev.player, hp: Math.max(0, prev.player.hp - retaliate) },
+      }));
+    }
+  }, [enemies, highlightedEnemyId]);
 
   const handleHeroMove = useCallback((pos) => {
     heroPosition.current = pos;
@@ -351,7 +410,10 @@ export default function App() {
     } else {
       setHighlightedNpcId(null);
     }
-  }, [interactRadius]);
+
+    const nearestEnemy = getClosestLiveEnemy(enemies, pos.x, pos.z, 16);
+    setHighlightedEnemyId(nearestEnemy?.id || null);
+  }, [enemies, interactRadius]);
 
   useEffect(() => {
     try {
@@ -385,6 +447,8 @@ export default function App() {
         } else {
           attemptInteraction();
         }
+      } else if (event.code === 'KeyF') {
+        handleAttack();
       } else if (event.code === 'Space' || event.code === 'Escape') {
         if (showTavernScene) {
           closeTavernScene();
@@ -397,13 +461,13 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [attemptInteraction, dialog, dismissDialog, showTavernScene, closeTavernScene]);
+  }, [attemptInteraction, closeTavernScene, dialog, dismissDialog, handleAttack, showTavernScene]);
 
   return (
     <div className={`hud-shell ${dialog ? 'dialog-open' : ''}`}>
       <div className="hud-frame">
         {webglSupported ? (
-          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} />
+          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} />
         ) : (
           <div className="webgl-fallback">
             <div className="webgl-fallback-title">3D engine failed to start</div>
@@ -472,6 +536,14 @@ export default function App() {
         <div className="mini-pill">
           <span className="icon coin" /> {hud.gold}
         </div>
+        <div className="mini-pill">
+          <span className="icon bolt" /> XP {combatXp}
+        </div>
+        {highlightedEnemyId && (() => {
+          const enemy = enemies.find((entry) => entry.id === highlightedEnemyId && !entry.dead);
+          if (!enemy) return null;
+          return <div className="mini-pill enemy-pill">{enemy.label} {enemy.hp}/{enemy.maxHp}</div>;
+        })()}
       </div>
 
       <div className="skin-selector">
@@ -528,12 +600,12 @@ export default function App() {
           onPointerDown={handleInteractPointer}
           onPointerUp={(event) => event.preventDefault()}
         >
-          Interact
+          {highlightedEnemyId && !highlightedNpcId ? 'Attack' : 'Interact'}
         </button>
       </div>
 
       <div className="hud-right">
-        <button className="circle-btn big"><span className="icon slash" /></button>
+        <button className="circle-btn big" onClick={handleAttack} disabled={Boolean(dialog)}><span className="icon slash" /></button>
         <button className="circle-btn"><span className="icon jump" /></button>
         <button className="circle-btn"><span className="icon block" /></button>
       </div>

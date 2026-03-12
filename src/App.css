@@ -240,6 +240,11 @@ html, body, #root {
   border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
+.enemy-pill {
+  background: rgba(123, 20, 20, 0.68);
+  border-color: rgba(255, 170, 150, 0.45);
+}
+
 .hud-joystick {
   position: absolute;
   left: clamp(18px, 5vw, 60px);

@@ -17,15 +17,15 @@ const DEFAULT_COLORS = {
 };
 
 const WORLD_BOUNDS = {
-  minX: -95,
-  maxX: 95,
-  minZ: -95,
-  maxZ: 150,
+  minX: -220,
+  maxX: 220,
+  minZ: -220,
+  maxZ: 260,
 };
 
 function Terrain() {
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(560, 560, 220, 220);
+    const geo = new THREE.PlaneGeometry(1200, 1200, 280, 280);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
@@ -48,7 +48,7 @@ function Terrain() {
 function PathRibbon() {
   return (
     <mesh rotation-x={-Math.PI / 2} position={[0, -3.3, 0]} receiveShadow>
-      <planeGeometry args={[50, 320]} />
+      <planeGeometry args={[80, 760]} />
       <meshStandardMaterial color="#f7d39f" roughness={0.7} metalness={0} />
     </mesh>
   );
@@ -68,7 +68,7 @@ function MountainBackdrop() {
 }
 
 function TreeField() {
-  const treeCount = 520;
+  const treeCount = 860;
   const mesh = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
@@ -76,7 +76,7 @@ function TreeField() {
     if (!mesh.current) return;
     for (let i = 0; i < treeCount; i++) {
       const angle = (i / treeCount) * Math.PI * 2;
-      const radius = 70 + Math.random() * 160;
+      const radius = 110 + Math.random() * 280;
       const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 10;
       const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 10;
       const scale = 0.8 + Math.random() * 0.9;
@@ -117,6 +117,33 @@ function NpcField({ highlightedNpcId, onNpcTap }) {
             <mesh position={[0, 2.1, 0]} onPointerDown={handleNpcTap(npc.id)}>
               <sphereGeometry args={[0.9, 16, 16]} />
               <meshStandardMaterial color={glow ? '#fff1cf' : '#f2cfa6'} />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap }) {
+  const handleEnemyTap = (enemyId) => (event) => {
+    event.stopPropagation();
+    onEnemyTap?.(enemyId);
+  };
+
+  return (
+    <group>
+      {enemies.filter((enemy) => !enemy.dead).map((enemy) => {
+        const glow = enemy.id === highlightedEnemyId;
+        return (
+          <group key={enemy.id} position={[enemy.x, -2.3, enemy.z]}>
+            <mesh castShadow onPointerDown={handleEnemyTap(enemy.id)}>
+              <cylinderGeometry args={[0.95, 1.05, 3.6, 10]} />
+              <meshStandardMaterial color={glow ? '#ff9f66' : '#7a1f1f'} emissive={glow ? '#ff8c52' : '#000'} emissiveIntensity={glow ? 0.5 : 0} />
+            </mesh>
+            <mesh position={[0, 2.1, 0]} onPointerDown={handleEnemyTap(enemy.id)}>
+              <sphereGeometry args={[0.95, 16, 16]} />
+              <meshStandardMaterial color={glow ? '#ffd3bf' : '#d26d54'} />
             </mesh>
           </group>
         );
@@ -377,7 +404,7 @@ function CameraRig({ target }) {
   return null;
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpcTap }) {
+function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies }) {
   const heroRef = useRef();
   return (
     <>
@@ -389,6 +416,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpc
       <PathRibbon />
       <TreeField />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
+      <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} />
       <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} />
       <FloatingRune />
       <CameraRig target={heroRef} />
@@ -396,7 +424,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpc
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpcTap }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies }) {
   return (
     <Canvas
       camera={{ position: [0, 18, 42], fov: 52, near: 0.1, far: 900 }}
@@ -409,7 +437,7 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin, moveInput, 
       }}
     >
       <Suspense fallback={null}>
-        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} />
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} />
       </Suspense>
     </Canvas>
   );

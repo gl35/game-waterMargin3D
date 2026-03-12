@@ -112,9 +112,8 @@ export default function App() {
     setDialog(null);
   }, []);
 
-  const attemptInteraction = useCallback(() => {
-    if (!highlightedNpcId) return;
-    const npc = npcWorld.find((entry) => entry.id === highlightedNpcId);
+  const interactWithNpc = useCallback((npcId) => {
+    const npc = npcWorld.find((entry) => entry.id === npcId);
     if (!npc) return;
 
     const { progress: storyProgress } = handleNpcDialog(story, npc.id);
@@ -162,15 +161,25 @@ export default function App() {
 
     setQuestProgress(nextQuestProgress);
     updateStory(storyProgress);
-  }, [highlightedNpcId, questProgress, story, updateStory]);
+  }, [questProgress, story, updateStory]);
+
+  const attemptInteraction = useCallback(() => {
+    if (!highlightedNpcId) return;
+    interactWithNpc(highlightedNpcId);
+  }, [highlightedNpcId, interactWithNpc]);
 
   const cycleHeroSkin = useCallback(() => {
     setHeroSkinIndex((prev) => (prev + 1) % HERO_SKINS.length);
   }, []);
 
-  const setMoveKey = useCallback((key, value) => {
-    setMobileMove((prev) => ({ ...prev, [key]: value }));
-  }, []);
+  const [joystickState, setJoystickState] = useState({
+    active: false,
+    pointerId: null,
+    baseX: 0,
+    baseY: 0,
+    knobX: 0,
+    knobY: 0,
+  });
 
   const handleClaimReward = useCallback((questId) => {
     const { questProgress: nextQuest, storyProgress: nextStory, reward } = claimQuestReward(questProgress, story, questId);
@@ -253,16 +262,77 @@ export default function App() {
     setSlotCooldowns((prev) => ({ ...prev, [slotId]: now + slot.cooldownMs }));
   }, [questProgress, slotCooldowns, story]);
 
-  const handleDirectionPointer = useCallback((key, value) => (event) => {
-    event.preventDefault();
-    setMobileMove((prev) => ({ ...prev, [key]: value }));
+  const updateMobileMoveByVector = useCallback((x, y) => {
+    const deadZone = 10;
+    setMobileMove({
+      forward: y < -deadZone,
+      backward: y > deadZone,
+      left: x < -deadZone,
+      right: x > deadZone,
+    });
   }, []);
+
+  const resetMobileMove = useCallback(() => {
+    setMobileMove({ forward: false, backward: false, left: false, right: false });
+  }, []);
+
+  const handleJoystickDown = useCallback((event) => {
+    if (dialog || showTavernScene) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setJoystickState({
+      active: true,
+      pointerId: event.pointerId,
+      baseX: event.clientX,
+      baseY: event.clientY,
+      knobX: 0,
+      knobY: 0,
+    });
+    resetMobileMove();
+  }, [dialog, resetMobileMove, showTavernScene]);
+
+  const handleJoystickMove = useCallback((event) => {
+    setJoystickState((prev) => {
+      if (!prev.active || prev.pointerId !== event.pointerId) return prev;
+      const rawX = event.clientX - prev.baseX;
+      const rawY = event.clientY - prev.baseY;
+      const max = 40;
+      const clampedX = Math.max(-max, Math.min(max, rawX));
+      const clampedY = Math.max(-max, Math.min(max, rawY));
+      updateMobileMoveByVector(clampedX, clampedY);
+      return { ...prev, knobX: clampedX, knobY: clampedY };
+    });
+  }, [updateMobileMoveByVector]);
+
+  const handleJoystickUp = useCallback((event) => {
+    setJoystickState((prev) => {
+      if (!prev.active || (event?.pointerId != null && prev.pointerId !== event.pointerId)) return prev;
+      return {
+        active: false,
+        pointerId: null,
+        baseX: 0,
+        baseY: 0,
+        knobX: 0,
+        knobY: 0,
+      };
+    });
+    resetMobileMove();
+  }, [resetMobileMove]);
 
   const handleInteractPointer = useCallback((event) => {
     event.preventDefault();
     if (dialog) dismissDialog();
     else attemptInteraction();
   }, [dialog, dismissDialog, attemptInteraction]);
+
+  const handleNpcTap = useCallback((npcId) => {
+    if (dialog) {
+      dismissDialog();
+      return;
+    }
+    setHighlightedNpcId(npcId);
+    interactWithNpc(npcId);
+  }, [dialog, dismissDialog, interactWithNpc]);
 
   const handleHeroMove = useCallback((pos) => {
     heroPosition.current = pos;
@@ -333,7 +403,7 @@ export default function App() {
     <div className={`hud-shell ${dialog ? 'dialog-open' : ''}`}>
       <div className="hud-frame">
         {webglSupported ? (
-          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={mobileMove} />
+          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} />
         ) : (
           <div className="webgl-fallback">
             <div className="webgl-fallback-title">3D engine failed to start</div>
@@ -440,31 +510,18 @@ export default function App() {
       </div>
 
       <div className="hud-mobile-controls">
-        <div className="dpad">
-          <button
-            className="dpad-btn up"
-            onPointerDown={handleDirectionPointer('forward', true)}
-            onPointerUp={handleDirectionPointer('forward', false)}
-            onPointerLeave={handleDirectionPointer('forward', false)}
-          >↑</button>
-          <button
-            className="dpad-btn left"
-            onPointerDown={handleDirectionPointer('left', true)}
-            onPointerUp={handleDirectionPointer('left', false)}
-            onPointerLeave={handleDirectionPointer('left', false)}
-          >←</button>
-          <button
-            className="dpad-btn right"
-            onPointerDown={handleDirectionPointer('right', true)}
-            onPointerUp={handleDirectionPointer('right', false)}
-            onPointerLeave={handleDirectionPointer('right', false)}
-          >→</button>
-          <button
-            className="dpad-btn down"
-            onPointerDown={handleDirectionPointer('backward', true)}
-            onPointerUp={handleDirectionPointer('backward', false)}
-            onPointerLeave={handleDirectionPointer('backward', false)}
-          >↓</button>
+        <div
+          className="touchpad"
+          onPointerDown={handleJoystickDown}
+          onPointerMove={handleJoystickMove}
+          onPointerUp={handleJoystickUp}
+          onPointerCancel={handleJoystickUp}
+        >
+          <div className="touch-base" />
+          <div
+            className="touch-knob"
+            style={{ transform: `translate(${joystickState.knobX}px, ${joystickState.knobY}px)` }}
+          />
         </div>
         <button
           className="mobile-action"

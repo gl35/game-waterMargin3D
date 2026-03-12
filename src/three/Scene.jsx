@@ -90,7 +90,12 @@ function TreeField() {
   );
 }
 
-function NpcField({ highlightedNpcId }) {
+function NpcField({ highlightedNpcId, onNpcTap }) {
+  const handleNpcTap = (npcId) => (event) => {
+    event.stopPropagation();
+    onNpcTap?.(npcId);
+  };
+
   return (
     <group>
       {NPCS.map((npc) => {
@@ -98,11 +103,11 @@ function NpcField({ highlightedNpcId }) {
         const glow = npc.id === highlightedNpcId;
         return (
           <group key={npc.id} position={[x, -2.4, z]}>
-            <mesh castShadow>
+            <mesh castShadow onPointerDown={handleNpcTap(npc.id)}>
               <cylinderGeometry args={[0.85, 0.95, 3.4, 10]} />
               <meshStandardMaterial color={glow ? '#ffe28a' : '#4f4a63'} />
             </mesh>
-            <mesh position={[0, 2.1, 0]}>
+            <mesh position={[0, 2.1, 0]} onPointerDown={handleNpcTap(npc.id)}>
               <sphereGeometry args={[0.9, 16, 16]} />
               <meshStandardMaterial color={glow ? '#fff1cf' : '#f2cfa6'} />
             </mesh>
@@ -365,7 +370,7 @@ function CameraRig({ target }) {
   return null;
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput }) {
+function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpcTap }) {
   const heroRef = useRef();
   return (
     <>
@@ -376,7 +381,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput }) {
       <Terrain />
       <PathRibbon />
       <TreeField />
-      <NpcField highlightedNpcId={highlightedNpcId} />
+      <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
       <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} />
       <FloatingRune />
       <CameraRig target={heroRef} />
@@ -384,7 +389,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput }) {
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin, moveInput }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin, moveInput, onNpcTap }) {
   return (
     <Canvas
       camera={{ position: [0, 12, 32], fov: 48, near: 0.1, far: 500 }}
@@ -397,7 +402,7 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin, moveInput }
       }}
     >
       <Suspense fallback={null}>
-        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={moveInput} />
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} />
       </Suspense>
     </Canvas>
   );

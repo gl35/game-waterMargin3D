@@ -583,7 +583,7 @@ html, body, #root {
   .hud-top {
     left: calc(8px + var(--safe-left));
     right: calc(8px + var(--safe-right));
-    top: calc(8px + var(--safe-top));
+    top: calc(62px + var(--safe-top));
     padding: 9px 10px;
     gap: 8px;
     font-size: 12px;
@@ -594,7 +594,7 @@ html, body, #root {
   .stat-value { min-width: 52px; font-size: 11px; }
 
   .hud-objective {
-    top: calc(66px + var(--safe-top));
+    top: calc(120px + var(--safe-top));
     left: calc(8px + var(--safe-left));
     max-width: min(62vw, 280px);
     padding: 8px 10px;
@@ -602,7 +602,7 @@ html, body, #root {
   }
 
   .quest-panel {
-    top: calc(66px + var(--safe-top));
+    top: calc(120px + var(--safe-top));
     right: calc(8px + var(--safe-right));
     width: min(42vw, 190px);
     padding: 8px;
@@ -630,9 +630,13 @@ html, body, #root {
   }
 
   .hud-bottom {
-    bottom: calc(112px + var(--safe-bottom));
+    top: calc(8px + var(--safe-top));
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
     gap: 7px;
     padding: 7px 10px;
+    z-index: 2200;
   }
 
   .slot {
@@ -670,29 +674,36 @@ html, body, #root {
     pointer-events: none;
   }
 
-  .dpad {
-    width: 120px;
-    height: 120px;
+  .touchpad {
+    width: 122px;
+    height: 122px;
     position: relative;
     pointer-events: auto;
-  }
-
-  .dpad-btn {
-    position: absolute;
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,.5);
-    background: rgba(13, 36, 58, 0.78);
-    color: #fff;
-    font-size: 22px;
     touch-action: none;
   }
 
-  .dpad-btn.up { left: 36px; top: 0; }
-  .dpad-btn.left { left: 0; top: 36px; }
-  .dpad-btn.right { right: 0; top: 36px; }
-  .dpad-btn.down { left: 36px; bottom: 0; }
+  .touch-base {
+    position: absolute;
+    inset: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    background: rgba(13, 36, 58, 0.5);
+  }
+
+  .touch-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    margin-left: -22px;
+    margin-top: -22px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.72);
+    background: radial-gradient(circle at 35% 35%, rgba(255,255,255,.95), rgba(120,170,210,.85));
+    box-shadow: 0 6px 14px rgba(2, 8, 12, 0.45);
+    pointer-events: none;
+  }
 
   .mobile-action {
     pointer-events: auto;
@@ -711,7 +722,7 @@ html, body, #root {
     display: none;
   }
 
-  .hud-shell.dialog-open .dpad {
+  .hud-shell.dialog-open .touchpad {
     display: none;
   }
 

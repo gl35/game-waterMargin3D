@@ -147,6 +147,76 @@ html, body, #root {
   gap: 8px;
 }
 
+.quest-panel {
+  position: absolute;
+  top: clamp(74px, 11vh, 138px);
+  right: clamp(12px, 2vw, 24px);
+  width: min(320px, 38vw);
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(190, 233, 255, 0.5);
+  background: linear-gradient(160deg, rgba(8, 32, 51, 0.86), rgba(22, 59, 87, 0.9));
+  color: #eff8ff;
+  font: 600 13px/1.35 'Nunito', system-ui;
+}
+
+.quest-header {
+  font-size: 11px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.quest-title {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.quest-state {
+  margin-top: 2px;
+  font-size: 11px;
+  letter-spacing: 0.9px;
+  color: #9dd9ff;
+}
+
+.quest-text {
+  margin-top: 8px;
+  color: #f4fbff;
+}
+
+.quest-progress {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.quest-claim {
+  margin-top: 10px;
+  border: none;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #062130;
+  background: linear-gradient(135deg, #ffdd7b, #ffad5d);
+  cursor: pointer;
+}
+
+.quest-toast {
+  position: absolute;
+  top: clamp(126px, 18vh, 190px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(6, 35, 54, 0.88);
+  color: #f5fcff;
+  border: 1px solid rgba(158, 226, 255, 0.55);
+  font: 700 12px/1 'Nunito', system-ui;
+  z-index: 2200;
+}
+
 .mini-pill {
   display: flex;
   align-items: center;
@@ -452,6 +522,19 @@ html, body, #root {
   .hud-top { flex-direction: column; gap: 10px; }
   .stat-value { min-width: 64px; }
   .hud-objective { max-width: 70%; }
+  .quest-panel {
+    width: min(92vw, 360px);
+    right: 10px;
+    top: auto;
+    bottom: 230px;
+    font-size: 12px;
+  }
+  .quest-toast {
+    top: auto;
+    bottom: 210px;
+    width: min(90vw, 360px);
+    text-align: center;
+  }
   .ring.outer { width: 120px; height: 120px; }
   .ring.inner { width: 60px; height: 60px; }
   .slot { width: 48px; height: 48px; }

@@ -4,6 +4,14 @@ import { GameCanvas } from './three/Scene';
 import { NPCS } from './core/story/config';
 import { tileToWorldPosition } from './core/story/coordinates';
 import { createStoryProgress, handleNpcDialog } from './core/story/stateMachine';
+import {
+  advanceQuestByNpc,
+  claimQuestReward,
+  getQuestLog,
+  loadQuestProgress,
+  saveQuestProgress,
+  tryAcceptQuest,
+} from './core/quests/questSystem';
 import { HERO_SKINS } from './core/hero/skins';
 
 const npcWorld = NPCS.map((npc) => ({ ...npc, world: tileToWorldPosition(npc) }));
@@ -57,6 +65,8 @@ function composeDialogText(npc, story) {
 
 export default function App() {
   const [story, setStory] = useState(() => createStoryProgress());
+  const [questProgress, setQuestProgress] = useState(() => loadQuestProgress());
+  const [questNotice, setQuestNotice] = useState(null);
   const [webglSupported, setWebglSupported] = useState(true);
   const [dialog, setDialog] = useState(null);
   const [highlightedNpcId, setHighlightedNpcId] = useState(null);
@@ -78,6 +88,12 @@ export default function App() {
     objective: story.chapterState.objective,
   }), [story]);
 
+  const questLog = useMemo(() => getQuestLog(questProgress), [questProgress]);
+  const activeQuest = useMemo(
+    () => questLog.find((quest) => quest.state === 'active') || questLog.find((quest) => quest.canClaim) || questLog[0],
+    [questLog],
+  );
+
   const updateStory = useCallback((next) => {
     setStory(next);
   }, []);
@@ -91,12 +107,52 @@ export default function App() {
     const npc = npcWorld.find((entry) => entry.id === highlightedNpcId);
     if (!npc) return;
 
-    const composed = composeDialogText(npc, story);
-    setDialog({ npc, text: composed });
+    const { progress: storyProgress } = handleNpcDialog(story, npc.id);
+    let nextQuestProgress = questProgress;
+    const acceptResult = tryAcceptQuest(nextQuestProgress, npc.id);
+    nextQuestProgress = acceptResult.progress;
+    const advanceResult = advanceQuestByNpc(nextQuestProgress, npc.id);
+    nextQuestProgress = advanceResult.progress;
 
-    const { progress } = handleNpcDialog(story, npc.id);
-    updateStory(progress);
-  }, [highlightedNpcId, story, updateStory]);
+    const questEvents = [...acceptResult.events, ...advanceResult.events];
+    const questLines = [];
+
+    if (questEvents.some((event) => event.type === 'quest_accepted')) {
+      const acceptedQuest = getQuestLog(nextQuestProgress).find((quest) => quest.state === 'active');
+      if (acceptedQuest) {
+        questLines.push(`New Quest: ${acceptedQuest.title}`);
+        questLines.push(acceptedQuest.activeStepText || 'Open the quest panel for objectives.');
+        setQuestNotice(`Quest accepted: ${acceptedQuest.title}`);
+      }
+    }
+
+    const stepEvent = questEvents.find((event) => event.type === 'quest_step_completed');
+    if (stepEvent) {
+      const updatedQuest = getQuestLog(nextQuestProgress).find((quest) => quest.id === stepEvent.questId);
+      if (updatedQuest?.state === 'active') {
+        questLines.push(`Quest progress: ${updatedQuest.stepIndex}/${updatedQuest.stepCount}`);
+        if (updatedQuest.activeStepText) questLines.push(updatedQuest.activeStepText);
+      }
+    }
+
+    if (questEvents.some((event) => event.type === 'quest_completed')) {
+      const completedQuest = getQuestLog(nextQuestProgress).find((quest) => quest.state === 'completed');
+      if (completedQuest) {
+        questLines.push(`Quest complete: ${completedQuest.title}`);
+        questLines.push('Claim your reward from the quest panel.');
+        setQuestNotice(`Quest complete: ${completedQuest.title}`);
+      }
+    }
+
+    const composed = composeDialogText(npc, storyProgress);
+    setDialog({
+      npc,
+      text: questLines.length ? `${composed}\n\n${questLines.join('\n')}` : composed,
+    });
+
+    setQuestProgress(nextQuestProgress);
+    updateStory(storyProgress);
+  }, [highlightedNpcId, questProgress, story, updateStory]);
 
   const cycleHeroSkin = useCallback(() => {
     setHeroSkinIndex((prev) => (prev + 1) % HERO_SKINS.length);
@@ -105,6 +161,14 @@ export default function App() {
   const setMoveKey = useCallback((key, value) => {
     setMobileMove((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  const handleClaimReward = useCallback((questId) => {
+    const { questProgress: nextQuest, storyProgress: nextStory, reward } = claimQuestReward(questProgress, story, questId);
+    if (!reward) return;
+    setQuestProgress(nextQuest);
+    setStory(nextStory);
+    setQuestNotice(`Quest reward claimed: +${reward.gold || 0} gold, +${reward.hpRestore || 0} HP (${reward.title})`);
+  }, [questProgress, story]);
 
   const handleDirectionPointer = useCallback((key, value) => (event) => {
     event.preventDefault();
@@ -145,6 +209,16 @@ export default function App() {
       setWebglSupported(false);
     }
   }, []);
+
+  useEffect(() => {
+    saveQuestProgress(questProgress);
+  }, [questProgress]);
+
+  useEffect(() => {
+    if (!questNotice) return;
+    const timer = window.setTimeout(() => setQuestNotice(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [questNotice]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -211,6 +285,31 @@ export default function App() {
 
       <div className="hud-objective" aria-live="polite">
         {hud.objective}
+      </div>
+
+      <div className="quest-panel" aria-live="polite">
+        <div className="quest-header">Quest Log</div>
+        {activeQuest ? (
+          <>
+            <div className="quest-title">{activeQuest.title}</div>
+            <div className="quest-state">{activeQuest.state.toUpperCase()}</div>
+            <div className="quest-text">
+              {activeQuest.state === 'active'
+                ? activeQuest.activeStepText
+                : activeQuest.state === 'completed'
+                  ? 'Quest complete. Claim your reward.'
+                  : activeQuest.summary}
+            </div>
+            <div className="quest-progress">{activeQuest.stepIndex}/{activeQuest.stepCount} steps</div>
+            {activeQuest.canClaim && (
+              <button className="quest-claim" onClick={() => handleClaimReward(activeQuest.id)}>
+                Claim Reward (+{activeQuest.reward?.gold || 0} gold)
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="quest-text">No quest data yet.</div>
+        )}
       </div>
 
       <div className="hud-top-right">
@@ -286,6 +385,8 @@ export default function App() {
         <button className="circle-btn"><span className="icon jump" /></button>
         <button className="circle-btn"><span className="icon block" /></button>
       </div>
+
+      {questNotice && <div className="quest-toast">{questNotice}</div>}
 
       {dialog && (
         <div className="dialog-overlay">

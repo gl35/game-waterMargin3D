@@ -323,36 +323,6 @@ export default function App() {
     resetMobileMove();
   }, [resetMobileMove]);
 
-  const handleInteractPointer = useCallback((event) => {
-    event.preventDefault();
-    if (dialog) {
-      dismissDialog();
-      return;
-    }
-    if (highlightedNpcId) {
-      attemptInteraction();
-      return;
-    }
-    if (highlightedEnemyId) {
-      handleAttack();
-      return;
-    }
-    attemptInteraction();
-  }, [attemptInteraction, dialog, dismissDialog, handleAttack, highlightedEnemyId, highlightedNpcId]);
-
-  const handleNpcTap = useCallback((npcId) => {
-    if (dialog) {
-      dismissDialog();
-      return;
-    }
-    setHighlightedNpcId(npcId);
-    interactWithNpc(npcId);
-  }, [dialog, dismissDialog, interactWithNpc]);
-
-  const handleEnemyTap = useCallback((enemyId) => {
-    setHighlightedEnemyId(enemyId);
-  }, []);
-
   const handleAttack = useCallback(() => {
     const target = highlightedEnemyId
       ? enemies.find((enemy) => enemy.id === highlightedEnemyId && !enemy.dead)
@@ -392,6 +362,36 @@ export default function App() {
       }));
     }
   }, [enemies, highlightedEnemyId]);
+
+  const handleInteractPointer = useCallback((event) => {
+    event.preventDefault();
+    if (dialog) {
+      dismissDialog();
+      return;
+    }
+    if (highlightedNpcId) {
+      attemptInteraction();
+      return;
+    }
+    if (highlightedEnemyId) {
+      handleAttack();
+      return;
+    }
+    attemptInteraction();
+  }, [attemptInteraction, dialog, dismissDialog, handleAttack, highlightedEnemyId, highlightedNpcId]);
+
+  const handleNpcTap = useCallback((npcId) => {
+    if (dialog) {
+      dismissDialog();
+      return;
+    }
+    setHighlightedNpcId(npcId);
+    interactWithNpc(npcId);
+  }, [dialog, dismissDialog, interactWithNpc]);
+
+  const handleEnemyTap = useCallback((enemyId) => {
+    setHighlightedEnemyId(enemyId);
+  }, []);
 
   const handleHeroMove = useCallback((pos) => {
     heroPosition.current = pos;

@@ -139,7 +139,7 @@ function NpcField({ highlightedNpcId, onNpcTap }) {
   );
 }
 
-function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap }) {
+function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) {
   const handleEnemyTap = (enemyId) => (event) => {
     event.stopPropagation();
     onEnemyTap?.(enemyId);
@@ -149,15 +149,17 @@ function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap }) {
     <group>
       {enemies.filter((enemy) => !enemy.dead).map((enemy) => {
         const glow = enemy.id === highlightedEnemyId;
+        const hitAge = attackFx?.enemyId === enemy.id ? Date.now() - attackFx.at : 9999;
+        const hitFlash = hitAge < 220;
         return (
           <group key={enemy.id} position={[enemy.x, -2.3, enemy.z]}>
             <mesh castShadow onPointerDown={handleEnemyTap(enemy.id)}>
               <cylinderGeometry args={[0.95, 1.05, 3.6, 10]} />
-              <meshStandardMaterial color={glow ? '#ff9f66' : '#7a1f1f'} emissive={glow ? '#ff8c52' : '#000'} emissiveIntensity={glow ? 0.5 : 0} />
+              <meshStandardMaterial color={hitFlash ? '#ffd8a8' : glow ? '#ff9f66' : '#7a1f1f'} emissive={hitFlash ? '#ffcf6a' : glow ? '#ff8c52' : '#000'} emissiveIntensity={hitFlash ? 1.2 : glow ? 0.5 : 0} />
             </mesh>
             <mesh position={[0, 2.1, 0]} onPointerDown={handleEnemyTap(enemy.id)}>
               <sphereGeometry args={[0.95, 16, 16]} />
-              <meshStandardMaterial color={glow ? '#ffd3bf' : '#d26d54'} />
+              <meshStandardMaterial color={hitFlash ? '#fff1cf' : glow ? '#ffd3bf' : '#d26d54'} emissive={hitFlash ? '#ffdb86' : '#000'} emissiveIntensity={hitFlash ? 0.85 : 0} />
             </mesh>
           </group>
         );
@@ -418,7 +420,7 @@ function CameraRig({ target }) {
   return null;
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies }) {
+function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx }) {
   const heroRef = useRef();
   const mobile = isMobile();
   return (
@@ -431,7 +433,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
       <PathRibbon />
       <TreeField />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
-      <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} />
+      <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} attackFx={attackFx} />
       <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} />
       <FloatingRune />
       <CameraRig target={heroRef} />
@@ -439,7 +441,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx }) {
   const mobile = isMobile();
   return (
     <Canvas
@@ -453,7 +455,7 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
       }}
     >
       <Suspense fallback={null}>
-        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} />
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} />
       </Suspense>
     </Canvas>
   );

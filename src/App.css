@@ -228,6 +228,52 @@ html, body, #root {
   z-index: 2200;
 }
 
+.attack-flash {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  transform: translate(-50%, -50%);
+  color: #ffd56a;
+  font-size: 56px;
+  font-weight: 900;
+  text-shadow: 0 0 18px rgba(255, 184, 74, 0.9);
+  pointer-events: none;
+  z-index: 2400;
+  animation: attackPulse 180ms ease-out;
+}
+
+.damage-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2450;
+  display: grid;
+  place-items: center;
+}
+
+.damage-popup {
+  color: #ffe8ba;
+  font: 800 26px/1 'Nunito', system-ui;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+  animation: dmgFloat 420ms ease-out forwards;
+}
+
+.damage-popup.crit {
+  color: #ffef7d;
+  font-size: 30px;
+}
+
+@keyframes attackPulse {
+  from { opacity: 0.95; transform: translate(-50%, -50%) scale(0.6); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
+}
+
+@keyframes dmgFloat {
+  from { opacity: 0; transform: translateY(20px) scale(0.85); }
+  30% { opacity: 1; }
+  to { opacity: 0; transform: translateY(-36px) scale(1.05); }
+}
+
 .mini-pill {
   display: flex;
   align-items: center;

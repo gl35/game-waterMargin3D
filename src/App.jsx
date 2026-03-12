@@ -88,6 +88,8 @@ export default function App() {
   const [highlightedEnemyId, setHighlightedEnemyId] = useState(null);
   const [combatXp, setCombatXp] = useState(0);
   const [lastEnemyHitAt, setLastEnemyHitAt] = useState(0);
+  const [attackFx, setAttackFx] = useState({ at: 0, enemyId: null, damage: 0 });
+  const [damagePopups, setDamagePopups] = useState([]);
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
 
   const heroSkin = HERO_SKINS[heroSkinIndex];
@@ -340,8 +342,11 @@ export default function App() {
     }
 
     const baseDamage = 10 + playerLevel * 2 + Math.floor(Math.random() * 10);
-    const { enemies: nextEnemies, killed, enemy } = damageEnemy(enemies, target.id, baseDamage, Date.now());
+    const hitAt = Date.now();
+    const { enemies: nextEnemies, killed, enemy } = damageEnemy(enemies, target.id, baseDamage, hitAt);
     setEnemies(nextEnemies);
+    setAttackFx({ at: hitAt, enemyId: target.id, damage: baseDamage });
+    setDamagePopups((prev) => [...prev, { id: `${hitAt}-${target.id}`, text: `-${baseDamage}`, crit: baseDamage > 24 }]);
 
     if (!enemy) return;
 
@@ -443,6 +448,14 @@ export default function App() {
   }, [questNotice]);
 
   useEffect(() => {
+    if (!damagePopups.length) return;
+    const timer = window.setTimeout(() => {
+      setDamagePopups((prev) => prev.slice(1));
+    }, 420);
+    return () => window.clearTimeout(timer);
+  }, [damagePopups]);
+
+  useEffect(() => {
     let raf = 0;
     let last = performance.now();
     const tick = (nowMs) => {
@@ -527,7 +540,7 @@ export default function App() {
     <div className={`hud-shell ${dialog ? 'dialog-open' : ''}`}>
       <div className="hud-frame">
         {webglSupported ? (
-          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} />
+          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} />
         ) : (
           <div className="webgl-fallback">
             <div className="webgl-fallback-title">3D engine failed to start</div>
@@ -671,6 +684,13 @@ export default function App() {
       </div>
 
       {questNotice && <div className="quest-toast">{questNotice}</div>}
+
+      {Date.now() - attackFx.at < 180 && <div className="attack-flash">✦</div>}
+      <div className="damage-layer" aria-hidden="true">
+        {damagePopups.map((popup) => (
+          <div key={popup.id} className={`damage-popup ${popup.crit ? 'crit' : ''}`}>{popup.text}</div>
+        ))}
+      </div>
 
       {dialog && (
         <div className="dialog-overlay">

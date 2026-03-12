@@ -323,10 +323,12 @@ export default function App() {
     resetMobileMove();
   }, [resetMobileMove]);
 
-  const handleAttack = useCallback(() => {
-    const target = highlightedEnemyId
-      ? enemies.find((enemy) => enemy.id === highlightedEnemyId && !enemy.dead)
-      : getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 14);
+  const handleAttack = useCallback((forcedEnemyId = null) => {
+    const target = forcedEnemyId
+      ? enemies.find((enemy) => enemy.id === forcedEnemyId && !enemy.dead)
+      : highlightedEnemyId
+        ? enemies.find((enemy) => enemy.id === highlightedEnemyId && !enemy.dead)
+        : getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 24);
 
     if (!target) {
       setQuestNotice('No enemy in range.');
@@ -391,7 +393,8 @@ export default function App() {
 
   const handleEnemyTap = useCallback((enemyId) => {
     setHighlightedEnemyId(enemyId);
-  }, []);
+    handleAttack(enemyId);
+  }, [handleAttack]);
 
   const handleHeroMove = useCallback((pos) => {
     heroPosition.current = pos;
@@ -434,6 +437,32 @@ export default function App() {
     const timer = window.setTimeout(() => setQuestNotice(null), 2600);
     return () => window.clearTimeout(timer);
   }, [questNotice]);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const t = performance.now() * 0.001;
+      setEnemies((prev) => prev.map((enemy, idx) => {
+        if (enemy.dead) return enemy;
+        const radius = enemy.type === 'captain' ? 10 : enemy.type === 'raider' ? 7 : 5;
+        const speed = enemy.type === 'captain' ? 0.35 : enemy.type === 'raider' ? 0.7 : 0.95;
+        const angle = t * speed + idx * 0.9;
+        return {
+          ...enemy,
+          x: enemy.patrolOriginX + Math.cos(angle) * radius,
+          z: enemy.patrolOriginZ + Math.sin(angle * 0.9) * radius,
+        };
+      }));
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    const nearestEnemy = getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 22);
+    setHighlightedEnemyId(nearestEnemy?.id || null);
+  }, [enemies]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {

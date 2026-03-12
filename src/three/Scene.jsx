@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { NPCS } from '../core/story/config';
@@ -386,8 +386,19 @@ function SceneContent({ onHeroMove, highlightedNpcId, heroSkin, moveInput }) {
 
 export function GameCanvas({ onHeroMove, highlightedNpcId, heroSkin, moveInput }) {
   return (
-    <Canvas camera={{ position: [0, 12, 32], fov: 48 }} shadows>
-      <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={moveInput} />
+    <Canvas
+      camera={{ position: [0, 12, 32], fov: 48, near: 0.1, far: 500 }}
+      gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+      dpr={[1, 1.75]}
+      shadows
+      onCreated={({ gl, scene }) => {
+        gl.setClearColor('#7eb6e8', 1);
+        scene.background = new THREE.Color('#7eb6e8');
+      }}
+    >
+      <Suspense fallback={null}>
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={moveInput} />
+      </Suspense>
     </Canvas>
   );
 }

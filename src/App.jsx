@@ -57,6 +57,7 @@ function composeDialogText(npc, story) {
 
 export default function App() {
   const [story, setStory] = useState(() => createStoryProgress());
+  const [webglSupported, setWebglSupported] = useState(true);
   const [dialog, setDialog] = useState(null);
   const [highlightedNpcId, setHighlightedNpcId] = useState(null);
   const [heroSkinIndex, setHeroSkinIndex] = useState(0);
@@ -80,6 +81,22 @@ export default function App() {
   const updateStory = useCallback((next) => {
     setStory(next);
   }, []);
+
+  const dismissDialog = useCallback(() => {
+    setDialog(null);
+  }, []);
+
+  const attemptInteraction = useCallback(() => {
+    if (!highlightedNpcId) return;
+    const npc = npcWorld.find((entry) => entry.id === highlightedNpcId);
+    if (!npc) return;
+
+    const composed = composeDialogText(npc, story);
+    setDialog({ npc, text: composed });
+
+    const { progress } = handleNpcDialog(story, npc.id);
+    updateStory(progress);
+  }, [highlightedNpcId, story, updateStory]);
 
   const cycleHeroSkin = useCallback(() => {
     setHeroSkinIndex((prev) => (prev + 1) % HERO_SKINS.length);
@@ -119,20 +136,14 @@ export default function App() {
     }
   }, []);
 
-  const attemptInteraction = useCallback(() => {
-    if (!highlightedNpcId) return;
-    const npc = npcWorld.find((entry) => entry.id === highlightedNpcId);
-    if (!npc) return;
-
-    const composed = composeDialogText(npc, story);
-    setDialog({ npc, text: composed });
-
-    const { progress } = handleNpcDialog(story, npc.id);
-    updateStory(progress);
-  }, [highlightedNpcId, story, updateStory]);
-
-  const dismissDialog = useCallback(() => {
-    setDialog(null);
+  useEffect(() => {
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      setWebglSupported(Boolean(gl));
+    } catch {
+      setWebglSupported(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -164,7 +175,14 @@ export default function App() {
   return (
     <div className="hud-shell">
       <div className="hud-frame">
-        <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={mobileMove} />
+        {webglSupported ? (
+          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} heroSkin={heroSkin} moveInput={mobileMove} />
+        ) : (
+          <div className="webgl-fallback">
+            <div className="webgl-fallback-title">3D engine failed to start</div>
+            <div className="webgl-fallback-body">Your browser/device blocked WebGL. Try Chrome/Edge, disable battery saver, or update GPU drivers.</div>
+          </div>
+        )}
         {highlightedNpcId && !dialog && (
           <div className="interact-prompt">{INTERACT_PROMPT}</div>
         )}

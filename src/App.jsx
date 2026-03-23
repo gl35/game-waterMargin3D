@@ -14,6 +14,7 @@ import {
 } from './core/quests/questSystem';
 import { HERO_SKINS } from './core/hero/skins';
 import VictoryBanquet from './VictoryBanquet';
+import OpeningCinematic from './OpeningCinematic';
 import { createEnemies, damageEnemy, knockbackEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
 import { getLevel, getXpProgress, getXpForNext, getStats, SHOP_UPGRADES } from './core/hero/progression';
 
@@ -111,6 +112,7 @@ export default function App() {
   const [heroSkinIndex, setHeroSkinIndex] = useState(0);
   const [showTavernScene, setShowTavernScene] = useState(false);
   const [showVictoryBanquet, setShowVictoryBanquet] = useState(false);
+  const [showOpening, setShowOpening] = useState(() => !sessionStorage.getItem('cine_seen'));
   const prevStage = useRef(null);
   const [mobileMove, setMobileMove] = useState({ forward: false, backward: false, left: false, right: false });
   const [slotCooldowns, setSlotCooldowns] = useState({});
@@ -875,6 +877,12 @@ export default function App() {
 
   return (
     <div className={`hud-shell ${dialog ? 'dialog-open' : ''}`}>
+      {showOpening && (
+        <OpeningCinematic onComplete={() => {
+          sessionStorage.setItem('cine_seen', '1');
+          setShowOpening(false);
+        }} />
+      )}
       <div className="hud-frame">
         {webglSupported ? (
           <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} />

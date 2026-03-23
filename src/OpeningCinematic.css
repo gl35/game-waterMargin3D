@@ -1,0 +1,178 @@
+.cinematic-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: #000;
+}
+
+.cinematic-overlay.fade-in {
+  animation: cine-fade-in 0.7s ease forwards;
+}
+.cinematic-overlay.fade-out {
+  animation: cine-fade-out 0.6s ease forwards;
+}
+
+@keyframes cine-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cine-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.cinematic-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* Letterbox bars */
+.cine-bar {
+  position: absolute;
+  left: 0; right: 0;
+  height: clamp(48px, 9vh, 80px);
+  background: #000;
+  z-index: 10;
+  pointer-events: none;
+}
+.cine-bar.top    { top: 0; }
+.cine-bar.bottom { bottom: 0; }
+
+/* Edge vignette */
+.cine-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.65) 100%);
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Text area */
+.cine-text-area {
+  position: absolute;
+  bottom: clamp(58px, 11vh, 96px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(760px, 88vw);
+  text-align: center;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.cine-line-wrap {
+  animation: cine-line-in 0.55s ease forwards;
+}
+@keyframes cine-line-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cine-line {
+  font-family: serif;
+  font-size: clamp(16px, 3.2vw, 26px);
+  color: #f0e8d0;
+  text-shadow: 0 0 20px rgba(200,160,80,0.5), 0 2px 8px rgba(0,0,0,0.9);
+  line-height: 1.5;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.cine-line-sub {
+  font-family: serif;
+  font-size: clamp(13px, 2.2vw, 18px);
+  color: #d9b36b;
+  text-shadow: 0 0 12px rgba(217,179,107,0.6), 0 1px 4px rgba(0,0,0,0.9);
+  margin: 2px 0 0;
+  letter-spacing: 0.15em;
+  opacity: 0.85;
+}
+
+/* Scene progress dots */
+.cine-dots {
+  position: absolute;
+  top: clamp(56px, 10vh, 88px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 20;
+  pointer-events: none;
+}
+.cine-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.4);
+  transition: all 0.3s ease;
+}
+.cine-dot.active {
+  background: #d9b36b;
+  border-color: #d9b36b;
+  box-shadow: 0 0 6px #d9b36b;
+  width: 18px;
+  border-radius: 3px;
+}
+.cine-dot.done {
+  background: rgba(217,179,107,0.45);
+  border-color: rgba(217,179,107,0.6);
+}
+
+/* Skip */
+.cine-skip {
+  position: absolute;
+  top: clamp(56px, 11vh, 92px);
+  right: clamp(16px, 3vw, 40px);
+  z-index: 25;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.55);
+  font-size: 13px;
+  padding: 5px 14px;
+  cursor: pointer;
+  font-family: sans-serif;
+  letter-spacing: 0.06em;
+  transition: background 0.2s, color 0.2s;
+}
+.cine-skip:hover {
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.9);
+}
+
+/* Title flash on last scene */
+.cine-title-flash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 15;
+  animation: cine-title-in 1.2s ease 1s both;
+}
+@keyframes cine-title-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.cine-title-chi {
+  font-family: serif;
+  font-size: clamp(60px, 14vw, 110px);
+  color: #d9b36b;
+  text-shadow: 0 0 40px rgba(217,179,107,0.7), 0 0 80px rgba(217,179,107,0.3), 0 3px 10px #000;
+  line-height: 1;
+  letter-spacing: 0.1em;
+}
+.cine-title-en {
+  font-family: serif;
+  font-size: clamp(18px, 4vw, 32px);
+  color: #f0e0c0;
+  text-shadow: 0 0 16px rgba(240,200,160,0.5), 0 2px 6px #000;
+  letter-spacing: 0.2em;
+  margin-top: 12px;
+}

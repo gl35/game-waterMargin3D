@@ -1857,32 +1857,264 @@ function LockOnRing({ enemies, lockedTarget }) {
   );
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos }) {
+// ── CHAPTER 2: BURNING VILLAGE ENVIRONMENT ────────────────────
+
+function BurningBuilding({ position, scale = 1, fireColor = '#ff5500' }) {
+  const fire1 = useRef(); const fire2 = useRef(); const fireLight = useRef();
+  const smokeRef = useRef();
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime() + position[0] * 0.3;
+    if (fire1.current) { fire1.current.scale.y = 1 + Math.sin(t * 7) * 0.3; fire1.current.scale.x = 1 + Math.sin(t * 5.3) * 0.12; }
+    if (fire2.current) { fire2.current.scale.y = 1 + Math.sin(t * 6 + 1) * 0.25; fire2.current.rotation.y = t * 0.5; }
+    if (fireLight.current) fireLight.current.intensity = 3.5 + Math.sin(t * 8) * 1.5 + Math.sin(t * 13) * 0.8;
+    if (smokeRef.current) { smokeRef.current.position.y = 6 + ((t * 0.8 + position[2]) % 4); smokeRef.current.scale.setScalar(1 + ((t * 0.8 + position[2]) % 4) * 0.4); smokeRef.current.material.opacity = Math.max(0, 0.35 - ((t * 0.8 + position[2]) % 4) * 0.08); }
+  });
+  const [px, py, pz] = position;
+  return (
+    <group position={[px, getTerrainHeight(px, pz), pz]} scale={scale}>
+      {/* Building shell — partially collapsed */}
+      <mesh castShadow position={[0, 1.5, 0]}>
+        <boxGeometry args={[4.5, 3.2, 3.5]} />
+        <meshStandardMaterial color="#2a1208" emissive="#ff2200" emissiveIntensity={0.08} roughness={1} />
+      </mesh>
+      {/* Broken roof */}
+      <mesh castShadow position={[-0.6, 3.1, 0]} rotation={[0.3, 0, -0.25]}>
+        <boxGeometry args={[2.5, 0.22, 3.6]} />
+        <meshStandardMaterial color="#1a0a04" roughness={1} />
+      </mesh>
+      <mesh castShadow position={[1.4, 2.8, 0]} rotation={[-0.2, 0, 0.4]}>
+        <boxGeometry args={[1.8, 0.18, 3.6]} />
+        <meshStandardMaterial color="#1a0a04" roughness={1} />
+      </mesh>
+      {/* Collapsed wall chunk */}
+      <mesh castShadow position={[2.2, 0.4, 0.8]} rotation={[0, 0.3, -0.6]}>
+        <boxGeometry args={[1.2, 1.8, 0.3]} />
+        <meshStandardMaterial color="#2a1208" roughness={1} />
+      </mesh>
+      {/* Main fire column */}
+      <mesh ref={fire1} position={[0, 2.5, 0]}>
+        <coneGeometry args={[1.2, 4.5, 9]} />
+        <meshStandardMaterial color="#ff5500" emissive="#ff3300" emissiveIntensity={1.8} transparent opacity={0.88} />
+      </mesh>
+      {/* Inner bright core */}
+      <mesh ref={fire2} position={[0, 2.0, 0]}>
+        <coneGeometry args={[0.6, 2.8, 7]} />
+        <meshStandardMaterial color="#ffcc20" emissive="#ffaa00" emissiveIntensity={2.5} transparent opacity={0.75} />
+      </mesh>
+      {/* Smoke puff */}
+      <mesh ref={smokeRef} position={[0, 6, 0]}>
+        <sphereGeometry args={[1.4, 6, 5]} />
+        <meshStandardMaterial color="#1a1818" transparent opacity={0.35} roughness={1} />
+      </mesh>
+      {/* Fire light */}
+      <pointLight ref={fireLight} color={fireColor} intensity={3.5} distance={28} decay={1.8} position={[0, 3, 0]} />
+    </group>
+  );
+}
+
+function EmberParticles() {
+  const COUNT = isMobile() ? 60 : 140;
+  const mesh = useRef();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const data = useMemo(() => Array.from({ length: COUNT }, () => ({
+    x: (Math.random() - 0.5) * 180, y: Math.random() * 18,
+    z: (Math.random() - 0.5) * 180,
+    vy: 0.8 + Math.random() * 1.2, vx: (Math.random() - 0.5) * 0.4,
+    phase: Math.random() * Math.PI * 2,
+  })), []);
+
+  useFrame((_, delta) => {
+    if (!mesh.current) return;
+    data.forEach((p, i) => {
+      p.phase += delta * 2.5;
+      p.y += p.vy * delta * 4;
+      p.x += p.vx * delta * 4 + Math.sin(p.phase) * delta;
+      if (p.y > 24) { p.y = 0; p.x = (Math.random() - 0.5) * 180; p.z = (Math.random() - 0.5) * 180; }
+      dummy.position.set(p.x, p.y, p.z);
+      dummy.updateMatrix();
+      mesh.current.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.current.instanceMatrix.needsUpdate = true;
+  });
+  return (
+    <instancedMesh ref={mesh} args={[null, null, COUNT]}>
+      <sphereGeometry args={[0.12, 4, 3]} />
+      <meshBasicMaterial color="#ff8820" />
+    </instancedMesh>
+  );
+}
+
+function NightSky() {
+  const skyTex = useMemo(() => {
+    const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+    const ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0,    '#000000');
+    g.addColorStop(0.3,  '#050508');
+    g.addColorStop(0.65, '#0e0508');
+    g.addColorStop(0.85, '#2a0a04');
+    g.addColorStop(1,    '#5a1a04');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 4, 256);
+    const tex = new THREE.CanvasTexture(c); tex.needsUpdate = true; return tex;
+  }, []);
+  // Stars
+  const starMesh = useRef();
+  const starDummy = useMemo(() => new THREE.Object3D(), []);
+  const stars = useMemo(() => Array.from({ length: 200 }, () => {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    return { x: Math.sin(phi) * Math.cos(theta) * 480, y: Math.abs(Math.sin(phi)) * 480 + 20, z: Math.sin(phi) * Math.sin(theta) * 480 };
+  }), []);
+  useEffect(() => {
+    if (!starMesh.current) return;
+    stars.forEach((s, i) => {
+      starDummy.position.set(s.x, s.y, s.z);
+      starDummy.updateMatrix();
+      starMesh.current.setMatrixAt(i, starDummy.matrix);
+    });
+    starMesh.current.instanceMatrix.needsUpdate = true;
+  }, [stars, starDummy]);
+  return (
+    <>
+      <mesh position={[0, -50, 0]}>
+        <sphereGeometry args={[520, 16, 12]} />
+        <meshBasicMaterial side={THREE.BackSide} map={skyTex} />
+      </mesh>
+      {/* Horizon fire glow */}
+      <mesh position={[0, -20, -200]}>
+        <planeGeometry args={[800, 80]} />
+        <meshBasicMaterial color="#ff3300" transparent opacity={0.22} />
+      </mesh>
+      <mesh position={[0, -10, -200]}>
+        <planeGeometry args={[600, 40]} />
+        <meshBasicMaterial color="#ff8800" transparent opacity={0.14} />
+      </mesh>
+      {/* Moon */}
+      <mesh position={[-80, 160, -300]}>
+        <circleGeometry args={[12, 18]} />
+        <meshBasicMaterial color="#fff8e0" />
+      </mesh>
+      <mesh position={[-80, 160, -301]}>
+        <circleGeometry args={[16, 18]} />
+        <meshBasicMaterial color="#ffeeaa" transparent opacity={0.15} />
+      </mesh>
+      {/* Stars */}
+      <instancedMesh ref={starMesh} args={[null, null, 200]}>
+        <sphereGeometry args={[0.8, 4, 3]} />
+        <meshBasicMaterial color="#ffffff" />
+      </instancedMesh>
+    </>
+  );
+}
+
+function BurnedTerrain() {
+  const geo = useMemo(() => {
+    const segs = isMobile() ? 100 : 160;
+    const g = new THREE.PlaneGeometry(900, 900, segs, segs);
+    const pos = g.attributes.position;
+    const colors = [];
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i); const y = pos.getY(i);
+      const h = Math.sin(x * 0.08) * 2.8 + Math.cos(y * 0.05) * 1.8 + Math.cos((x + y) * 0.03) * 1.0 + Math.sin(x * 0.02 + y * 0.015) * 4.0;
+      pos.setZ(i, h);
+      // Burned brown/char color
+      const t = THREE.MathUtils.clamp((h + 4) / 10, 0, 1);
+      const burn = 0.3 + Math.random() * 0.15; // char variation
+      colors.push(burn * (0.22 + t * 0.18), burn * (0.15 + t * 0.12), burn * (0.08 + t * 0.06));
+    }
+    pos.needsUpdate = true;
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    g.computeVertexNormals();
+    return g;
+  }, []);
+  return (
+    <mesh geometry={geo} rotation-x={-Math.PI / 2} receiveShadow position={[0, -3.5, 0]}>
+      <meshStandardMaterial vertexColors roughness={0.98} metalness={0} />
+    </mesh>
+  );
+}
+
+function BurningVillageScene() {
+  // Dim, mostly fire-driven lighting
+  return (
+    <>
+      <ambientLight intensity={0.08} color="#220808" />
+      <directionalLight color="#1a0808" intensity={0.3} position={[0, 40, 0]} />
+      <hemisphereLight args={[0x110404, 0x080402, 0.2]} />
+      <NightSky />
+      <BurnedTerrain />
+      {/* Path — ash-covered */}
+      <mesh rotation-x={-Math.PI / 2} position={[0, -3.28, 0]} receiveShadow>
+        <planeGeometry args={[8, 520]} />
+        <meshStandardMaterial color="#1a1410" roughness={0.95} />
+      </mesh>
+      {/* Burning buildings scattered across the village */}
+      <BurningBuilding position={[-18, 0, 5]}   scale={1.2} fireColor="#ff5500" />
+      <BurningBuilding position={[14, 0, -12]}  scale={1.0} fireColor="#ff6600" />
+      <BurningBuilding position={[-30, 0, -18]} scale={0.85} fireColor="#ff4400" />
+      <BurningBuilding position={[28, 0, 8]}    scale={1.1} fireColor="#ff5500" />
+      <BurningBuilding position={[-8, 0, -30]}  scale={0.9} fireColor="#ff6600" />
+      <BurningBuilding position={[40, 0, -20]}  scale={1.3} fireColor="#ff4400" />
+      <BurningBuilding position={[-45, 0, 15]}  scale={0.8} fireColor="#ff7700" />
+      {/* Collapsed fence pieces */}
+      {[[-12,0,10],[5,0,-8],[-25,0,-5],[18,0,15],[-5,0,20]].map(([fx,,fz],i) => (
+        <mesh key={i} castShadow position={[fx, getTerrainHeight(fx,fz)+0.2, fz]} rotation={[0, i*0.8, Math.random()*0.5-0.25]}>
+          <boxGeometry args={[3.5+i*0.4, 0.2, 0.25]} />
+          <meshStandardMaterial color="#2a1208" roughness={1} />
+        </mesh>
+      ))}
+      {/* Hay bales on fire */}
+      {[[8,0,18],[-20,0,12],[30,0,-5]].map(([hx,,hz],i) => (
+        <group key={i} position={[hx, getTerrainHeight(hx,hz), hz]}>
+          <mesh castShadow position={[0,0.4,0]}><cylinderGeometry args={[0.7,0.7,0.9,10]} /><meshStandardMaterial color="#1a0a04" roughness={1} /></mesh>
+          <mesh position={[0,1.2,0]}><coneGeometry args={[0.5,1.4,7]} /><meshStandardMaterial color="#ff4400" emissive="#ff2200" emissiveIntensity={1.5} transparent opacity={0.8} /></mesh>
+          <pointLight color="#ff6600" intensity={2} distance={12} decay={2} position={[0,1,0]} />
+        </group>
+      ))}
+      {/* Ember particles rising */}
+      <EmberParticles />
+      {/* Distant burning horizon glow */}
+      <pointLight color="#ff3300" intensity={4} distance={120} decay={0.8} position={[-40, 15, -60]} />
+      <pointLight color="#ff5500" intensity={3} distance={100} decay={0.9} position={[50, 12, -40]} />
+      <pointLight color="#ff4400" intensity={2.5} distance={80} decay={1} position={[0, 10, 40]} />
+    </>
+  );
+}
+
+function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos, chapter }) {
   const heroRef = useRef();
-  const mobile = isMobile();
   const dragonActive = superFx?.type === 'dragon' && Date.now() - superFx.at < 1200;
   const stormActive  = superFx?.type === 'storm'  && Date.now() - superFx.at < 1400;
   const shadowActive = superFx?.type === 'shadow' && Date.now() - superFx.at < 1100;
+  const ch2 = chapter === 2;
+
   return (
     <>
-      <SkyDome />
-      <DayNightCycle />
-      <hemisphereLight args={[0x88c8ff, 0x4a8030, 0.6]} />
-      <MountainBackdrop />
-      <Terrain />
-      <PathRibbon />
-      <TreeField />
-      <SwayingGrass />
-      <Clouds />
-      <Birds />
-      <FallingLeaves />
-      {/* Campfires */}
-      {[[-18,10],[22,-8],[-40,-25],[55,20]].map(([cx,cz],i) => (
-        <Campfire key={i} position={[cx, getTerrainHeight(cx,cz), cz]} />
-      ))}
-      <GroundScatter />
-      <LiangshanFortress />
-      <AmbientVillagers />
+      {/* ── ENVIRONMENT: swap by chapter ── */}
+      {ch2 ? (
+        <BurningVillageScene />
+      ) : (
+        <>
+          <SkyDome />
+          <DayNightCycle />
+          <hemisphereLight args={[0x88c8ff, 0x4a8030, 0.6]} />
+          <MountainBackdrop />
+          <Terrain />
+          <PathRibbon />
+          <TreeField />
+          <SwayingGrass />
+          <Clouds />
+          <Birds />
+          <FallingLeaves />
+          {[[-18,10],[22,-8],[-40,-25],[55,20]].map(([cx,cz],i) => (
+            <Campfire key={i} position={[cx, getTerrainHeight(cx,cz), cz]} />
+          ))}
+          <GroundScatter />
+          <LiangshanFortress />
+          <AmbientVillagers />
+        </>
+      )}
+
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
       <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} attackFx={attackFx} />
       <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} isMounted={isMounted} />
@@ -1999,8 +2231,9 @@ function Horse({ position, isMounted, heroRef }) {
 }
 
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos, chapter }) {
   const mobile = isMobile();
+  const bgColor = chapter === 2 ? '#0a0404' : '#7ab8e8';
   return (
     <Canvas
       fallback={<div style={{width:'100%',height:'100%',background:'#0a1520',display:'flex',alignItems:'center',justifyContent:'center',color:'#d9b36b',fontFamily:'serif',fontSize:'18px'}}>Loading...</div>}
@@ -2009,12 +2242,12 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
       dpr={mobile ? [1, 1] : [1, 1.5]}
       shadows="soft"
       onCreated={({ gl, scene }) => {
-        gl.setClearColor('#7ab8e8', 1);
-        scene.background = new THREE.Color('#7ab8e8');
+        gl.setClearColor(bgColor, 1);
+        scene.background = new THREE.Color(bgColor);
       }}
     >
       <Suspense fallback={null}>
-        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} isMounted={isMounted} horsePos={horsePos} />
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} isMounted={isMounted} horsePos={horsePos} chapter={chapter} />
       </Suspense>
     </Canvas>
   );

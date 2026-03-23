@@ -351,8 +351,9 @@ function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) 
         const glow = enemy.id === highlightedEnemyId;
         const hitAge = attackFx?.enemyId === enemy.id ? Date.now() - attackFx.at : 9999;
         const hitFlash = hitAge < 220;
+        const isWarlord = enemy.type === 'warlord';
         return (
-          <group key={enemy.id} position={[enemy.x, -2.4, enemy.z]}>
+          <group key={enemy.id} position={[enemy.x, -2.4, enemy.z]} scale={isWarlord ? [1.6, 1.6, 1.6] : [1, 1, 1]}>
             <EnemySoldier
               glow={glow}
               hitFlash={hitFlash}
@@ -360,9 +361,37 @@ function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) 
               attackFx={attackFx}
               onClick={(e) => { e.stopPropagation(); onEnemyTap?.(enemy.id); }}
             />
+            {/* Warlord aura */}
+            {isWarlord && (
+              <WarlordAura />
+            )}
           </group>
         );
       })}
+    </group>
+  );
+}
+
+function WarlordAura() {
+  const ringRef = useRef();
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (ringRef.current) {
+      ringRef.current.rotation.y = t * 1.5;
+      ringRef.current.material.opacity = 0.3 + Math.sin(t * 3) * 0.15;
+    }
+  });
+  return (
+    <group>
+      <mesh ref={ringRef} position={[0, 2, 0]}>
+        <torusGeometry args={[2.2, 0.15, 6, 32]} />
+        <meshBasicMaterial color="#ff2020" transparent opacity={0.4} />
+      </mesh>
+      <mesh position={[0, -0.5, 0]} rotation={[-Math.PI/2, 0, 0]}>
+        <ringGeometry args={[1.8, 2.4, 28]} />
+        <meshBasicMaterial color="#ff4020" transparent opacity={0.3} />
+      </mesh>
+      <pointLight color="#ff2010" intensity={2} distance={10} decay={2} />
     </group>
   );
 }

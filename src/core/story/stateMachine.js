@@ -1,4 +1,4 @@
-import { INITIAL_CHAPTER_STATE } from './config';
+import { INITIAL_CHAPTER_STATE, CHAPTER2_STATE } from './config';
 
 export const STORY_SAVE_KEY = 'dowm.story-progress.v1';
 
@@ -97,16 +97,18 @@ function reevaluateEscortReadiness(progress) {
 
 export function recordRaiderKill(progress) {
   const next = clone(progress);
+  const ch = next.chapterState.chapter;
 
-  // Auto-advance to chapter 1 combat stages if still in early chapters
+  // Auto-advance to combat stage if still in early setup stages
   if (['chapter0_intro','chapter0_recruit','chapter0_ready','talk_villager'].includes(next.chapterState.stage)) {
     next.chapterState.chapter = 1;
     next.chapterState.stage = 'clear_raiders';
-    next.chapterState.objective = `Defeat all raiders (${next.chapterState.raidersDefeated}/${next.chapterState.raidersTarget}).`;
+    next.chapterState.objective = `Defeat raiders (0/${next.chapterState.raidersTarget}).`;
   }
 
   next.chapterState.raidersDefeated += 1;
-  next.chapterState.objective = `Defeat raiders (${next.chapterState.raidersDefeated}/${next.chapterState.raidersTarget}).`;
+  const label = ch === 2 ? 'guards' : 'raiders';
+  next.chapterState.objective = `Defeat ${label} (${next.chapterState.raidersDefeated}/${next.chapterState.raidersTarget}).`;
 
   if (
     next.chapterState.raidersDefeated >= next.chapterState.raidersTarget
@@ -114,7 +116,9 @@ export function recordRaiderKill(progress) {
   ) {
     next.chapterState.minibossSpawned = true;
     next.chapterState.stage = 'defeat_miniboss';
-    next.chapterState.objective = 'A powerful captain has appeared — defeat him!';
+    next.chapterState.objective = ch === 2
+      ? '⚔️ Warlord Gao emerges — defeat him!'
+      : '⚔️ A powerful captain has appeared — defeat him!';
   }
 
   return next;
@@ -123,11 +127,19 @@ export function recordRaiderKill(progress) {
 export function recordMiniBossDefeat(progress) {
   const next = clone(progress);
   next.chapterState.minibossDefeated = true;
-  // Auto-complete chapter — no need to return to Song Jiang
   next.chapterState.stage = 'complete';
   next.chapterState.completed = true;
-  next.chapterState.objective = 'Chapter 1 complete! Victory is yours.';
-  next.player.gold += 100;
+  const ch = next.chapterState.chapter;
+  next.chapterState.objective = ch === 2
+    ? 'Chapter 2 complete! The Magistrate falls.'
+    : 'Chapter 1 complete! Victory is yours.';
+  next.player.gold += ch === 2 ? 200 : 100;
+  return next;
+}
+
+export function advanceToChapter2(progress) {
+  const next = clone(progress);
+  next.chapterState = clone(CHAPTER2_STATE);
   return next;
 }
 

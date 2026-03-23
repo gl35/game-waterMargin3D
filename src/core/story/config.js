@@ -90,3 +90,14 @@ export const INITIAL_CHAPTER_STATE = {
   minibossSpawned: false,
   minibossDefeated: false,
 };
+
+export const CHAPTER2_STATE = {
+  chapter: 2,
+  stage: 'clear_guards',
+  objective: 'Defeat the Magistrate\'s guards (0/7). The Warlord hides within.',
+  completed: false,
+  raidersDefeated: 0,
+  raidersTarget: 7,
+  minibossSpawned: false,
+  minibossDefeated: false,
+};

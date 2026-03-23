@@ -389,11 +389,17 @@ function BanquetHall({ cameraPhase }) {
 }
 
 // ── Main exported component ─────────────────────────────────────
-export default function VictoryBanquet({ onClose, gold, heroes }) {
+export default function VictoryBanquet({ onClose, gold, heroes, chapter = 1 }) {
   const [phase, setPhase] = useState('cinematic'); // cinematic → revealed
   const [captionIndex, setCaptionIndex] = useState(0);
 
-  const CAPTIONS = [
+  const CAPTIONS = chapter === 2 ? [
+    '⚔️  Chapter 2 Complete — The Magistrate Falls',
+    `🏆  Guards defeated. Warlord Gao slain.`,
+    `🪙  Reward: +200 gold  •  Heroes: ${heroes}/108`,
+    '🏮  The people cheer as Liangshan\'s might spreads...',
+    '"The road home grows shorter. Keep fighting."',
+  ] : [
     '⚔️  Chapter 1 Complete — Oath at Liangshan',
     `🏆  Raiders defeated. Captain Zhao slain.`,
     `🪙  Reward: +100 gold  •  Heroes recruited: ${heroes}/108`,
@@ -444,7 +450,7 @@ export default function VictoryBanquet({ onClose, gold, heroes }) {
           <span>👥 {heroes} / 108 heroes</span>
         </div>
         <button className="banquet-continue" onClick={onClose}>
-          Continue to Chapter 2 →
+          {chapter >= 2 ? '⚔️ Continue to Chapter 3 →' : '⚔️ Continue to Chapter 2 →'}
         </button>
       </div>
     </div>

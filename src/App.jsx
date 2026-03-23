@@ -3,7 +3,7 @@ import './App.css';
 import { GameCanvas } from './three/Scene';
 import { NPCS } from './core/story/config';
 import { tileToWorldPosition } from './core/story/coordinates';
-import { createStoryProgress, handleNpcDialog, recordMiniBossDefeat, recordRaiderKill, saveStoryProgress } from './core/story/stateMachine';
+import { createStoryProgress, handleNpcDialog, recordMiniBossDefeat, recordRaiderKill, saveStoryProgress, advanceToChapter2 } from './core/story/stateMachine';
 import {
   advanceQuestByNpc,
   claimQuestReward,
@@ -15,7 +15,7 @@ import {
 import { HERO_SKINS } from './core/hero/skins';
 import VictoryBanquet from './VictoryBanquet';
 import OpeningCinematic from './OpeningCinematic';
-import { createEnemies, damageEnemy, knockbackEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
+import { createEnemies, createChapter2Enemies, damageEnemy, knockbackEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
 import { getLevel, getXpProgress, getXpForNext, getStats, SHOP_UPGRADES } from './core/hero/progression';
 
 const npcWorld = NPCS.map((npc) => ({ ...npc, world: tileToWorldPosition(npc) }));
@@ -926,15 +926,17 @@ export default function App() {
         {/* Quick action hint based on stage */}
         {(() => {
           const s = story.chapterState.stage;
+          const ch = story.chapterState.chapter;
           const hints = {
             chapter0_intro:   '💬 Find Wu Yong (yellow ring) and talk to him',
             chapter0_recruit: '💬 Talk to Lin Chong + Tonkey (yellow rings)',
             chapter0_ready:   '💬 Talk to Song Jiang to begin Chapter 1',
             talk_villager:    '💬 Find Village Elder Liu and talk to him',
-            clear_raiders:    `⚔️ Kill enemies — ${story.chapterState.raidersDefeated}/${story.chapterState.raidersTarget} raiders down`,
-            defeat_miniboss:  '⚔️ Defeat the Captain (large red ring on ground)!',
+            clear_raiders:    `⚔️ Kill enemies — ${story.chapterState.raidersDefeated}/${story.chapterState.raidersTarget} ${ch === 2 ? 'guards' : 'raiders'} down`,
+            clear_guards:     `⚔️ Kill guards — ${story.chapterState.raidersDefeated}/${story.chapterState.raidersTarget} down`,
+            defeat_miniboss:  ch === 2 ? '⚔️ Destroy Warlord Gao — he is massive and armored!' : '⚔️ Defeat the Captain (large red ring on ground)!',
             return_songjiang: '💬 Return to Song Jiang — or just keep fighting!',
-            complete:         '✅ Chapter 1 complete!',
+            complete:         ch === 2 ? '✅ Chapter 2 complete! The Magistrate falls.' : '✅ Chapter 1 complete!',
           };
           const hint = hints[s];
           return hint ? <div className="objective-hint">{hint}</div> : null;
@@ -1218,7 +1220,25 @@ export default function App() {
       )}
 
       {showVictoryBanquet && (
-        <VictoryBanquet onClose={() => setShowVictoryBanquet(false)} gold={hud.gold} heroes={hud.heroes} />
+        <VictoryBanquet
+          chapter={story.chapterState.chapter}
+          gold={hud.gold}
+          heroes={hud.heroes}
+          onClose={() => {
+            setShowVictoryBanquet(false);
+            const currentChapter = story.chapterState.chapter;
+            if (currentChapter === 1) {
+              // Advance to chapter 2
+              setStory((prev) => advanceToChapter2(prev));
+              setEnemies(createChapter2Enemies());
+              setCombatXp((xp) => xp + 80); // chapter completion XP bonus
+              setQuestNotice('📖 Chapter 2 begins — The Magistrate\'s Wrath!');
+            } else {
+              // Future chapters — loop for now
+              setQuestNotice('🏆 You have completed the demo. More chapters coming!');
+            }
+          }}
+        />
       )}
 
       {showTavernScene && (

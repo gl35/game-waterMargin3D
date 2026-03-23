@@ -1246,25 +1246,63 @@ html, body, #root {
   .cutscene-trigger,
   .hud-joystick,
   .hud-right,
-  .hud-top-right {
+  .hud-top-right,
+  .hud-bottom,
+  .quest-panel,
+  .super-bar,
+  .stamina-bar-wrap,
+  .boss-bar-wrap,
+  .lockon-hud,
+  .charge-indicator {
     display: none;
   }
 
-  .hud-bottom {
-    top: calc(8px + var(--safe-top));
-    bottom: auto;
+  /* Compact top HUD — hp + gold only */
+  .hud-top {
+    top: calc(var(--safe-top) + 6px);
+    left: calc(var(--safe-left) + 6px);
+    right: calc(var(--safe-right) + 6px);
+    padding: 6px 10px;
+    gap: 8px;
+    background: rgba(0,0,0,0.55);
+    border-color: rgba(255,255,255,0.12);
+  }
+  .stat-block.mini { display: none; }
+
+  /* Objective — single line, top center */
+  .hud-objective {
+    top: calc(var(--safe-top) + 52px);
     left: 50%;
     transform: translateX(-50%);
-    gap: 7px;
-    padding: 7px 10px;
-    z-index: 2200;
+    max-width: 90vw;
+    width: max-content;
+    text-align: center;
+    padding: 5px 12px;
+    font-size: 11px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 8px;
+  }
+  .objective-hint { display: none; }
+
+  /* Quest toast */
+  .quest-toast {
+    top: auto;
+    bottom: calc(160px + var(--safe-bottom));
+    width: min(90vw, 340px);
+    text-align: center;
   }
 
-  .slot {
-    width: 44px;
-    height: 44px;
-    font-size: 20px;
+  /* Damage popups */
+  .damage-popup { font-size: 16px; }
+
+  /* Chapter advance btn on mobile */
+  .chapter-advance-btn {
+    top: auto;
+    right: 50%;
+    bottom: calc(var(--safe-bottom, 0px) + 165px);
+    transform: translateX(50%);
   }
+  .chapter-advance-btn:hover { transform: translateX(50%) scale(1.04); }
 
   .dialog-overlay {
     width: calc(100vw - 16px - var(--safe-left) - var(--safe-right));
@@ -1329,9 +1367,79 @@ html, body, #root {
   .mobile-btns {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     pointer-events: auto;
   }
+
+  /* Mini bar: dodge + lock + supers + shop */
+  .mobile-mini-bar {
+    display: flex;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(var(--safe-bottom) + 140px);
+    gap: 8px;
+    align-items: center;
+    z-index: 2600;
+    pointer-events: auto;
+  }
+  .mini-bar-btn {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    border: 1.5px solid rgba(255,255,255,0.25);
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    pointer-events: auto;
+  }
+  .mini-bar-btn.active { background: rgba(68,221,255,0.25); border-color: #44ddff; }
+  .mini-bar-btn.active-lock { background: rgba(0,255,200,0.2); border-color: #00ffc8; }
+  .mini-bar-btn.super-mini { border-color: var(--sc, #888); font-size: 20px; }
+  .mini-bar-btn.super-ready { background: rgba(0,0,0,0.6); box-shadow: 0 0 8px var(--sc, #888); }
+  .mini-bar-btn.super-cool  { opacity: 0.5; font-size: 12px; font-weight: 700; color: #aaa; }
+  .mini-bar-btn.super-locked { opacity: 0.3; font-size: 14px; }
+
+  /* Mobile stamina bar */
+  .mobile-stamina {
+    display: block;
+    position: absolute;
+    left: calc(var(--safe-left) + 8px);
+    right: calc(var(--safe-right) + 8px);
+    bottom: calc(var(--safe-bottom) + 133px);
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    z-index: 2400;
+  }
+  .mobile-stamina-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.08s linear, background 0.3s;
+  }
+
+  /* Mobile boss bar */
+  .mobile-boss-bar {
+    display: block;
+    position: absolute;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--safe-bottom) + 138px);
+    width: min(300px, 80vw);
+    z-index: 2400;
+  }
+  .mobile-boss-label {
+    font-size: 10px; font-weight: 700; color: #ff6644;
+    text-align: center; margin-bottom: 2px;
+    text-shadow: 0 1px 3px #000;
+  }
+  .mobile-boss-track {
+    height: 7px; background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,80,40,0.5); border-radius: 4px; overflow: hidden;
+  }
+  .mobile-boss-fill { height: 100%; border-radius: 4px; transition: width 0.25s ease, background 0.4s; }
 
   .mobile-action {
     pointer-events: auto;

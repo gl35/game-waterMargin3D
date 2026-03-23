@@ -432,7 +432,7 @@ function useMovementControls() {
   return stateRef;
 }
 
-function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel }) {
+function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, isMounted }) {
   const group = heroRef || useRef();
   const controls = useMovementControls();
   const velocity = useRef(new THREE.Vector3());
@@ -504,8 +504,8 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
     const isMoving = dir.lengthSq() > 0;
     if (isMoving) {
       dir.normalize();
-      const spd = isSprinting ? 32 : 18;
-      velocity.current.lerp(dir.multiplyScalar(spd), isSprinting ? 0.35 : 0.2);
+      const spd = isMounted ? 42 : isSprinting ? 32 : 18;
+      velocity.current.lerp(dir.multiplyScalar(spd), isMounted ? 0.45 : isSprinting ? 0.35 : 0.2);
       group.current.rotation.y = Math.atan2(dir.x, -dir.z);
     } else {
       velocity.current.lerp(new THREE.Vector3(), 0.15);
@@ -886,7 +886,7 @@ function SkyDome() {
   );
 }
 
-function CameraRig({ target, screenShake, slowMo, lockedTarget, enemies }) {
+function CameraRig({ target, screenShake, slowMo, lockedTarget, enemies, isMounted }) {
   const { camera } = useThree();
   const offset = useMemo(() => new THREE.Vector3(0, 16, 34), []);
   const shakeRef = useRef(0);
@@ -894,7 +894,7 @@ function CameraRig({ target, screenShake, slowMo, lockedTarget, enemies }) {
   useFrame((state, delta) => {
     if (!target.current) return;
     // Lock-on: orbit around target
-    let followOffset = offset;
+    let followOffset = isMounted ? new THREE.Vector3(0, 22, 48) : offset;
     if (lockedTarget) {
       const enemy = enemies.find((e) => e.id === lockedTarget && !e.dead);
       if (enemy) {
@@ -1681,7 +1681,7 @@ function LockOnRing({ enemies, lockedTarget }) {
   );
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo }) {
+function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos }) {
   const heroRef = useRef();
   const mobile = isMobile();
   const dragonActive = superFx?.type === 'dragon' && Date.now() - superFx.at < 1200;
@@ -1709,18 +1709,148 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
       <AmbientVillagers />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
       <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} attackFx={attackFx} />
-      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} />
+      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} isMounted={isMounted} />
+      {horsePos && <Horse position={horsePos} isMounted={isMounted} heroRef={heroRef} />}
       {lockedTarget && <LockOnRing enemies={enemies} lockedTarget={lockedTarget} />}
       <DragonStrikeVfx heroRef={heroRef} active={dragonActive} />
       <StormSweepVfx  heroRef={heroRef} active={stormActive} />
       <ShadowBlinkVfx heroRef={heroRef} active={shadowActive} />
       <FloatingRune />
-      <CameraRig target={heroRef} screenShake={screenShake} slowMo={slowMo} lockedTarget={lockedTarget} enemies={enemies} />
+      <CameraRig target={heroRef} screenShake={screenShake} slowMo={slowMo} lockedTarget={lockedTarget} enemies={enemies} isMounted={isMounted} />
     </>
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo }) {
+// ── HORSE ────────────────────────────────────────────────────────
+function Horse({ position, isMounted, heroRef }) {
+  const bodyRef = useRef();
+  const legFL = useRef(); const legFR = useRef();
+  const legBL = useRef(); const legBR = useRef();
+  const neckRef = useRef(); const tailRef = useRef();
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    const speed = isMounted ? 9 : 1.2;
+    const gallop = Math.sin(t * speed);
+
+    if (isMounted && heroRef?.current && bodyRef.current) {
+      // Follow hero when mounted
+      bodyRef.current.parent.position.x = heroRef.current.position.x;
+      bodyRef.current.parent.position.z = heroRef.current.position.z;
+      bodyRef.current.parent.rotation.y = heroRef.current.rotation.y;
+      // Gallop bob
+      bodyRef.current.parent.position.y = -0.8 + Math.abs(gallop) * 0.3;
+    }
+
+    // Leg animation
+    const swing = gallop * 0.5;
+    if (legFL.current) legFL.current.rotation.x =  swing;
+    if (legFR.current) legFR.current.rotation.x = -swing;
+    if (legBL.current) legBL.current.rotation.x = -swing;
+    if (legBR.current) legBR.current.rotation.x =  swing;
+    if (neckRef.current) neckRef.current.rotation.x = Math.sin(t * speed * 0.5) * 0.08;
+    if (tailRef.current) tailRef.current.rotation.z = Math.sin(t * 1.5) * 0.2;
+  });
+
+  const horseColor = '#8a6030';
+  const darkBrown = '#5a3a18';
+  const manColor = '#2a1808';
+
+  return (
+    <group position={[position.x, -1.2, position.z]}>
+      <group ref={bodyRef}>
+        {/* Body */}
+        <mesh position={[0, 1.2, 0]}>
+          <boxGeometry args={[1.6, 1.1, 3.2]} />
+          <meshStandardMaterial color={horseColor} roughness={0.8} />
+        </mesh>
+        {/* Belly rounding */}
+        <mesh position={[0, 0.9, 0]}>
+          <cylinderGeometry args={[0.7, 0.65, 2.8, 10]} />
+          <meshStandardMaterial color={horseColor} roughness={0.8} />
+        </mesh>
+
+        {/* Neck */}
+        <group ref={neckRef} position={[0, 1.6, 1.3]}>
+          <mesh rotation={[0.4, 0, 0]}>
+            <cylinderGeometry args={[0.38, 0.5, 1.4, 8]} />
+            <meshStandardMaterial color={horseColor} roughness={0.8} />
+          </mesh>
+          {/* Head */}
+          <mesh position={[0, 0.9, 0.5]} rotation={[0.3, 0, 0]}>
+            <boxGeometry args={[0.55, 0.6, 1.1]} />
+            <meshStandardMaterial color={horseColor} roughness={0.8} />
+          </mesh>
+          {/* Nose */}
+          <mesh position={[0, 0.7, 1.1]} rotation={[0.3, 0, 0]}>
+            <boxGeometry args={[0.45, 0.35, 0.5]} />
+            <meshStandardMaterial color={darkBrown} roughness={0.9} />
+          </mesh>
+          {/* Eye */}
+          <mesh position={[-0.22, 1.0, 0.75]}>
+            <sphereGeometry args={[0.08, 6, 6]} />
+            <meshStandardMaterial color="#1a1010" />
+          </mesh>
+          <mesh position={[0.22, 1.0, 0.75]}>
+            <sphereGeometry args={[0.08, 6, 6]} />
+            <meshStandardMaterial color="#1a1010" />
+          </mesh>
+          {/* Mane */}
+          <mesh position={[0, 0.8, 0]} rotation={[0.2, 0, 0]}>
+            <boxGeometry args={[0.2, 0.8, 1.2]} />
+            <meshStandardMaterial color={manColor} roughness={1} />
+          </mesh>
+          {/* Ears */}
+          <mesh position={[-0.2, 1.4, 0.5]}><coneGeometry args={[0.08, 0.3, 5]} /><meshStandardMaterial color={horseColor} /></mesh>
+          <mesh position={[0.2, 1.4, 0.5]}><coneGeometry args={[0.08, 0.3, 5]} /><meshStandardMaterial color={horseColor} /></mesh>
+        </group>
+
+        {/* Tail */}
+        <group ref={tailRef} position={[0, 1.2, -1.6]}>
+          <mesh rotation={[-0.4, 0, 0]} position={[0, -0.3, -0.3]}>
+            <cylinderGeometry args={[0.12, 0.04, 1.2, 6]} />
+            <meshStandardMaterial color={manColor} roughness={1} />
+          </mesh>
+        </group>
+
+        {/* Legs */}
+        {[[-0.5, 0, 1.0], [0.5, 0, 1.0], [-0.5, 0, -0.9], [0.5, 0, -0.9]].map(([lx,_ly,lz], i) => (
+          <group key={i} ref={[legFL, legFR, legBL, legBR][i]} position={[lx, 0.4, lz]}>
+            <mesh position={[0, -0.3, 0]}>
+              <cylinderGeometry args={[0.18, 0.14, 1.2, 7]} />
+              <meshStandardMaterial color={darkBrown} roughness={0.9} />
+            </mesh>
+            {/* Hoof */}
+            <mesh position={[0, -0.95, 0]}>
+              <boxGeometry args={[0.22, 0.18, 0.28]} />
+              <meshStandardMaterial color="#1a1010" />
+            </mesh>
+          </group>
+        ))}
+
+        {/* Saddle */}
+        <mesh position={[0, 1.8, -0.1]}>
+          <boxGeometry args={[0.9, 0.2, 1.0]} />
+          <meshStandardMaterial color="#3a1808" roughness={0.7} />
+        </mesh>
+        <mesh position={[0, 1.9, -0.1]}>
+          <boxGeometry args={[0.7, 0.12, 0.8]} />
+          <meshStandardMaterial color="#5a2818" roughness={0.7} />
+        </mesh>
+
+        {/* Glow ring when near & unmounted = mountable */}
+        {!isMounted && (
+          <mesh position={[0, 0.05, 0]} rotation={[-Math.PI/2, 0, 0]}>
+            <ringGeometry args={[2.2, 2.8, 24]} />
+            <meshBasicMaterial color="#ffe060" transparent opacity={0.4} />
+          </mesh>
+        )}
+      </group>
+    </group>
+  );
+}
+
+export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos }) {
   const mobile = isMobile();
   return (
     <Canvas
@@ -1735,7 +1865,7 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
       }}
     >
       <Suspense fallback={null}>
-        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} />
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} isMounted={isMounted} horsePos={horsePos} />
       </Suspense>
     </Canvas>
   );

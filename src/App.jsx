@@ -142,6 +142,9 @@ export default function App() {
   const [levelUpFlash, setLevelUpFlash] = useState(false);
   const prevLevel = useRef(1);
   const [shopOpen, setShopOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const HORSE_POS = useMemo(() => ({ x: -15, z: 20 }), []);
   const [statBonuses, setStatBonuses] = useState({ maxHp: 0, damage: 0, speed: 0, range: 0 });
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
   const lastComboAt = useRef(0);
@@ -172,11 +175,11 @@ export default function App() {
     return {
       ...base,
       maxHp:  base.maxHp  + statBonuses.maxHp,
-      damage: base.damage + statBonuses.damage,
-      speed:  base.speed  + statBonuses.speed,
-      attackRange: base.attackRange + statBonuses.range,
+      damage: base.damage + statBonuses.damage + (isMounted ? 8 : 0),
+      speed:  base.speed  + statBonuses.speed  + (isMounted ? 14 : 0),
+      attackRange: base.attackRange + statBonuses.range + (isMounted ? 8 : 0),
     };
-  }, [playerLevel, statBonuses]);
+  }, [playerLevel, statBonuses, isMounted]);
 
   // Detect level-up (must be after playerLevel is defined)
   useEffect(() => {
@@ -292,9 +295,21 @@ export default function App() {
   }, [questProgress, story, updateStory]);
 
   const attemptInteraction = useCallback(() => {
+    // Check if near horse first
+    const dx = heroPosition.current.x - HORSE_POS.x;
+    const dz = heroPosition.current.z - HORSE_POS.z;
+    const distToHorse = Math.hypot(dx, dz);
+    if (distToHorse < 8) {
+      setIsMounted((m) => {
+        const next = !m;
+        setQuestNotice(next ? '🐴 Mounted! Speed +60%, sweep attacks' : '🐴 Dismounted');
+        return next;
+      });
+      return;
+    }
     if (!highlightedNpcId) return;
     interactWithNpc(highlightedNpcId);
-  }, [highlightedNpcId, interactWithNpc]);
+  }, [highlightedNpcId, interactWithNpc, HORSE_POS]);
 
   const cycleHeroSkin = useCallback(() => {
     setHeroSkinIndex((prev) => (prev + 1) % HERO_SKINS.length);
@@ -888,7 +903,7 @@ export default function App() {
       )}
       <div className="hud-frame">
         {webglSupported ? (
-          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} />
+          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} isMounted={isMounted} horsePos={HORSE_POS} />
         ) : (
           <div className="webgl-fallback">
             <div className="webgl-fallback-title">3D engine failed to start</div>
@@ -1146,7 +1161,9 @@ export default function App() {
         </div>
       )}
 
+      {/* ── MOBILE CONTROLS (clean minimal layout) ── */}
       <div className="hud-mobile-controls">
+        {/* Left: joystick */}
         <div
           className="touchpad"
           onPointerDown={handleJoystickDown}
@@ -1155,43 +1172,75 @@ export default function App() {
           onPointerCancel={handleJoystickUp}
         >
           <div className="touch-base" />
-          <div
-            className="touch-knob"
-            style={{ transform: `translate(${joystickState.knobX}px, ${joystickState.knobY}px)` }}
-          />
+          <div className="touch-knob" style={{ transform: `translate(${joystickState.knobX}px, ${joystickState.knobY}px)` }} />
         </div>
+
+        {/* Right: 3 core buttons */}
         <div className="mobile-btns">
-          {/* Light attack */}
           <button
             className={`mobile-action attack-btn ${lockedTarget || highlightedEnemyId ? 'enemy-near' : ''}`}
             onPointerDown={(e) => { e.preventDefault(); handleAttack(); }}
             onPointerUp={(e) => e.preventDefault()}
           >⚔️</button>
-          {/* Heavy charge */}
           <button
             className={`mobile-action heavy-btn ${isCharging ? 'charging' : ''}`}
             onPointerDown={(e) => { e.preventDefault(); handleChargeStart(); }}
             onPointerUp={(e) => { e.preventDefault(); handleChargeRelease(); }}
           >💢</button>
-          {/* Dodge */}
-          <button
-            className={`mobile-action dodge-btn ${isDodging ? 'dodging' : ''}`}
-            onPointerDown={(e) => { e.preventDefault(); handleDodge(); }}
-            onPointerUp={(e) => e.preventDefault()}
-          >💨</button>
-          {/* Lock-on */}
-          <button
-            className={`mobile-action lockon-btn ${lockedTarget ? 'locked' : ''}`}
-            onPointerDown={(e) => { e.preventDefault(); handleLockOn(); }}
-            onPointerUp={(e) => e.preventDefault()}
-          >🎯</button>
           <button
             className="mobile-action interact-btn"
             onPointerDown={handleInteractPointer}
             onPointerUp={(e) => e.preventDefault()}
-          >{highlightedNpcId ? 'Talk' : 'E'}</button>
+          >{highlightedNpcId ? '💬' : isDodging ? '💨' : 'E'}</button>
         </div>
       </div>
+
+      {/* ── MOBILE MINI BAR (dodge + lock-on + menu) ── */}
+      <div className="mobile-mini-bar">
+        <button className={`mini-bar-btn ${isDodging ? 'active' : ''}`}
+          onPointerDown={(e) => { e.preventDefault(); handleDodge(); }}>💨</button>
+        <button className={`mini-bar-btn ${lockedTarget ? 'active-lock' : ''}`}
+          onPointerDown={(e) => { e.preventDefault(); handleLockOn(); }}>🎯</button>
+        {/* Super buttons inline */}
+        {SUPER_MOVES.map((move) => {
+          const now = Date.now();
+          const cdMs = Math.max(0, (superCooldowns[move.id] || 0) - now);
+          const locked = move.id === 'dragon' ? !heroStats.dragonUnlocked : move.id === 'storm' ? !heroStats.stormUnlocked : !heroStats.shadowUnlocked;
+          const cool = cdMs > 0;
+          return (
+            <button key={move.id}
+              className={`mini-bar-btn super-mini ${locked ? 'super-locked' : cool ? 'super-cool' : 'super-ready'}`}
+              style={{ '--sc': move.color }}
+              onPointerDown={(e) => { e.preventDefault(); if (!locked) handleSuperMove(move.id); }}
+              disabled={cool || locked}>
+              {locked ? '🔒' : cool ? `${Math.ceil(cdMs/1000)}s` : move.label.split(' ')[0]}
+            </button>
+          );
+        })}
+        <button className={`mini-bar-btn ${isMounted ? 'active' : ''}`}
+          onPointerDown={(e) => { e.preventDefault(); attemptInteraction(); }}>🐴</button>
+        <button className="mini-bar-btn" onPointerDown={(e) => { e.preventDefault(); setShopOpen(true); }}>🛒</button>
+      </div>
+
+      {/* ── MOBILE STAMINA (slim bar above controls) ── */}
+      <div className="mobile-stamina">
+        <div className="mobile-stamina-fill" style={{ width: `${stamina}%`, background: stamina < 25 ? '#ff4444' : stamina < 50 ? '#ffaa22' : '#44ddff' }} />
+      </div>
+
+      {/* Boss bar on mobile */}
+      {(() => {
+        const boss = enemies.find((e) => e.type === 'captain' || e.type === 'warlord' && !e.dead);
+        if (!boss) return null;
+        const pct = Math.round((boss.hp / boss.maxHp) * 100);
+        return (
+          <div className="mobile-boss-bar">
+            <div className="mobile-boss-label">{boss.label}</div>
+            <div className="mobile-boss-track">
+              <div className="mobile-boss-fill" style={{ width: `${pct}%`, background: pct > 50 ? '#dd3322' : pct > 25 ? '#dd7700' : '#ffcc00' }} />
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="hud-right">
         <button className="circle-btn big" onClick={handleAttack} disabled={Boolean(dialog)}><span className="icon slash" /></button>

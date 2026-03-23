@@ -134,6 +134,20 @@ export default function App() {
   const openTavernScene = useCallback(() => setShowTavernScene(true), []);
   const closeTavernScene = useCallback(() => setShowTavernScene(false), []);
 
+  const playerLevel = useMemo(() => getLevel(combatXp), [combatXp]);
+  const xpProgress  = useMemo(() => getXpProgress(combatXp), [combatXp]);
+  const xpForNext   = useMemo(() => getXpForNext(combatXp), [combatXp]);
+  const heroStats   = useMemo(() => {
+    const base = getStats(playerLevel);
+    return {
+      ...base,
+      maxHp:  base.maxHp  + statBonuses.maxHp,
+      damage: base.damage + statBonuses.damage,
+      speed:  base.speed  + statBonuses.speed,
+      attackRange: base.attackRange + statBonuses.range,
+    };
+  }, [playerLevel, statBonuses]);
+
   const hud = useMemo(() => ({
     hp: story.player.hp,
     maxHp: heroStats.maxHp,
@@ -167,20 +181,6 @@ export default function App() {
       setQuestNotice(`${upgrade.label} purchased!`);
     }
   }, [story.player.gold, heroStats.maxHp]);
-
-  const playerLevel = useMemo(() => getLevel(combatXp), [combatXp]);
-  const xpProgress  = useMemo(() => getXpProgress(combatXp), [combatXp]);
-  const xpForNext   = useMemo(() => getXpForNext(combatXp), [combatXp]);
-  const heroStats   = useMemo(() => {
-    const base = getStats(playerLevel);
-    return {
-      ...base,
-      maxHp:  base.maxHp  + statBonuses.maxHp,
-      damage: base.damage + statBonuses.damage,
-      speed:  base.speed  + statBonuses.speed,
-      attackRange: base.attackRange + statBonuses.range,
-    };
-  }, [playerLevel, statBonuses]);
 
   const questLog = useMemo(() => getQuestLog(questProgress), [questProgress]);
   const activeQuest = useMemo(

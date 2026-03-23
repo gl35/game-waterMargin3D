@@ -501,15 +501,35 @@ export class WorldScene extends Phaser.Scene {
   updateEnemyHPBar(enemy) {
     enemy.hpBar.clear();
     const ratio = Phaser.Math.Clamp(enemy.hp / enemy.maxHp, 0, 1);
-    const width = enemy.isMiniBoss ? 46 : 32;
+    const barW = enemy.isMiniBoss ? 50 : 34;
+    const barH = enemy.isMiniBoss ? 7 : 5;
+    const bx = Math.round(enemy.x - barW / 2);
+    const by = Math.round(enemy.y - (enemy.isMiniBoss ? 26 : 22));
 
-    enemy.hpBar.fillStyle(0x000000);
-    enemy.hpBar.fillRect(enemy.x - width / 2, enemy.y - 22, width, 5);
-    enemy.hpBar.fillStyle(ratio > 0.5 ? 0x00ff00 : ratio > 0.25 ? 0xffff00 : 0xff0000);
-    enemy.hpBar.fillRect(enemy.x - width / 2, enemy.y - 22, width * ratio, 5);
+    // Background + border
+    enemy.hpBar.fillStyle(0x000000, 0.75);
+    enemy.hpBar.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
+    enemy.hpBar.fillStyle(0x220000, 1);
+    enemy.hpBar.fillRect(bx, by, barW, barH);
+
+    // Fill color: green → yellow → red
+    const fillColor = ratio > 0.6 ? 0x22cc44 : ratio > 0.3 ? 0xddcc00 : 0xee2222;
+    const fillW = Math.max(1, Math.round(barW * ratio));
+    enemy.hpBar.fillStyle(fillColor, 1);
+    enemy.hpBar.fillRect(bx, by, fillW, barH);
+
+    // Shine strip on top
+    enemy.hpBar.fillStyle(0xffffff, 0.22);
+    enemy.hpBar.fillRect(bx, by, fillW, Math.max(1, Math.round(barH * 0.35)));
+
+    // Boss gets a border glow
+    if (enemy.isMiniBoss) {
+      enemy.hpBar.lineStyle(1, 0xff9966, 0.7);
+      enemy.hpBar.strokeRect(bx - 1, by - 1, barW + 2, barH + 2);
+    }
 
     if (enemy.nameTag) {
-      enemy.nameTag.setPosition(enemy.x, enemy.y - (enemy.isMiniBoss ? 36 : 30));
+      enemy.nameTag.setPosition(enemy.x, enemy.y - (enemy.isMiniBoss ? 38 : 30));
     }
   }
 
@@ -1054,73 +1074,174 @@ export class WorldScene extends Phaser.Scene {
   }
 
   showDamageText(x, y, amount, color = '#ff4444') {
+    const isCrit = String(amount).includes('CRIT') || String(amount).includes('HEAVY');
+    const fontSize = isCrit ? '18px' : '15px';
+
     const txt = this.add.text(x, y - 20, `${amount}`, {
-      fontSize: '16px', fill: color, stroke: '#000', strokeThickness: 3, fontStyle: 'bold',
+      fontSize,
+      fill: color,
+      stroke: '#000',
+      strokeThickness: isCrit ? 4 : 3,
+      fontStyle: 'bold',
+      shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 3, fill: true },
     }).setDepth(50);
 
+    const floatY = isCrit ? y - 80 : y - 60;
+    const startScale = isCrit ? 1.4 : 1.1;
+
+    txt.setScale(startScale);
     this.tweens.add({
       targets: txt,
-      y: y - 60,
+      y: floatY,
       alpha: 0,
-      duration: 800,
+      scaleX: 0.85,
+      scaleY: 0.85,
+      duration: isCrit ? 1000 : 750,
+      ease: 'Quad.easeOut',
       onComplete: () => txt.destroy(),
     });
   }
 
   playHitSpark(x, y, color = 0xffcc66) {
-    const spark = this.add.graphics().setDepth(45);
-    spark.fillStyle(color, 0.95);
+    // Burst ring
+    const ring = this.add.graphics().setDepth(44);
+    ring.lineStyle(2, color, 0.85);
+    ring.strokeCircle(x, y, 6);
+    this.tweens.add({
+      targets: ring,
+      scaleX: 2.8, scaleY: 2.8,
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy(),
+    });
 
-    for (let i = 0; i < 8; i++) {
-      const a = (Math.PI * 2 * i) / 8;
-      const sx = x + Math.cos(a) * 6;
-      const sy = y + Math.sin(a) * 6;
-      spark.fillCircle(sx, sy, 2);
+    // Particle dots flying outward
+    const spark = this.add.graphics().setDepth(46);
+    const numParticles = 10;
+    const positions = [];
+    for (let i = 0; i < numParticles; i++) {
+      const a = (Math.PI * 2 * i) / numParticles + Math.random() * 0.4;
+      const r = 4 + Math.random() * 5;
+      positions.push({ x: x + Math.cos(a) * r, y: y + Math.sin(a) * r });
     }
+    spark.fillStyle(color, 1);
+    positions.forEach(({ x: sx, y: sy }) => {
+      spark.fillCircle(sx, sy, 1.5 + Math.random() * 1.5);
+    });
+    // Bright core flash
+    spark.fillStyle(0xffffff, 0.9);
+    spark.fillCircle(x, y, 4);
 
     this.tweens.add({
       targets: spark,
+      scaleX: 2.0, scaleY: 2.0,
       alpha: 0,
-      scaleX: 1.8,
-      scaleY: 1.8,
-      duration: 180,
+      duration: 200,
+      ease: 'Quad.easeOut',
       onComplete: () => spark.destroy(),
     });
   }
 
-  playSlashFx(style) {
-    const slash = this.add.graphics().setDepth(40);
-    const fxRange = style.id === 'strategist' ? 72 : 56;
-    const fxWidth = style.id === 'strategist' ? 44 : 28;
+  playDeathBurst(x, y, color = 0xff4444) {
+    // Big flash
+    const flash = this.add.graphics().setDepth(48);
+    flash.fillStyle(0xffffff, 0.75);
+    flash.fillCircle(x, y, 20);
+    this.tweens.add({
+      targets: flash,
+      scaleX: 2.5, scaleY: 2.5,
+      alpha: 0,
+      duration: 280,
+      ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy(),
+    });
 
+    // Particle spray
+    const debris = this.add.graphics().setDepth(47);
+    for (let i = 0; i < 16; i++) {
+      const a = (Math.PI * 2 * i) / 16 + Math.random() * 0.5;
+      const r = 8 + Math.random() * 18;
+      const px = x + Math.cos(a) * r;
+      const py = y + Math.sin(a) * r;
+      debris.fillStyle(i % 3 === 0 ? 0xffffff : color, 0.9);
+      debris.fillCircle(px, py, 1.5 + Math.random() * 2);
+    }
+    this.tweens.add({
+      targets: debris,
+      scaleX: 1.8, scaleY: 1.8,
+      alpha: 0,
+      duration: 380,
+      ease: 'Quad.easeOut',
+      onComplete: () => debris.destroy(),
+    });
+
+    // Screen impact flash
+    this.cameras.main.flash(120, 255, 200, 100, false);
+  }
+
+  playSlashFx(style) {
     const nx = this.playerFacing.x;
     const ny = this.playerFacing.y;
     const px = -ny;
     const py = nx;
 
-    const startX = this.player.x + nx * 14;
-    const startY = this.player.y + ny * 14;
+    const fxRange = style.id === 'strategist' ? 76 : 60;
+    const fxWidth = style.id === 'strategist' ? 46 : 30;
+
+    const startX = this.player.x + nx * 12;
+    const startY = this.player.y + ny * 12;
     const endX = this.player.x + nx * fxRange;
     const endY = this.player.y + ny * fxRange;
 
-    slash.fillStyle(style.color, 0.32);
+    // Outer glow layer (wide, soft)
+    const glow = this.add.graphics().setDepth(38);
+    glow.fillStyle(style.color, 0.15);
+    glow.beginPath();
+    glow.moveTo(startX + px * fxWidth * 0.55, startY + py * fxWidth * 0.55);
+    glow.lineTo(startX - px * fxWidth * 0.55, startY - py * fxWidth * 0.55);
+    glow.lineTo(endX - px * fxWidth * 1.1, endY - py * fxWidth * 1.1);
+    glow.lineTo(endX + px * fxWidth * 1.1, endY + py * fxWidth * 1.1);
+    glow.closePath();
+    glow.fillPath();
+    this.tweens.add({ targets: glow, alpha: 0, duration: 220, onComplete: () => glow.destroy() });
+
+    // Mid slash body
+    const slash = this.add.graphics().setDepth(40);
+    slash.fillStyle(style.color, 0.42);
     slash.beginPath();
-    slash.moveTo(startX + px * (fxWidth * 0.35), startY + py * (fxWidth * 0.35));
-    slash.lineTo(startX - px * (fxWidth * 0.35), startY - py * (fxWidth * 0.35));
-    slash.lineTo(endX - px * (fxWidth * 0.7), endY - py * (fxWidth * 0.7));
-    slash.lineTo(endX + px * (fxWidth * 0.7), endY + py * (fxWidth * 0.7));
+    slash.moveTo(startX + px * fxWidth * 0.36, startY + py * fxWidth * 0.36);
+    slash.lineTo(startX - px * fxWidth * 0.36, startY - py * fxWidth * 0.36);
+    slash.lineTo(endX - px * fxWidth * 0.72, endY - py * fxWidth * 0.72);
+    slash.lineTo(endX + px * fxWidth * 0.72, endY + py * fxWidth * 0.72);
     slash.closePath();
     slash.fillPath();
 
-    slash.lineStyle(2, style.color, 0.95);
+    // Bright core line
+    slash.lineStyle(2.5, 0xffffff, 0.85);
+    slash.beginPath();
+    slash.moveTo(startX + px * fxWidth * 0.1, startY + py * fxWidth * 0.1);
+    slash.lineTo(endX - px * fxWidth * 0.15, endY - py * fxWidth * 0.15);
+    slash.strokePath();
+
+    // Colored edge line
+    slash.lineStyle(1.5, style.color, 0.98);
     slash.strokeLineShape(new Phaser.Geom.Line(startX, startY, endX, endY));
 
-    this.tweens.add({
-      targets: slash,
-      alpha: 0,
-      duration: 180,
-      onComplete: () => slash.destroy(),
-    });
+    this.tweens.add({ targets: slash, alpha: 0, duration: 180, onComplete: () => slash.destroy() });
+
+    // Tip spark at end of slash
+    const tipSpark = this.add.graphics().setDepth(42);
+    tipSpark.fillStyle(0xffffff, 0.95);
+    tipSpark.fillCircle(endX, endY, 4);
+    tipSpark.fillStyle(style.color, 0.9);
+    tipSpark.fillCircle(endX, endY, 2.5);
+    for (let i = 0; i < 5; i++) {
+      const a = (Math.PI * 2 * i) / 5 + Math.random() * 0.6;
+      tipSpark.fillStyle(style.color, 0.7);
+      tipSpark.fillCircle(endX + Math.cos(a) * 5, endY + Math.sin(a) * 5, 1.5);
+    }
+    this.tweens.add({ targets: tipSpark, alpha: 0, scaleX: 1.6, scaleY: 1.6, duration: 160, onComplete: () => tipSpark.destroy() });
   }
 
   damagePlayer(amount, source = 'hit') {
@@ -1206,6 +1327,9 @@ export class WorldScene extends Phaser.Scene {
     this.playerGold += enemy.gold;
     this.goldText.setText(`Gold: ${this.playerGold} 两`);
     this.showDamageText(enemy.x, enemy.y - 20, `+${enemy.gold} gold`, '#ffdd44');
+
+    // Death burst VFX
+    this.playDeathBurst(enemy.x, enemy.y, enemy.isMiniBoss ? 0xff6040 : 0xff4444);
 
     if (enemy.nameTag) enemy.nameTag.destroy();
     if (enemy.shadow) enemy.shadow.destroy();

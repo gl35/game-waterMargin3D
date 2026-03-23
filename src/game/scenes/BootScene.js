@@ -109,32 +109,49 @@ export class BootScene extends Phaser.Scene {
 
   generateBackdrop(style) {
     this.makeCanvasTexture(`${style.id}_chapterBackdrop`, 512, 512, (ctx, w, h) => {
-      const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, '#c6f4ff');
-      g.addColorStop(0.45, '#94d8ff');
-      g.addColorStop(0.8, '#79bff0');
-      g.addColorStop(1, '#9dc6f2');
+      // Rich sky gradient
+      const g = ctx.createLinearGradient(0, 0, 0, h * 0.65);
+      g.addColorStop(0, '#7ab8e8');
+      g.addColorStop(0.25, '#9acef4');
+      g.addColorStop(0.6, '#bce0ff');
+      g.addColorStop(1, '#d8f0ff');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
 
+      // Ground tone
+      const groundG = ctx.createLinearGradient(0, h * 0.6, 0, h);
+      groundG.addColorStop(0, '#a8d898');
+      groundG.addColorStop(1, '#80b870');
+      ctx.fillStyle = groundG;
+      ctx.fillRect(0, Math.round(h * 0.6), w, Math.round(h * 0.4));
+
+      // Sun glow
       ctx.save();
-      const sun = ctx.createRadialGradient(w * 0.75, 90, 10, w * 0.75, 90, 140);
-      sun.addColorStop(0, 'rgba(255,255,255,0.8)');
-      sun.addColorStop(1, 'rgba(255,255,255,0)');
+      const sun = ctx.createRadialGradient(w * 0.72, 80, 10, w * 0.72, 80, 180);
+      sun.addColorStop(0, 'rgba(255,255,220,0.85)');
+      sun.addColorStop(0.25, 'rgba(255,240,180,0.45)');
+      sun.addColorStop(1, 'rgba(255,220,150,0)');
       ctx.fillStyle = sun;
-      ctx.beginPath();
-      ctx.arc(w * 0.75, 90, 160, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(0, 0, w, 280);
       ctx.restore();
 
-      ctx.globalAlpha = 0.25;
-      for (let i = 0; i < 6; i++) {
-        ctx.fillStyle = i % 2 === 0 ? '#b9dbf8' : '#a2c9eb';
-        const baseY = 240 + i * 32;
+      // Horizon atmospheric haze
+      const haze = ctx.createLinearGradient(0, h * 0.52, 0, h * 0.68);
+      haze.addColorStop(0, 'rgba(200,230,255,0)');
+      haze.addColorStop(0.5, 'rgba(200,230,255,0.28)');
+      haze.addColorStop(1, 'rgba(200,230,255,0)');
+      ctx.fillStyle = haze;
+      ctx.fillRect(0, 0, w, h);
+
+      // Wave layers near horizon
+      ctx.globalAlpha = 0.18;
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#a8c8e8' : '#88b0d0';
+        const baseY = 270 + i * 26;
         ctx.beginPath();
         ctx.moveTo(0, h);
-        for (let x = 0; x <= w; x += 48) {
-          const wave = Math.sin((x + i * 50) * 0.025) * (14 + i * 3);
+        for (let x = 0; x <= w; x += 40) {
+          const wave = Math.sin((x + i * 60) * 0.022) * (12 + i * 2);
           ctx.lineTo(x, baseY - wave);
         }
         ctx.lineTo(w, h);
@@ -149,48 +166,110 @@ export class BootScene extends Phaser.Scene {
     this.makeCanvasTexture(`${style.id}_mountains`, 512, 220, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h);
 
-      const layers = [
-        { colorA: '#d2f2ff', colorB: '#a7d9f5', height: 70, wave: 20 },
-        { colorA: '#b9e1f5', colorB: '#8bbfda', height: 110, wave: 32 },
-        { colorA: '#8db1cf', colorB: '#6d95b8', height: 150, wave: 38 },
+      // Far peaks - mist-blue
+      const farPeaks = [
+        [0,180],[60,90],[120,115],[190,75],[260,100],[340,68],[420,95],[512,180],[512,220],[0,220]
       ];
+      const farG = ctx.createLinearGradient(0, 68, 0, h);
+      farG.addColorStop(0, '#c4dff5');
+      farG.addColorStop(1, '#98bedd');
+      ctx.fillStyle = farG;
+      ctx.globalAlpha = 0.72;
+      ctx.beginPath();
+      farPeaks.forEach(([x,y], i) => i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y));
+      ctx.closePath();
+      ctx.fill();
 
-      layers.forEach((layer, idx) => {
-        ctx.globalAlpha = 0.9 - idx * 0.2;
-        const grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, layer.colorA);
-        grad.addColorStop(1, layer.colorB);
-        ctx.fillStyle = grad;
+      // Snow caps on far peaks
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#e8f4ff';
+      [[60,90,16],[190,75,18],[340,68,22],[420,95,14]].forEach(([px,py,r]) => {
         ctx.beginPath();
-        ctx.moveTo(0, h);
-        for (let x = 0; x <= w; x += 36) {
-          const y = layer.height + Math.sin((x + idx * 20) * 0.02) * layer.wave + Math.cos(x * 0.015) * 14;
-          ctx.lineTo(x, y);
-        }
-        ctx.lineTo(w, h);
-        ctx.closePath();
+        ctx.ellipse(px, py+6, r, 10, 0, 0, Math.PI * 2);
         ctx.fill();
       });
+
+      // Mid peaks - green-blue
+      const midPeaks = [
+        [0,200],[80,125],[150,145],[230,108],[310,130],[390,105],[470,130],[512,200],[512,220],[0,220]
+      ];
+      const midG = ctx.createLinearGradient(0, 105, 0, h);
+      midG.addColorStop(0, '#8fb8d8');
+      midG.addColorStop(0.6, '#6a98b8');
+      midG.addColorStop(1, '#5580a0');
+      ctx.fillStyle = midG;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      midPeaks.forEach(([x,y], i) => i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y));
+      ctx.closePath();
+      ctx.fill();
+
+      // Near foothills - forested green
+      const nearPeaks = [
+        [0,220],[0,185],[70,162],[140,172],[220,150],[300,168],[380,155],[450,165],[512,185],[512,220]
+      ];
+      const nearG = ctx.createLinearGradient(0, 148, 0, h);
+      nearG.addColorStop(0, '#5c9a70');
+      nearG.addColorStop(1, '#4a7a58');
+      ctx.fillStyle = nearG;
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      nearPeaks.forEach(([x,y], i) => i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y));
+      ctx.closePath();
+      ctx.fill();
+
+      // Tree silhouettes on foothills
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#3a6848';
+      for (let i = 0; i < 18; i++) {
+        const tx = 20 + i * 28;
+        const baseY = 185 + Math.sin(i * 0.7) * 10;
+        const th = 18 + Math.sin(i * 1.3) * 6;
+        ctx.beginPath();
+        ctx.moveTo(tx, baseY - th);
+        ctx.lineTo(tx - 7, baseY + 2);
+        ctx.lineTo(tx + 7, baseY + 2);
+        ctx.closePath();
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_clouds`, 256, 96, (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h);
       const drawCloud = (x, y, s = 1) => {
-        const gradient = ctx.createLinearGradient(x - 20 * s, y - 5 * s, x + 20 * s, y + 5 * s);
-        gradient.addColorStop(0, 'rgba(255,255,255,0.95)');
-        gradient.addColorStop(1, 'rgba(255,255,255,0.55)');
-        ctx.fillStyle = gradient;
+        // Soft shadow layer
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = '#90b8d0';
         ctx.beginPath();
-        ctx.ellipse(x, y, 26 * s, 14 * s, 0, 0, Math.PI * 2);
-        ctx.ellipse(x + 20 * s, y - 4 * s, 18 * s, 12 * s, 0, 0, Math.PI * 2);
-        ctx.ellipse(x - 22 * s, y - 2 * s, 17 * s, 10 * s, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + 4, y + 6, 30 * s, 13 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Main cloud body
+        const gradient = ctx.createRadialGradient(x - 6 * s, y - 4 * s, 4, x, y, 30 * s);
+        gradient.addColorStop(0, 'rgba(255,255,255,0.98)');
+        gradient.addColorStop(0.5, 'rgba(240,248,255,0.85)');
+        gradient.addColorStop(1, 'rgba(220,235,250,0.55)');
+        ctx.fillStyle = gradient;
+        ctx.globalAlpha = 1;
+
+        ctx.beginPath();
+        ctx.ellipse(x, y, 30 * s, 14 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(x + 22 * s, y - 3 * s, 20 * s, 12 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(x - 24 * s, y - 1 * s, 18 * s, 10 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(x - 4 * s, y - 10 * s, 18 * s, 10 * s, 0, 0, Math.PI * 2);
         ctx.fill();
       };
 
-      drawCloud(50, 36, 1.2);
-      drawCloud(130, 46, 1.05);
-      drawCloud(206, 34, 1.3);
+      drawCloud(54, 38, 1.2);
+      drawCloud(138, 28, 0.9);
+      drawCloud(210, 42, 1.1);
     });
   }
 
@@ -201,106 +280,301 @@ export class BootScene extends Phaser.Scene {
     this.generateScenery(style);
 
     this.makeCanvasTexture(`${style.id}_grass`, tileSize, tileSize, (ctx) => {
-      const g = ctx.createLinearGradient(0, 0, 0, tileSize);
+      // Base gradient
+      const g = ctx.createLinearGradient(0, 0, tileSize, tileSize);
       g.addColorStop(0, style.grassA);
-      g.addColorStop(1, style.grassB);
+      g.addColorStop(0.5, style.grassB);
+      g.addColorStop(1, style.grassA);
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, tileSize, tileSize);
-      for (let i = 0; i < 100; i++) {
-        ctx.fillStyle = i % 2 ? style.grassA : style.grassB;
-        ctx.fillRect(Math.random() * tileSize, Math.random() * tileSize, 1, 1);
+
+      // Subtle soil patches
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#8b6940';
+      for (let i = 0; i < 6; i++) {
+        const px = (i * 7 + 3) % tileSize;
+        const py = (i * 11 + 5) % tileSize;
+        ctx.beginPath();
+        ctx.ellipse(px, py, 3, 2, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
+
+      // Grass blade clusters
+      const bladeColors = [style.grassA, style.grassB, '#a8d890', '#88c070'];
+      ctx.globalAlpha = 0.7;
+      const bladePositions = [[4,28],[8,20],[14,27],[19,22],[24,26],[29,19],[6,12],[16,8],[27,14],[10,4],[22,6]];
+      bladePositions.forEach(([bx, by]) => {
+        ctx.strokeStyle = bladeColors[(bx + by) % bladeColors.length];
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(bx, by + 4);
+        ctx.quadraticCurveTo(bx + 1, by + 1, bx + 2, by - 3);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(bx + 3, by + 4);
+        ctx.quadraticCurveTo(bx + 2, by + 1, bx, by - 2);
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_water`, tileSize, tileSize, (ctx) => {
+      // Deep water base
       const g = ctx.createLinearGradient(0, 0, 0, tileSize);
       g.addColorStop(0, style.waterA);
-      g.addColorStop(1, style.waterB);
+      g.addColorStop(0.5, style.waterB);
+      g.addColorStop(1, style.waterA);
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, tileSize, tileSize);
-      ctx.strokeStyle = '#9ec6ff';
-      ctx.globalAlpha = style.id === 'ink' ? 0.25 : 0.45;
-      for (let y = 5; y < tileSize; y += 8) {
+
+      // Sub-surface depth darkening in corners
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#004488';
+      ctx.fillRect(0, 0, 6, tileSize);
+      ctx.fillRect(tileSize - 6, 0, 6, tileSize);
+
+      // Wave lines
+      ctx.globalAlpha = style.id === 'ink' ? 0.22 : 0.48;
+      ctx.lineWidth = 1.2;
+      for (let row = 0; row < 4; row++) {
+        const wy = 5 + row * 8;
+        const offsetX = (row % 2) * 8;
+        ctx.strokeStyle = row % 2 === 0 ? '#b8e8ff' : '#d0f0ff';
         ctx.beginPath();
-        ctx.moveTo(2, y);
-        ctx.quadraticCurveTo(10, y - 3, 16, y);
-        ctx.quadraticCurveTo(24, y + 3, 30, y);
+        ctx.moveTo(0 + offsetX, wy);
+        ctx.quadraticCurveTo(6 + offsetX, wy - 2.5, 12 + offsetX, wy);
+        ctx.quadraticCurveTo(18 + offsetX, wy + 2.5, 24 + offsetX, wy);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(16 + offsetX, wy + 1);
+        ctx.quadraticCurveTo(22 + offsetX, wy - 1.5, 28 + offsetX, wy + 1);
         ctx.stroke();
       }
+
+      // Sparkle highlights
+      ctx.globalAlpha = 0.65;
+      ctx.fillStyle = '#ffffff';
+      [[5, 4], [18, 12], [9, 22], [26, 7], [22, 25], [13, 17]].forEach(([sx, sy]) => {
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, 1.5, 0.7, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      });
       ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_path`, tileSize, tileSize, (ctx) => {
+      // Cobblestone base
       const g = ctx.createLinearGradient(0, 0, 0, tileSize);
       g.addColorStop(0, style.pathA);
       g.addColorStop(1, style.pathB);
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, tileSize, tileSize);
-      for (let i = 0; i < 30; i++) {
-        ctx.fillStyle = i % 2 ? '#d4b88e' : '#6b5132';
-        ctx.fillRect(Math.random() * tileSize, Math.random() * tileSize, 2, 2);
-      }
+
+      // Stone blocks with mortar lines
+      ctx.globalAlpha = 0.55;
+      const stones = [
+        [1,1,14,10], [16,1,15,10],
+        [1,12,9,10], [11,12,11,10], [23,12,8,10],
+        [1,23,14,8], [16,23,15,8],
+      ];
+      stones.forEach(([sx, sy, sw, sh]) => {
+        const stoneG = ctx.createLinearGradient(sx, sy, sx, sy + sh);
+        stoneG.addColorStop(0, style.pathA);
+        stoneG.addColorStop(1, style.pathB);
+        ctx.fillStyle = stoneG;
+        ctx.fillRect(sx, sy, sw, sh);
+
+        // Stone edge highlight
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + 1, sy + sh - 1);
+        ctx.lineTo(sx + 1, sy + 1);
+        ctx.lineTo(sx + sw - 1, sy + 1);
+        ctx.stroke();
+
+        // Stone edge shadow
+        ctx.strokeStyle = '#00000044';
+        ctx.beginPath();
+        ctx.moveTo(sx + sw - 1, sy + 1);
+        ctx.lineTo(sx + sw - 1, sy + sh - 1);
+        ctx.lineTo(sx + 1, sy + sh - 1);
+        ctx.stroke();
+        ctx.globalAlpha = 0.55;
+      });
+      ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_wall`, tileSize, tileSize, (ctx) => {
+      // Base masonry fill
       ctx.fillStyle = style.wallA;
       ctx.fillRect(0, 0, tileSize, tileSize);
-      ctx.strokeStyle = style.wallB;
-      for (let y = 0; y < tileSize; y += 8) {
+
+      // Brick pattern
+      ctx.lineWidth = 1;
+      for (let row = 0; row < 4; row++) {
+        const y0 = row * 8;
+        // mortar line
+        ctx.strokeStyle = style.wallB;
+        ctx.globalAlpha = 0.6;
         ctx.beginPath();
-        ctx.moveTo(0, y + 0.5);
-        ctx.lineTo(tileSize, y + 0.5);
+        ctx.moveTo(0, y0 + 7.5);
+        ctx.lineTo(tileSize, y0 + 7.5);
         ctx.stroke();
+
+        // vertical joints (offset every other row)
+        const offset = (row % 2) * 8;
+        for (let col = 0; col < 5; col++) {
+          const vx = (col * 8 + offset) % tileSize;
+          ctx.globalAlpha = 0.45;
+          ctx.beginPath();
+          ctx.moveTo(vx + 0.5, y0);
+          ctx.lineTo(vx + 0.5, y0 + 7);
+          ctx.stroke();
+        }
+
+        // Top highlight per brick
+        ctx.globalAlpha = 0.22;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.5;
+        for (let col = 0; col < 4; col++) {
+          const bx = (col * 8 + offset + 1) % tileSize;
+          ctx.beginPath();
+          ctx.moveTo(bx, y0 + 1);
+          ctx.lineTo(bx + 6, y0 + 1);
+          ctx.stroke();
+        }
       }
+      ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_player`, 32, 32, (ctx) => {
-      // Inspired by your reference: white-robed spear wielder silhouette.
-      const robeBase = style.id === 'ink' ? '#f2efe8' : '#f6f4ff';
-      const robeShade = style.id === 'ink' ? '#d9d3c8' : '#d9d4ef';
+      const robeBase = style.id === 'ink' ? '#f0ece2' : '#f4f2ff';
+      const robeShade = style.id === 'ink' ? '#cdc7b8' : '#cac4e8';
+      const robeDark = style.id === 'ink' ? '#a09888' : '#9890c8';
 
-      // Spear / staff
-      ctx.strokeStyle = '#d7d7dd';
-      ctx.lineWidth = 2;
+      // Spear shaft
+      ctx.strokeStyle = '#c8c4b0';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(8, 22);
-      ctx.lineTo(28, 6);
+      ctx.moveTo(6, 30);
+      ctx.lineTo(29, 3);
       ctx.stroke();
 
-      // Flowing robe (main silhouette)
-      ctx.fillStyle = robeBase;
+      // Spear tip
+      ctx.fillStyle = '#d4d8e8';
       ctx.beginPath();
-      ctx.moveTo(11, 10);
-      ctx.lineTo(7, 16);
-      ctx.lineTo(6, 24);
-      ctx.lineTo(10, 31);
-      ctx.lineTo(20, 31);
-      ctx.lineTo(23, 22);
-      ctx.lineTo(22, 14);
-      ctx.lineTo(17, 10);
+      ctx.moveTo(29, 3);
+      ctx.lineTo(26, 6);
+      ctx.lineTo(31, 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(29, 3);
+      ctx.lineTo(30, 4);
+      ctx.lineTo(27.5, 5);
       ctx.closePath();
       ctx.fill();
 
-      // Robe folds
+      // Flowing robe body - layered for depth
       ctx.fillStyle = robeShade;
-      ctx.fillRect(10, 16, 2, 12);
-      ctx.fillRect(13, 14, 2, 15);
-      ctx.fillRect(16, 15, 2, 13);
+      ctx.beginPath();
+      ctx.moveTo(10, 12);
+      ctx.lineTo(6, 18);
+      ctx.lineTo(5, 27);
+      ctx.lineTo(9, 32);
+      ctx.lineTo(14, 32);
+      ctx.lineTo(15, 22);
+      ctx.lineTo(13, 12);
+      ctx.closePath();
+      ctx.fill();
 
-      // Head + hair
-      ctx.fillStyle = '#efcb8f';
-      ctx.fillRect(13, 7, 4, 4);
-      ctx.fillStyle = '#0f1022';
-      ctx.fillRect(11, 5, 7, 4);
-      ctx.fillRect(10, 8, 3, 3);
+      ctx.fillStyle = robeBase;
+      ctx.beginPath();
+      ctx.moveTo(13, 11);
+      ctx.lineTo(9, 17);
+      ctx.lineTo(9, 27);
+      ctx.lineTo(13, 32);
+      ctx.lineTo(21, 32);
+      ctx.lineTo(24, 24);
+      ctx.lineTo(23, 14);
+      ctx.lineTo(18, 11);
+      ctx.closePath();
+      ctx.fill();
 
-      // Sash accent (purple ribbon feel)
-      ctx.fillStyle = '#6b58b5';
-      ctx.fillRect(9, 17, 10, 1);
+      // Robe fold lines (painted strokes)
+      ctx.strokeStyle = robeShade;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.7;
+      [[11,15,10,30],[14,13,13,32],[17,12,16,31],[20,14,20,30]].forEach(([x1,y1,x2,y2]) => {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo(x1 - 1, (y1+y2)/2, x2, y2);
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
 
-      // Foot hint
-      ctx.fillStyle = '#3a3166';
-      ctx.fillRect(14, 30, 3, 2);
+      // Inner robe / collar contrast
+      ctx.fillStyle = robeDark;
+      ctx.beginPath();
+      ctx.moveTo(14, 11);
+      ctx.lineTo(12, 16);
+      ctx.lineTo(16, 14);
+      ctx.closePath();
+      ctx.fill();
+
+      // Sash
+      ctx.fillStyle = '#6040a8';
+      ctx.fillRect(10, 18, 11, 2);
+      ctx.fillStyle = '#8060c8';
+      ctx.fillRect(11, 18, 4, 1);
+
+      // Arms
+      ctx.strokeStyle = robeBase;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(10, 14);
+      ctx.quadraticCurveTo(6, 17, 8, 21);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(22, 13);
+      ctx.quadraticCurveTo(27, 16, 25, 20);
+      ctx.stroke();
+
+      // Neck
+      ctx.fillStyle = '#e8c888';
+      ctx.fillRect(14, 8, 4, 4);
+
+      // Head
+      ctx.fillStyle = '#e8c888';
+      ctx.beginPath();
+      ctx.ellipse(16, 6, 4, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hair bun / topknot
+      ctx.fillStyle = '#1a1228';
+      ctx.beginPath();
+      ctx.ellipse(16, 2, 3.5, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2a1e38';
+      ctx.beginPath();
+      ctx.ellipse(16, 4, 4.5, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hair pin
+      ctx.strokeStyle = '#d8c070';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(19, 1);
+      ctx.lineTo(17, 5);
+      ctx.stroke();
+
+      // Shoes/boots
+      ctx.fillStyle = '#2a2040';
+      ctx.fillRect(10, 30, 4, 3);
+      ctx.fillRect(17, 30, 4, 3);
     });
 
     this.makeCanvasTexture(`${style.id}_npc`, 32, 32, (ctx) => {
@@ -407,84 +681,397 @@ export class BootScene extends Phaser.Scene {
     });
 
     this.makeCanvasTexture(`${style.id}_enemy`, 32, 32, (ctx) => {
-      ctx.fillStyle = '#2b1b1b';
-      ctx.fillRect(10, 13, 12, 13);
-      ctx.fillStyle = style.enemy;
-      ctx.fillRect(11, 15, 10, 10);
-      ctx.fillStyle = '#ddb08f';
-      ctx.fillRect(12, 6, 8, 6);
-      ctx.fillStyle = '#111';
-      ctx.fillRect(10, 3, 12, 3);
-      ctx.fillStyle = '#bcbcbc';
-      ctx.fillRect(25, 10, 2, 14);
+      // Dark armor torso with rivets
+      const armorBase = '#2a1f1f';
+      const armorHighlight = '#443030';
+
+      // Body shadow
+      ctx.fillStyle = '#180f0f';
+      ctx.beginPath();
+      ctx.ellipse(17, 24, 8, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Legs
+      ctx.fillStyle = '#1e1414';
+      ctx.fillRect(11, 22, 4, 10);
+      ctx.fillRect(17, 22, 4, 10);
+      ctx.fillStyle = '#100c0c';
+      ctx.fillRect(11, 30, 5, 3);
+      ctx.fillRect(16, 30, 5, 3);
+
+      // Torso armor
+      ctx.fillStyle = armorBase;
+      ctx.fillRect(9, 12, 14, 12);
+      ctx.fillStyle = armorHighlight;
+      ctx.fillRect(10, 12, 12, 3);
+
+      // Armor plate lines
+      ctx.strokeStyle = '#3d2a2a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(16, 12); ctx.lineTo(16, 24);
+      ctx.moveTo(9, 17); ctx.lineTo(23, 17);
+      ctx.moveTo(9, 21); ctx.lineTo(23, 21);
+      ctx.stroke();
+
+      // Rivet dots
+      ctx.fillStyle = '#5a4040';
+      [[10,13],[14,13],[18,13],[22,13],[10,20],[22,20]].forEach(([rx,ry]) => {
+        ctx.beginPath(); ctx.arc(rx, ry, 0.8, 0, Math.PI*2); ctx.fill();
+      });
+
+      // Weapon (halberd) - behind body
+      ctx.strokeStyle = '#888090';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(24, 32); ctx.lineTo(26, 4);
+      ctx.stroke();
+      // Blade
+      ctx.fillStyle = '#aaa8b8';
+      ctx.beginPath();
+      ctx.moveTo(26, 4);
+      ctx.lineTo(22, 8);
+      ctx.lineTo(27, 10);
+      ctx.lineTo(29, 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#d0d0e0';
+      ctx.beginPath();
+      ctx.moveTo(26, 4);
+      ctx.lineTo(27, 5);
+      ctx.lineTo(25, 8);
+      ctx.closePath();
+      ctx.fill();
+
+      // Arms
+      ctx.strokeStyle = armorBase;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(9, 14); ctx.lineTo(5, 20);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(23, 14); ctx.lineTo(27, 19);
+      ctx.stroke();
+
+      // Neck
+      ctx.fillStyle = '#c09070';
+      ctx.fillRect(13, 8, 6, 4);
+
+      // Head
+      ctx.fillStyle = '#c09070';
+      ctx.beginPath();
+      ctx.ellipse(16, 6, 5, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Helmet
+      ctx.fillStyle = '#1e1414';
+      ctx.beginPath();
+      ctx.ellipse(16, 4, 5.5, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2e2020';
+      ctx.fillRect(10, 6, 12, 3);
+      // Helmet crest
+      ctx.fillStyle = '#8a1818';
+      ctx.beginPath();
+      ctx.moveTo(14, 2);
+      ctx.lineTo(16, -1);
+      ctx.lineTo(18, 2);
+      ctx.lineTo(16, 4);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glowing red eyes
+      ctx.fillStyle = '#ff2020';
+      ctx.beginPath(); ctx.ellipse(13, 7, 1.4, 1, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(19, 7, 1.4, 1, 0, 0, Math.PI*2); ctx.fill();
+      // Eye glow
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = '#ff6060';
+      ctx.beginPath(); ctx.ellipse(13, 7, 2.5, 1.8, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(19, 7, 2.5, 1.8, 0, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_tree`, 36, 46, (ctx) => {
-      ctx.fillStyle = '#8f6a40';
-      ctx.fillRect(15, 31, 6, 13);
-
-      const pineA = '#d4ffd2';
-      const pineB = '#7dd9a0';
-      ctx.fillStyle = pineA;
+      // Trunk
+      const trunkG = ctx.createLinearGradient(15, 30, 21, 46);
+      trunkG.addColorStop(0, '#a07848');
+      trunkG.addColorStop(1, '#6b4e28');
+      ctx.fillStyle = trunkG;
       ctx.beginPath();
-      ctx.moveTo(18, 4);
-      ctx.lineTo(4, 24);
-      ctx.lineTo(32, 24);
+      ctx.moveTo(14, 46);
+      ctx.lineTo(13, 32);
+      ctx.lineTo(16, 30);
+      ctx.lineTo(20, 30);
+      ctx.lineTo(23, 32);
+      ctx.lineTo(22, 46);
+      ctx.closePath();
+      ctx.fill();
+      // Bark lines
+      ctx.strokeStyle = '#6b4e28';
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(16, 31); ctx.lineTo(15, 45); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(20, 31); ctx.lineTo(21, 45); ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Back foliage layer (darker)
+      ctx.fillStyle = '#4a9060';
+      ctx.beginPath();
+      ctx.moveTo(18, 2);
+      ctx.lineTo(2, 28);
+      ctx.lineTo(34, 28);
       ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = pineB;
+      // Mid foliage
+      const foliageG = ctx.createLinearGradient(18, 6, 18, 34);
+      foliageG.addColorStop(0, '#68c888');
+      foliageG.addColorStop(0.5, '#50a870');
+      foliageG.addColorStop(1, '#3d8855');
+      ctx.fillStyle = foliageG;
       ctx.beginPath();
-      ctx.moveTo(18, 10);
-      ctx.lineTo(3, 30);
-      ctx.lineTo(33, 30);
+      ctx.moveTo(18, 6);
+      ctx.lineTo(4, 30);
+      ctx.lineTo(32, 30);
       ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = 'rgba(255,255,255,.45)';
-      ctx.fillRect(13, 11, 3, 3);
-      ctx.fillRect(21, 16, 3, 3);
+      // Top sprig
+      ctx.fillStyle = '#78d898';
+      ctx.beginPath();
+      ctx.moveTo(18, 3);
+      ctx.lineTo(10, 18);
+      ctx.lineTo(26, 18);
+      ctx.closePath();
+      ctx.fill();
+
+      // Light highlight
+      ctx.fillStyle = 'rgba(200,255,220,0.55)';
+      ctx.beginPath();
+      ctx.ellipse(14, 14, 4, 6, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Branch hints
+      ctx.strokeStyle = '#4a7040';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(18, 22); ctx.lineTo(8, 28); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(18, 22); ctx.lineTo(28, 27); ctx.stroke();
+      ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_rock`, 42, 28, (ctx) => {
       const rockA = style.id === 'ink' ? '#9ea9b1' : '#aab8c2';
       const rockB = style.id === 'ink' ? '#7e8a92' : '#8090a0';
-      ctx.fillStyle = rockA;
+      const rockDark = style.id === 'ink' ? '#606870' : '#6070800';
+
+      // Rock shadow
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#000000';
       ctx.beginPath();
-      ctx.moveTo(4, 20);
-      ctx.lineTo(10, 9);
-      ctx.lineTo(20, 4);
-      ctx.lineTo(32, 6);
-      ctx.lineTo(38, 15);
-      ctx.lineTo(35, 24);
-      ctx.lineTo(16, 26);
+      ctx.ellipse(22, 26, 18, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Main rock body
+      const rockG = ctx.createLinearGradient(4, 4, 38, 26);
+      rockG.addColorStop(0, rockA);
+      rockG.addColorStop(0.6, rockB);
+      rockG.addColorStop(1, '#607080');
+      ctx.fillStyle = rockG;
+      ctx.beginPath();
+      ctx.moveTo(6, 22);
+      ctx.lineTo(9, 10);
+      ctx.lineTo(18, 4);
+      ctx.lineTo(30, 5);
+      ctx.lineTo(38, 13);
+      ctx.lineTo(37, 23);
+      ctx.lineTo(20, 27);
       ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = rockB;
+      // Top face highlight
+      ctx.fillStyle = rockA;
+      ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      ctx.moveTo(19, 5);
-      ctx.lineTo(31, 7);
-      ctx.lineTo(34, 13);
-      ctx.lineTo(25, 14);
+      ctx.moveTo(17, 5);
+      ctx.lineTo(29, 6);
+      ctx.lineTo(33, 12);
+      ctx.lineTo(24, 12);
       ctx.closePath();
       ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Crack detail
+      ctx.strokeStyle = '#607080';
+      ctx.lineWidth = 0.8;
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(19, 6);
+      ctx.lineTo(22, 14);
+      ctx.lineTo(25, 18);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(12, 14);
+      ctx.lineTo(17, 18);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Edge highlight
+      ctx.strokeStyle = 'rgba(220,235,245,0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(8, 12);
+      ctx.lineTo(14, 5);
+      ctx.lineTo(24, 3);
+      ctx.stroke();
     });
 
     this.makeCanvasTexture(`${style.id}_building`, 64, 64, (ctx) => {
-      ctx.fillStyle = '#b58556';
-      ctx.fillRect(0, 20, 64, 44);
-      ctx.fillStyle = '#6f3a2f';
+      // Foundation platform
+      const foundG = ctx.createLinearGradient(0, 54, 0, 64);
+      foundG.addColorStop(0, '#c09878');
+      foundG.addColorStop(1, '#907050');
+      ctx.fillStyle = foundG;
+      ctx.fillRect(2, 52, 60, 12);
+      // Foundation edge
+      ctx.strokeStyle = '#705030';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(2, 52, 60, 12);
+
+      // Wall body
+      const wallG = ctx.createLinearGradient(0, 20, 0, 54);
+      wallG.addColorStop(0, '#d4a870');
+      wallG.addColorStop(1, '#b08050');
+      ctx.fillStyle = wallG;
+      ctx.fillRect(4, 20, 56, 34);
+
+      // Wall panel lines
+      ctx.strokeStyle = '#a07040';
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.4;
+      for (let lx = 10; lx < 56; lx += 10) {
+        ctx.beginPath(); ctx.moveTo(lx + 4, 20); ctx.lineTo(lx + 4, 54); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Roof - double-eave Chinese style
+      // Lower eave
+      ctx.fillStyle = '#4a2820';
       ctx.beginPath();
-      ctx.moveTo(0, 22);
-      ctx.lineTo(32, 0);
-      ctx.lineTo(64, 22);
+      ctx.moveTo(-4, 26);
+      ctx.lineTo(32, 8);
+      ctx.lineTo(68, 26);
+      ctx.lineTo(64, 30);
+      ctx.lineTo(32, 14);
+      ctx.lineTo(0, 30);
+      ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = '#4c2f14';
-      ctx.fillRect(24, 38, 16, 26);
-      ctx.fillStyle = '#9cc7db';
-      ctx.fillRect(8, 29, 12, 10);
-      ctx.fillRect(44, 29, 12, 10);
+      // Roof highlight
+      ctx.fillStyle = '#6a3828';
+      ctx.beginPath();
+      ctx.moveTo(0, 28);
+      ctx.lineTo(32, 11);
+      ctx.lineTo(64, 28);
+      ctx.lineTo(64, 26);
+      ctx.lineTo(32, 8);
+      ctx.lineTo(0, 26);
+      ctx.closePath();
+      ctx.fill();
+
+      // Curved eave tips
+      ctx.fillStyle = '#3a1e14';
+      ctx.beginPath();
+      ctx.moveTo(-4, 24);
+      ctx.quadraticCurveTo(-6, 30, 0, 32);
+      ctx.lineTo(2, 28);
+      ctx.quadraticCurveTo(-1, 27, -2, 23);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(68, 24);
+      ctx.quadraticCurveTo(70, 30, 64, 32);
+      ctx.lineTo(62, 28);
+      ctx.quadraticCurveTo(65, 27, 66, 23);
+      ctx.closePath();
+      ctx.fill();
+
+      // Roof tiles pattern
+      ctx.strokeStyle = '#3a1e14';
+      ctx.lineWidth = 0.6;
+      ctx.globalAlpha = 0.5;
+      for (let i = 0; i < 8; i++) {
+        const rtx = 4 + i * 8;
+        ctx.beginPath();
+        ctx.moveTo(rtx, 30);
+        ctx.lineTo(rtx + 4, 12 + i * 0.4);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Ridge ornament
+      ctx.fillStyle = '#d9b36b';
+      ctx.beginPath();
+      ctx.arc(32, 8, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffd080';
+      ctx.beginPath();
+      ctx.arc(32, 8, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Door
+      const doorG = ctx.createLinearGradient(24, 38, 40, 54);
+      doorG.addColorStop(0, '#3a200e');
+      doorG.addColorStop(1, '#1e0e08');
+      ctx.fillStyle = doorG;
+      ctx.fillRect(24, 38, 16, 16);
+      // Door arch
+      ctx.fillStyle = '#2a1408';
+      ctx.beginPath();
+      ctx.arc(32, 38, 8, Math.PI, 0);
+      ctx.fill();
+      // Door knocker
+      ctx.fillStyle = '#c8a040';
+      ctx.beginPath();
+      ctx.arc(32, 44, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Windows
+      ctx.fillStyle = '#5a9aaa';
+      ctx.fillRect(6, 30, 12, 10);
+      ctx.fillRect(46, 30, 12, 10);
+      // Window grille
+      ctx.strokeStyle = '#2a1408';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(12, 30); ctx.lineTo(12, 40);
+      ctx.moveTo(6, 35); ctx.lineTo(18, 35);
+      ctx.moveTo(52, 30); ctx.lineTo(52, 40);
+      ctx.moveTo(46, 35); ctx.lineTo(58, 35);
+      ctx.stroke();
+
+      // Lanterns
+      ctx.fillStyle = '#dd2020';
+      ctx.beginPath(); ctx.ellipse(10, 27, 3, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff6030';
+      ctx.beginPath(); ctx.ellipse(10, 27, 1.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#888'; ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(10, 22); ctx.lineTo(10, 24); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(10, 30); ctx.lineTo(10, 32); ctx.stroke();
+      // Tassel
+      ctx.strokeStyle = '#ffcc00';
+      ctx.beginPath(); ctx.moveTo(10, 32); ctx.lineTo(8, 36); ctx.moveTo(10, 32); ctx.lineTo(10, 36); ctx.moveTo(10, 32); ctx.lineTo(12, 36); ctx.stroke();
+
+      ctx.fillStyle = '#dd2020';
+      ctx.beginPath(); ctx.ellipse(54, 27, 3, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff6030';
+      ctx.beginPath(); ctx.ellipse(54, 27, 1.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#888'; ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(54, 22); ctx.lineTo(54, 24); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(54, 30); ctx.lineTo(54, 32); ctx.stroke();
+      ctx.strokeStyle = '#ffcc00';
+      ctx.beginPath(); ctx.moveTo(54, 32); ctx.lineTo(52, 36); ctx.moveTo(54, 32); ctx.lineTo(54, 36); ctx.moveTo(54, 32); ctx.lineTo(56, 36); ctx.stroke();
     });
   }
 

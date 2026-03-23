@@ -436,7 +436,7 @@ function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) 
         const hitAge = attackFx?.enemyId === enemy.id ? Date.now() - attackFx.at : 9999;
         const hitFlash = hitAge < 220;
         const isWarlord = enemy.type === 'warlord';
-        const ey = getTerrainHeight(enemy.x, enemy.z);
+        const ey = getTerrainHeight(enemy.x, enemy.z) + 0.0;
         return (
           <group key={enemy.id} position={[enemy.x, ey, enemy.z]} scale={isWarlord ? [1.6, 1.6, 1.6] : [1, 1, 1]}>
             <EnemySoldier
@@ -600,12 +600,17 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
     group.current.position.x = THREE.MathUtils.clamp(group.current.position.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX);
     group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ);
 
-    // ── Terrain following ──
-    // When mounted: hero group still tracks position for camera/combat, but is invisible
-    // When on foot: snap Y to terrain
+    // ── Terrain following — hard snap to surface ──
     if (!isMounted) {
-      const groundY = getTerrainHeight(group.current.position.x, group.current.position.z);
-      group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, groundY, 0.22);
+      const x = group.current.position.x;
+      const z = group.current.position.z;
+      group.current.position.y = getTerrainHeight(x, z);
+      // Tilt character to match slope
+      const STEP = 0.8;
+      const hx = getTerrainHeight(x + STEP, z) - getTerrainHeight(x - STEP, z);
+      const hz = getTerrainHeight(x, z + STEP) - getTerrainHeight(x, z - STEP);
+      group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -hz / (STEP * 2) * 0.6, 0.15);
+      group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z,  hx / (STEP * 2) * 0.6, 0.15);
     }
 
     // ── Solid obstacle collision ──
@@ -644,13 +649,7 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
       chargeGlowRef.current.scale.setScalar(1 + chargeLevel * 1.5);
     }
 
-    // ── Walk bob (scale only — Y handled by terrain snap above) ──
-    if (isMoving && !isMounted) {
-      const bob = Math.abs(Math.sin(t * 9));
-      group.current.scale.y = 1.0 - bob * 0.04;
-    } else {
-      group.current.scale.y = THREE.MathUtils.lerp(group.current.scale.y, 1.0, 0.12);
-    }
+    // No walk bob on Y scale — causes clipping on slopes
 
     moveCallback.current?.({ x: group.current.position.x, y: group.current.position.y, z: group.current.position.z });
 
@@ -1910,7 +1909,7 @@ function Horse({ position, isMounted, heroRef }) {
     const t = clock.getElapsedTime();
     const px = isMounted && heroRef?.current ? heroRef.current.position.x : position.x;
     const pz = isMounted && heroRef?.current ? heroRef.current.position.z : position.z;
-    const gy = getTerrainHeight(px, pz);
+    const gy = getTerrainHeight(px, pz) + (isMounted ? 0.0 : 0.0);
     groupRef.current.position.set(px, gy, pz);
     if (isMounted && heroRef?.current) groupRef.current.rotation.y = heroRef.current.rotation.y;
     const lastX = groupRef.current._lx ?? px;

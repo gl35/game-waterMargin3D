@@ -30,43 +30,89 @@ function isMobile() {
 
 function Terrain() {
   const geometry = useMemo(() => {
-    const mobile = isMobile();
-    const geo = new THREE.PlaneGeometry(900, 900, mobile ? 110 : 180, mobile ? 110 : 180);
+    const segs = isMobile() ? 120 : 200;
+    const geo = new THREE.PlaneGeometry(900, 900, segs, segs);
     const pos = geo.attributes.position;
+    const colors = [];
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const y = pos.getY(i);
-      const height = Math.sin(x * 0.08) * 2.4 + Math.cos(y * 0.05) * 1.4 + Math.cos((x + y) * 0.03) * 0.8;
-      pos.setZ(i, height);
+      const h = Math.sin(x * 0.08) * 2.8
+              + Math.cos(y * 0.05) * 1.8
+              + Math.cos((x + y) * 0.03) * 1.0
+              + Math.sin(x * 0.02 + y * 0.015) * 4.0;
+      pos.setZ(i, h);
+      // Vertex colors: green on hills, brown in valleys, dark at low points
+      const t = THREE.MathUtils.clamp((h + 4) / 10, 0, 1);
+      const r = THREE.MathUtils.lerp(0.28, 0.52, t);
+      const g = THREE.MathUtils.lerp(0.38, 0.72, t);
+      const b = THREE.MathUtils.lerp(0.18, 0.40, t);
+      colors.push(r, g, b);
     }
     pos.needsUpdate = true;
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     return geo;
   }, []);
 
   return (
-    <mesh geometry={geometry} rotation-x={-Math.PI / 2} receiveShadow castShadow position={[0, -3.5, 0]}>
-      <meshStandardMaterial color="#9edc9d" flatShading />
+    <mesh geometry={geometry} rotation-x={-Math.PI / 2} receiveShadow position={[0, -3.5, 0]}>
+      <meshStandardMaterial vertexColors roughness={0.92} metalness={0} />
     </mesh>
   );
 }
 
 function PathRibbon() {
+  // Textured cobblestone path using vertex color variation
+  const geo = useMemo(() => {
+    const g = new THREE.PlaneGeometry(8, 520, 4, 80);
+    const pos = g.attributes.position;
+    const colors = [];
+    for (let i = 0; i < pos.count; i++) {
+      const v = Math.random();
+      colors.push(0.72 + v * 0.08, 0.58 + v * 0.06, 0.32 + v * 0.06);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    return g;
+  }, []);
   return (
-    <mesh rotation-x={-Math.PI / 2} position={[0, -3.3, 0]} receiveShadow>
-      <planeGeometry args={[70, 520]} />
-      <meshStandardMaterial color="#f7d39f" roughness={0.7} metalness={0} />
+    <mesh geometry={geo} rotation-x={-Math.PI / 2} position={[0, -3.28, 0]} receiveShadow>
+      <meshStandardMaterial vertexColors roughness={0.88} />
     </mesh>
   );
 }
 
 function MountainBackdrop() {
-  const geometry = useMemo(() => new THREE.PlaneGeometry(900, 220, 60, 16), []);
+  const peaks = useMemo(() => {
+    const layers = [
+      { color: '#c8dff5', y: 55, z: -240, peaks: [[-180,0],[  -80,55],[ -20,80],[  40,70],[ 120,60],[ 200,45],[ 300,0]] },
+      { color: '#a0c0e0', y: 40, z: -200, peaks: [[-180,0],[  -90,40],[ -30,65],[  20,55],[  80,50],[ 160,38],[ 250,0]] },
+      { color: '#7a9abb', y: 25, z: -165, peaks: [[-150,0],[  -60,30],[   0,50],[  50,42],[  110,35],[ 180,28],[ 250,0]] },
+    ];
+    return layers;
+  }, []);
+
   return (
-    <group position={[0, 55, -220]}>
-      {[0, 1, -1].map((offset, idx) => (
-        <mesh key={`mountain-${idx}`} geometry={geometry} position={[offset * 14, idx * 10, idx * -6]}>
-          <meshBasicMaterial color={idx === 0 ? '#cfe9ff' : '#a7cfe8'} transparent opacity={0.8 - idx * 0.15} />
+    <group>
+      {peaks.map((layer, li) => {
+        const shape = new THREE.Shape();
+        shape.moveTo(layer.peaks[0][0], 0);
+        layer.peaks.forEach(([x, y]) => shape.lineTo(x, y));
+        shape.lineTo(layer.peaks[layer.peaks.length-1][0], -60);
+        shape.lineTo(layer.peaks[0][0], -60);
+        shape.closePath();
+        const geo = new THREE.ShapeGeometry(shape);
+        return (
+          <mesh key={li} geometry={geo} position={[0, layer.y, layer.z]} rotation={[0, 0, 0]}>
+            <meshBasicMaterial color={layer.color} transparent opacity={0.9 - li * 0.1} />
+          </mesh>
+        );
+      })}
+      {/* Snow caps */}
+      {[[-80,95,-242],[0,80,-200],[-30,115,-242],[40,80,-240],[120,60,-238]].map(([x,y,z],i) => (
+        <mesh key={i} position={[x, y, z]}>
+          <sphereGeometry args={[12, 7, 5]} />
+          <meshBasicMaterial color="#e8eeff" transparent opacity={0.7} />
         </mesh>
       ))}
     </group>
@@ -75,104 +121,108 @@ function MountainBackdrop() {
 
 function TreeField() {
   const mobile = isMobile();
-  const treeCount = mobile ? 160 : 420;
-  const mesh = useRef();
+  const COUNT = mobile ? 180 : 480;
+  const trunkMesh = useRef();
+  const topMesh   = useRef();
+  const midMesh   = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  useEffect(() => {
-    if (!mesh.current) return;
-    for (let i = 0; i < treeCount; i++) {
-      const angle = (i / treeCount) * Math.PI * 2;
-      const radius = 90 + Math.random() * 180;
-      const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 10;
-      const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 10;
-      const scale = 0.8 + Math.random() * 0.9;
-      dummy.position.set(x, -2.5, z);
-      dummy.scale.set(scale, scale * 1.4, scale);
-      dummy.rotation.y = Math.random() * Math.PI;
-      dummy.updateMatrix();
-      mesh.current.setMatrixAt(i, dummy.matrix);
-    }
-    mesh.current.instanceMatrix.needsUpdate = true;
-  }, [dummy, treeCount]);
+  const treeData = useMemo(() => Array.from({ length: COUNT }, (_, i) => {
+    const angle = (i / COUNT) * Math.PI * 2 + Math.random() * 0.4;
+    const radius = 80 + Math.random() * 200;
+    return {
+      x: Math.cos(angle) * radius + (Math.random() - 0.5) * 20,
+      z: Math.sin(angle) * radius + (Math.random() - 0.5) * 20,
+      scale: 0.7 + Math.random() * 1.1,
+      ry: Math.random() * Math.PI * 2,
+      variety: Math.floor(Math.random() * 3), // 0=pine 1=round 2=tall
+    };
+  }), [COUNT]);
 
   useEffect(() => {
-    if (!mesh.current) return;
-    mesh.current.frustumCulled = false;
-    mesh.current.geometry.computeBoundingSphere();
-    mesh.current.geometry.boundingSphere.radius = 9999;
-  }, []);
+    [trunkMesh, topMesh, midMesh].forEach((ref, layer) => {
+      if (!ref.current) return;
+      treeData.forEach((t, i) => {
+        const s = t.scale;
+        if (layer === 0) { // trunk
+          dummy.position.set(t.x, -2.5 + s * 1.2, t.z);
+          dummy.scale.set(s * 0.25, s * 2.5, s * 0.25);
+        } else if (layer === 1) { // bottom foliage
+          dummy.position.set(t.x, -2.5 + s * 3, t.z);
+          dummy.scale.set(s * 1.4, s * 1.8, s * 1.4);
+        } else { // top spire
+          dummy.position.set(t.x, -2.5 + s * 5, t.z);
+          dummy.scale.set(s * 0.9, s * 2.2, s * 0.9);
+        }
+        dummy.rotation.y = t.ry;
+        dummy.updateMatrix();
+        ref.current.setMatrixAt(i, dummy.matrix);
+      });
+      ref.current.instanceMatrix.needsUpdate = true;
+      ref.current.frustumCulled = false;
+    });
+  }, [treeData, dummy]);
 
   return (
-    <instancedMesh ref={mesh} args={[null, null, treeCount]} castShadow receiveShadow frustumCulled={false}>
-      <coneGeometry args={[2.8, 8, 6]} />
-      <meshStandardMaterial color="#3e8554" flatShading />
-    </instancedMesh>
+    <>
+      <instancedMesh ref={trunkMesh} args={[null, null, COUNT]} castShadow>
+        <cylinderGeometry args={[1, 1.2, 1, 6]} />
+        <meshStandardMaterial color="#6b4220" roughness={1} />
+      </instancedMesh>
+      <instancedMesh ref={midMesh} args={[null, null, COUNT]} castShadow receiveShadow>
+        <coneGeometry args={[1, 1, 7]} />
+        <meshStandardMaterial color="#2a6636" roughness={0.85} />
+      </instancedMesh>
+      <instancedMesh ref={topMesh} args={[null, null, COUNT]} castShadow receiveShadow>
+        <coneGeometry args={[0.7, 1, 6]} />
+        <meshStandardMaterial color="#3a8848" roughness={0.85} />
+      </instancedMesh>
+    </>
   );
 }
 
-// Generic human character: body + legs + arms + head
-function HumanFigure({ bodyColor = '#4a4060', robeColor = '#3a3050', skinColor = '#f2c9a0', hatColor = null, highlight = false, onClick = null, children }) {
-  const mat = (color, emissive = '#000', emissInt = 0) => (
-    <meshStandardMaterial color={highlight ? '#ffe8a0' : color} emissive={highlight ? '#ffcc40' : emissive} emissiveIntensity={highlight ? 0.35 : emissInt} />
-  );
+// Generic human character — much more detailed
+function HumanFigure({ bodyColor = '#4a4060', robeColor = '#3a3050', skinColor = '#f2c9a0', hatColor = null, highlight = false, onClick = null, children, sashColor = '#c09040', weapon = null }) {
+  const em = highlight ? '#ffcc40' : '#000';
+  const emI = highlight ? 0.35 : 0;
+  const mat = (color) => <meshStandardMaterial color={highlight ? '#ffe8a0' : color} emissive={em} emissiveIntensity={emI} roughness={0.8} />;
   return (
     <group onClick={onClick}>
-      {/* Lower robe / skirt */}
-      <mesh castShadow position={[0, 0.9, 0]}>
-        <cylinderGeometry args={[0.82, 1.05, 1.9, 14]} />
-        {mat(robeColor)}
-      </mesh>
+      {/* Legs */}
+      <mesh castShadow position={[-0.32, 0.6, 0]}><cylinderGeometry args={[0.26, 0.3, 1.3, 8]} />{mat(bodyColor)}</mesh>
+      <mesh castShadow position={[0.32, 0.6, 0]}><cylinderGeometry args={[0.26, 0.3, 1.3, 8]} />{mat(bodyColor)}</mesh>
+      {/* Boots */}
+      <mesh castShadow position={[-0.32, 0.05, 0.06]}><boxGeometry args={[0.42, 0.22, 0.6]} /><meshStandardMaterial color="#1a1820" emissive={em} emissiveIntensity={emI} /></mesh>
+      <mesh castShadow position={[0.32, 0.05, 0.06]}><boxGeometry args={[0.42, 0.22, 0.6]} /><meshStandardMaterial color="#1a1820" emissive={em} emissiveIntensity={emI} /></mesh>
+      {/* Lower robe */}
+      <mesh castShadow position={[0, 1.1, 0]}><cylinderGeometry args={[0.78, 0.95, 1.4, 14]} />{mat(robeColor)}</mesh>
       {/* Upper torso */}
-      <mesh castShadow position={[0, 2.3, 0]}>
-        <cylinderGeometry args={[0.72, 0.82, 1.8, 12]} />
-        {mat(bodyColor)}
-      </mesh>
-      {/* Left arm */}
-      <mesh castShadow position={[-1.0, 2.2, 0]} rotation={[0, 0, 0.38]}>
-        <cylinderGeometry args={[0.22, 0.28, 1.7, 8]} />
-        {mat(bodyColor)}
-      </mesh>
-      {/* Right arm */}
-      <mesh castShadow position={[1.0, 2.2, 0]} rotation={[0, 0, -0.38]}>
-        <cylinderGeometry args={[0.22, 0.28, 1.7, 8]} />
-        {mat(bodyColor)}
-      </mesh>
+      <mesh castShadow position={[0, 2.2, 0]}><cylinderGeometry args={[0.65, 0.78, 1.5, 12]} />{mat(bodyColor)}</mesh>
+      {/* Chest detail */}
+      <mesh castShadow position={[0, 2.4, 0.55]}><boxGeometry args={[0.8, 0.7, 0.12]} />{mat(robeColor)}</mesh>
+      {/* Sash */}
+      <mesh position={[0, 1.55, 0]}><torusGeometry args={[0.82, 0.1, 6, 22]} /><meshStandardMaterial color={sashColor} metalness={0.4} roughness={0.5} emissive={em} emissiveIntensity={emI} /></mesh>
+      {/* Arms */}
+      <mesh castShadow position={[-0.92, 2.1, 0]} rotation={[0, 0, 0.35]}><cylinderGeometry args={[0.2, 0.25, 1.4, 8]} />{mat(bodyColor)}</mesh>
+      <mesh castShadow position={[0.92, 2.1, 0]} rotation={[0, 0, -0.35]}><cylinderGeometry args={[0.2, 0.25, 1.4, 8]} />{mat(bodyColor)}</mesh>
+      {/* Hands */}
+      <mesh castShadow position={[-1.38, 1.45, 0]}><sphereGeometry args={[0.2, 8, 8]} /><meshStandardMaterial color={skinColor} emissive={em} emissiveIntensity={emI} /></mesh>
+      <mesh castShadow position={[1.38, 1.45, 0]}><sphereGeometry args={[0.2, 8, 8]} /><meshStandardMaterial color={skinColor} emissive={em} emissiveIntensity={emI} /></mesh>
       {/* Neck */}
-      <mesh castShadow position={[0, 3.3, 0]}>
-        <cylinderGeometry args={[0.28, 0.32, 0.45, 8]} />
-        {mat(skinColor)}
-      </mesh>
+      <mesh castShadow position={[0, 3.15, 0]}><cylinderGeometry args={[0.26, 0.3, 0.4, 8]} /><meshStandardMaterial color={skinColor} emissive={em} emissiveIntensity={emI} /></mesh>
       {/* Head */}
-      <mesh castShadow position={[0, 3.95, 0]}>
-        <sphereGeometry args={[0.72, 14, 14]} />
-        {mat(skinColor)}
-      </mesh>
+      <mesh castShadow position={[0, 3.75, 0]}><sphereGeometry args={[0.68, 14, 14]} /><meshStandardMaterial color={skinColor} roughness={0.7} emissive={em} emissiveIntensity={emI} /></mesh>
       {/* Eyes */}
-      <mesh position={[-0.22, 4.02, 0.62]}>
-        <sphereGeometry args={[0.1, 6, 6]} />
-        <meshStandardMaterial color="#1a1020" />
-      </mesh>
-      <mesh position={[0.22, 4.02, 0.62]}>
-        <sphereGeometry args={[0.1, 6, 6]} />
-        <meshStandardMaterial color="#1a1020" />
-      </mesh>
-      {/* Sash / belt */}
-      <mesh position={[0, 1.85, 0]}>
-        <torusGeometry args={[0.85, 0.1, 6, 22]} />
-        <meshStandardMaterial color="#c09040" metalness={0.3} roughness={0.6} />
-      </mesh>
-      {/* Hat (optional) */}
+      <mesh position={[-0.22, 3.82, 0.58]}><sphereGeometry args={[0.09, 6, 6]} /><meshStandardMaterial color="#1a1020" /></mesh>
+      <mesh position={[0.22, 3.82, 0.58]}><sphereGeometry args={[0.09, 6, 6]} /><meshStandardMaterial color="#1a1020" /></mesh>
+      {/* Hat */}
       {hatColor && <>
-        <mesh position={[0, 4.55, -0.1]} rotation={[0.08, 0, 0]}>
-          <cylinderGeometry args={[1.4, 1.4, 0.22, 28]} />
-          <meshStandardMaterial color={hatColor} />
-        </mesh>
-        <mesh position={[0, 5.1, -0.1]} rotation={[0.08, 0, 0]}>
-          <coneGeometry args={[0.95, 1.4, 18]} />
-          <meshStandardMaterial color={hatColor} />
-        </mesh>
+        <mesh position={[0, 4.32, -0.12]} rotation={[0.08, 0, 0]}><cylinderGeometry args={[1.32, 1.32, 0.2, 26]} /><meshStandardMaterial color={hatColor} emissive={em} emissiveIntensity={emI} /></mesh>
+        <mesh position={[0, 4.88, -0.12]} rotation={[0.08, 0, 0]}><coneGeometry args={[0.9, 1.3, 16]} /><meshStandardMaterial color={hatColor} emissive={em} emissiveIntensity={emI} /></mesh>
       </>}
+      {/* Weapon */}
+      {weapon === 'staff' && <mesh castShadow position={[1.1, 1.8, -0.3]} rotation={[0.15, 0, 0.1]}><cylinderGeometry args={[0.06, 0.06, 5, 6]} /><meshStandardMaterial color="#b0a880" metalness={0.2} /></mesh>}
+      {weapon === 'sword' && <mesh castShadow position={[1.1, 1.8, -0.2]} rotation={[0.1, 0, 0.08]}><boxGeometry args={[0.1, 3.5, 0.06]} /><meshStandardMaterial color="#c8c8d8" metalness={0.7} roughness={0.2} /></mesh>}
       {children}
     </group>
   );
@@ -180,11 +230,11 @@ function HumanFigure({ bodyColor = '#4a4060', robeColor = '#3a3050', skinColor =
 
 function NpcField({ highlightedNpcId, onNpcTap }) {
   const NPC_STYLES = {
-    songjiang: { body: '#5a1a20', robe: '#8a2830', hat: '#1a1010' },
-    linchong:  { body: '#2a2840', robe: '#383060', hat: '#1e1c2e' },
-    wuyong:    { body: '#1e3040', robe: '#2a4458', hat: '#162030' },
-    tonkey:    { body: '#1c2230', robe: '#283248', hat: null      },
-    villager:  { body: '#4a3820', robe: '#6a5030', hat: '#604020' },
+    songjiang: { body: '#7f1f26', robe: '#aa2a34', hat: '#101010', sash: '#d9b36b', weapon: 'staff' },
+    linchong:  { body: '#2a2848', robe: '#3a3868', hat: '#181828', sash: '#6688cc', weapon: 'staff' },
+    wuyong:    { body: '#1e304a', robe: '#2a4868', hat: '#101820', sash: '#44aacc', weapon: null   },
+    tonkey:    { body: '#1c2a38', robe: '#243248', hat: null,       sash: '#40cc88', weapon: 'sword' },
+    villager:  { body: '#4a3820', robe: '#7a5a30', hat: '#604020', sash: '#c09040', weapon: null   },
   };
 
   return (
@@ -199,6 +249,8 @@ function NpcField({ highlightedNpcId, onNpcTap }) {
               bodyColor={style.body}
               robeColor={style.robe}
               hatColor={style.hat}
+              sashColor={style.sash}
+              weapon={style.weapon}
               highlight={glow}
               onClick={(e) => { e.stopPropagation(); onNpcTap?.(npc.id); }}
             />
@@ -862,27 +914,48 @@ function Lights({ mobile = false }) {
 function SkyDome() {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
-    canvas.width = 2;
-    canvas.height = 2;
+    canvas.width = 4; canvas.height = 256;
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const gradient = ctx.createLinearGradient(0, 0, 0, 2);
-      gradient.addColorStop(0, '#fefcf2');
-      gradient.addColorStop(0.5, '#b8e4ff');
-      gradient.addColorStop(1, '#72aef0');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 2, 2);
-    }
+    const g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0,    '#1a3a6a');
+    g.addColorStop(0.25, '#2a6aaa');
+    g.addColorStop(0.55, '#6ab4e8');
+    g.addColorStop(0.78, '#a8d4f4');
+    g.addColorStop(0.92, '#d8eeff');
+    g.addColorStop(1,    '#f0f4ff');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 4, 256);
+    // Horizon glow
+    const h = ctx.createLinearGradient(0, 180, 0, 256);
+    h.addColorStop(0, 'rgba(255,200,120,0)');
+    h.addColorStop(1, 'rgba(255,180,80,0.25)');
+    ctx.fillStyle = h;
+    ctx.fillRect(0, 0, 4, 256);
     const tex = new THREE.CanvasTexture(canvas);
     tex.needsUpdate = true;
     return tex;
   }, []);
 
   return (
-    <mesh position={[0, -50, 0]}>
-      <sphereGeometry args={[520, 32, 32]} />
-      <meshBasicMaterial side={THREE.BackSide} map={texture} />
-    </mesh>
+    <group>
+      <mesh position={[0, -50, 0]}>
+        <sphereGeometry args={[520, 24, 16]} />
+        <meshBasicMaterial side={THREE.BackSide} map={texture} />
+      </mesh>
+      {/* Sun disc */}
+      <mesh position={[120, 140, -280]}>
+        <circleGeometry args={[18, 20]} />
+        <meshBasicMaterial color="#fffae0" />
+      </mesh>
+      <mesh position={[120, 140, -281]}>
+        <circleGeometry args={[28, 20]} />
+        <meshBasicMaterial color="#ffeeaa" transparent opacity={0.35} />
+      </mesh>
+      <mesh position={[120, 140, -282]}>
+        <circleGeometry args={[48, 20]} />
+        <meshBasicMaterial color="#ffdd88" transparent opacity={0.12} />
+      </mesh>
+    </group>
   );
 }
 
@@ -962,9 +1035,12 @@ function DayNightCycle() {
 
   return (
     <>
-      <ambientLight ref={ambientRef} intensity={0.65} />
-      <directionalLight ref={sunRef} castShadow intensity={1.5} position={[40, 80, 20]}
-        shadow-mapSize-width={512} shadow-mapSize-height={512} />
+      <ambientLight ref={ambientRef} intensity={0.55} color="#ffe8cc" />
+      <directionalLight ref={sunRef} castShadow intensity={2.2} position={[60, 100, 40]}
+        shadow-mapSize-width={1024} shadow-mapSize-height={1024}
+        shadow-camera-left={-120} shadow-camera-right={120}
+        shadow-camera-top={120} shadow-camera-bottom={-120}
+        shadow-bias={-0.001} />
     </>
   );
 }
@@ -1241,6 +1317,60 @@ function FallingLeaves() {
       <planeGeometry args={[0.4, 0.3]} />
       <meshStandardMaterial color="#c8a020" side={THREE.DoubleSide} transparent opacity={0.85} />
     </instancedMesh>
+  );
+}
+
+// ── GROUND SCATTER ──────────────────────────────────────────────
+function GroundScatter() {
+  const rockMesh = useRef();
+  const flowerMesh = useRef();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const ROCKS = 120; const FLOWERS = 80;
+
+  const rockData = useMemo(() => Array.from({ length: ROCKS }, () => ({
+    x: (Math.random()-0.5)*280, z: (Math.random()-0.5)*280,
+    sx: 0.4+Math.random()*1.2, sy: 0.3+Math.random()*0.8, sz: 0.4+Math.random()*1.0,
+    ry: Math.random()*Math.PI,
+  })), []);
+  const flowerData = useMemo(() => Array.from({ length: FLOWERS }, () => ({
+    x: (Math.random()-0.5)*200, z: (Math.random()-0.5)*200,
+    s: 0.3+Math.random()*0.5,
+  })), []);
+
+  useEffect(() => {
+    if (rockMesh.current) {
+      rockData.forEach((r, i) => {
+        dummy.position.set(r.x, -3.1, r.z);
+        dummy.scale.set(r.sx, r.sy, r.sz);
+        dummy.rotation.y = r.ry;
+        dummy.updateMatrix();
+        rockMesh.current.setMatrixAt(i, dummy.matrix);
+      });
+      rockMesh.current.instanceMatrix.needsUpdate = true;
+    }
+    if (flowerMesh.current) {
+      flowerData.forEach((f, i) => {
+        dummy.position.set(f.x, -3.0, f.z);
+        dummy.scale.setScalar(f.s);
+        dummy.rotation.y = Math.random()*Math.PI*2;
+        dummy.updateMatrix();
+        flowerMesh.current.setMatrixAt(i, dummy.matrix);
+      });
+      flowerMesh.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [rockData, flowerData, dummy]);
+
+  return (
+    <>
+      <instancedMesh ref={rockMesh} args={[null, null, ROCKS]} castShadow receiveShadow>
+        <dodecahedronGeometry args={[0.8, 0]} />
+        <meshStandardMaterial color="#8a8878" roughness={0.95} />
+      </instancedMesh>
+      <instancedMesh ref={flowerMesh} args={[null, null, FLOWERS]}>
+        <sphereGeometry args={[0.35, 5, 4]} />
+        <meshStandardMaterial color="#f0a8c0" emissive="#dd6688" emissiveIntensity={0.2} />
+      </instancedMesh>
+    </>
   );
 }
 
@@ -1691,7 +1821,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
     <>
       <SkyDome />
       <DayNightCycle />
-      <hemisphereLight args={[0xcff6ff, 0x89c09a, 0.5]} />
+      <hemisphereLight args={[0x88c8ff, 0x4a8030, 0.6]} />
       <MountainBackdrop />
       <Terrain />
       <PathRibbon />
@@ -1705,6 +1835,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
       <Campfire position={[22, -3.2, -8]} />
       <Campfire position={[-40, -3.2, -25]} />
       <Campfire position={[55, -3.2, 20]} />
+      <GroundScatter />
       <LiangshanFortress />
       <AmbientVillagers />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
@@ -1858,7 +1989,7 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
       camera={{ position: [0, 18, 42], fov: 52, near: 0.1, far: 900 }}
       gl={{ antialias: !mobile, alpha: false, powerPreference: 'high-performance' }}
       dpr={mobile ? [1, 1] : [1, 1.5]}
-      shadows={false}
+      shadows="soft"
       onCreated={({ gl, scene }) => {
         gl.setClearColor('#7ab8e8', 1);
         scene.background = new THREE.Color('#7ab8e8');

@@ -519,7 +519,7 @@ export default function App() {
       setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 600);
       setStory((prev) => {
         const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
-        return res.enemy.type === 'captain' ? recordMiniBossDefeat(r) : recordRaiderKill(r);
+        return (res.enemy.type === 'captain' || res.enemy.type === 'warlord') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
       });
       // Kill XP + combo finish bonus
       const killXp = res.enemy.xp + (newCombo >= 3 ? Math.floor(newCombo * 1.5) : 0);
@@ -568,7 +568,7 @@ export default function App() {
       setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 700);
       setStory((prev) => {
         const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
-        return res.enemy.type === 'captain' ? recordMiniBossDefeat(r) : recordRaiderKill(r);
+        return (res.enemy.type === 'captain' || res.enemy.type === 'warlord') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
       });
       setCombatXp((xp) => xp + res.enemy.xp);
       setLockedTarget(null);

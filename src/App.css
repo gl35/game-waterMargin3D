@@ -475,6 +475,77 @@ html, body, #root {
   border-color: #00ffcc !important;
 }
 
+/* ── CHAPTER ADVANCE BUTTON ── */
+.chapter-advance-btn {
+  position: absolute;
+  top: 50%;
+  right: clamp(16px, 3vw, 32px);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, rgba(10,8,20,0.92), rgba(30,15,40,0.92));
+  border: 2px solid #d9b36b;
+  border-radius: 14px;
+  color: #f0e0c0;
+  cursor: pointer;
+  z-index: 200;
+  box-shadow: 0 0 24px rgba(217,179,107,0.35), 0 4px 16px rgba(0,0,0,0.6);
+  animation: chap-btn-pulse 2.2s ease-in-out infinite;
+  text-align: left;
+  max-width: 200px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.chapter-advance-btn:hover {
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 0 0 36px rgba(217,179,107,0.6), 0 6px 22px rgba(0,0,0,0.7);
+}
+.chapter-advance-btn:active {
+  transform: translateY(-50%) scale(0.97);
+}
+@keyframes chap-btn-pulse {
+  0%,100% { border-color: #d9b36b; box-shadow: 0 0 18px rgba(217,179,107,0.3); }
+  50%      { border-color: #ffd880; box-shadow: 0 0 32px rgba(217,179,107,0.6); }
+}
+.chap-btn-icon { font-size: 22px; flex-shrink: 0; }
+.chap-btn-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffe880;
+  letter-spacing: 0.04em;
+}
+.chap-btn-text small {
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  font-family: sans-serif;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.chap-btn-arrow {
+  font-size: 18px;
+  color: #d9b36b;
+  flex-shrink: 0;
+}
+
+@media (max-width: 932px), (pointer: coarse) {
+  .chapter-advance-btn {
+    top: auto;
+    right: 50%;
+    bottom: calc(var(--safe-bottom, 0px) + 160px);
+    transform: translateX(50%);
+    padding: 10px 16px;
+    max-width: 240px;
+  }
+  .chapter-advance-btn:hover {
+    transform: translateX(50%) scale(1.04);
+  }
+}
+
 /* ── LEVEL UP FLASH ── */
 .levelup-flash {
   position: absolute;

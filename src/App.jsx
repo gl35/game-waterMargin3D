@@ -1107,6 +1107,31 @@ export default function App() {
         );
       })()}
 
+      {/* Chapter advance button — shown after chapter complete */}
+      {story.chapterState.stage === 'complete' && !showVictoryBanquet && (
+        <button
+          className="chapter-advance-btn"
+          onClick={() => {
+            const ch = story.chapterState.chapter;
+            if (ch === 1) {
+              setStory((prev) => advanceToChapter2(prev));
+              setEnemies(createChapter2Enemies());
+              setCombatXp((xp) => xp + 80);
+              setQuestNotice('📖 Chapter 2 begins — The Magistrate\'s Wrath!');
+            } else {
+              setQuestNotice('🏆 More chapters coming soon!');
+            }
+          }}
+        >
+          <span className="chap-btn-icon">⚔️</span>
+          <span className="chap-btn-text">
+            Enter Chapter {story.chapterState.chapter + 1}
+            <small>You can keep roaming first</small>
+          </span>
+          <span className="chap-btn-arrow">→</span>
+        </button>
+      )}
+
       {/* Kill flash overlay */}
       {killFlash && <div className="kill-flash" />}
 
@@ -1224,20 +1249,7 @@ export default function App() {
           chapter={story.chapterState.chapter}
           gold={hud.gold}
           heroes={hud.heroes}
-          onClose={() => {
-            setShowVictoryBanquet(false);
-            const currentChapter = story.chapterState.chapter;
-            if (currentChapter === 1) {
-              // Advance to chapter 2
-              setStory((prev) => advanceToChapter2(prev));
-              setEnemies(createChapter2Enemies());
-              setCombatXp((xp) => xp + 80); // chapter completion XP bonus
-              setQuestNotice('📖 Chapter 2 begins — The Magistrate\'s Wrath!');
-            } else {
-              // Future chapters — loop for now
-              setQuestNotice('🏆 You have completed the demo. More chapters coming!');
-            }
-          }}
+          onClose={() => setShowVictoryBanquet(false)}
         />
       )}
 

@@ -111,10 +111,80 @@ function TreeField() {
   );
 }
 
+// Generic human character: body + legs + arms + head
+function HumanFigure({ bodyColor = '#4a4060', robeColor = '#3a3050', skinColor = '#f2c9a0', hatColor = null, highlight = false, onClick = null, children }) {
+  const mat = (color, emissive = '#000', emissInt = 0) => (
+    <meshStandardMaterial color={highlight ? '#ffe8a0' : color} emissive={highlight ? '#ffcc40' : emissive} emissiveIntensity={highlight ? 0.35 : emissInt} />
+  );
+  return (
+    <group onClick={onClick}>
+      {/* Lower robe / skirt */}
+      <mesh castShadow position={[0, 0.9, 0]}>
+        <cylinderGeometry args={[0.82, 1.05, 1.9, 14]} />
+        {mat(robeColor)}
+      </mesh>
+      {/* Upper torso */}
+      <mesh castShadow position={[0, 2.3, 0]}>
+        <cylinderGeometry args={[0.72, 0.82, 1.8, 12]} />
+        {mat(bodyColor)}
+      </mesh>
+      {/* Left arm */}
+      <mesh castShadow position={[-1.0, 2.2, 0]} rotation={[0, 0, 0.38]}>
+        <cylinderGeometry args={[0.22, 0.28, 1.7, 8]} />
+        {mat(bodyColor)}
+      </mesh>
+      {/* Right arm */}
+      <mesh castShadow position={[1.0, 2.2, 0]} rotation={[0, 0, -0.38]}>
+        <cylinderGeometry args={[0.22, 0.28, 1.7, 8]} />
+        {mat(bodyColor)}
+      </mesh>
+      {/* Neck */}
+      <mesh castShadow position={[0, 3.3, 0]}>
+        <cylinderGeometry args={[0.28, 0.32, 0.45, 8]} />
+        {mat(skinColor)}
+      </mesh>
+      {/* Head */}
+      <mesh castShadow position={[0, 3.95, 0]}>
+        <sphereGeometry args={[0.72, 14, 14]} />
+        {mat(skinColor)}
+      </mesh>
+      {/* Eyes */}
+      <mesh position={[-0.22, 4.02, 0.62]}>
+        <sphereGeometry args={[0.1, 6, 6]} />
+        <meshStandardMaterial color="#1a1020" />
+      </mesh>
+      <mesh position={[0.22, 4.02, 0.62]}>
+        <sphereGeometry args={[0.1, 6, 6]} />
+        <meshStandardMaterial color="#1a1020" />
+      </mesh>
+      {/* Sash / belt */}
+      <mesh position={[0, 1.85, 0]}>
+        <torusGeometry args={[0.85, 0.1, 6, 22]} />
+        <meshStandardMaterial color="#c09040" metalness={0.3} roughness={0.6} />
+      </mesh>
+      {/* Hat (optional) */}
+      {hatColor && <>
+        <mesh position={[0, 4.55, -0.1]} rotation={[0.08, 0, 0]}>
+          <cylinderGeometry args={[1.4, 1.4, 0.22, 28]} />
+          <meshStandardMaterial color={hatColor} />
+        </mesh>
+        <mesh position={[0, 5.1, -0.1]} rotation={[0.08, 0, 0]}>
+          <coneGeometry args={[0.95, 1.4, 18]} />
+          <meshStandardMaterial color={hatColor} />
+        </mesh>
+      </>}
+      {children}
+    </group>
+  );
+}
+
 function NpcField({ highlightedNpcId, onNpcTap }) {
-  const handleNpcTap = (npcId) => (event) => {
-    event.stopPropagation();
-    onNpcTap?.(npcId);
+  const NPC_STYLES = {
+    songjiang: { body: '#5a1a20', robe: '#8a2830', hat: '#1a1010' },
+    linchong:  { body: '#2a2840', robe: '#383060', hat: '#1e1c2e' },
+    wuyong:    { body: '#1e3040', robe: '#2a4458', hat: '#162030' },
+    tonkey:    { body: '#1c2230', robe: '#283248', hat: null      },
+    villager:  { body: '#4a3820', robe: '#6a5030', hat: '#604020' },
   };
 
   return (
@@ -122,16 +192,23 @@ function NpcField({ highlightedNpcId, onNpcTap }) {
       {NPCS.map((npc) => {
         const { x, z } = tileToWorldPosition(npc);
         const glow = npc.id === highlightedNpcId;
+        const style = NPC_STYLES[npc.id] || NPC_STYLES.villager;
         return (
-          <group key={npc.id} position={[x, -2.4, z]}>
-            <mesh castShadow onPointerDown={handleNpcTap(npc.id)}>
-              <cylinderGeometry args={[0.85, 0.95, 3.4, 10]} />
-              <meshStandardMaterial color={glow ? '#ffe28a' : '#4f4a63'} />
-            </mesh>
-            <mesh position={[0, 2.1, 0]} onPointerDown={handleNpcTap(npc.id)}>
-              <sphereGeometry args={[0.9, 16, 16]} />
-              <meshStandardMaterial color={glow ? '#fff1cf' : '#f2cfa6'} />
-            </mesh>
+          <group key={npc.id} position={[x, -2.5, z]}>
+            <HumanFigure
+              bodyColor={style.body}
+              robeColor={style.robe}
+              hatColor={style.hat}
+              highlight={glow}
+              onClick={(e) => { e.stopPropagation(); onNpcTap?.(npc.id); }}
+            />
+            {/* Highlight ring on ground */}
+            {glow && (
+              <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[1.1, 1.5, 28]} />
+                <meshBasicMaterial color="#ffe060" transparent opacity={0.55} />
+              </mesh>
+            )}
           </group>
         );
       })}
@@ -139,12 +216,120 @@ function NpcField({ highlightedNpcId, onNpcTap }) {
   );
 }
 
-function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) {
-  const handleEnemyTap = (enemyId) => (event) => {
-    event.stopPropagation();
-    onEnemyTap?.(enemyId);
-  };
+function EnemySoldier({ glow, hitFlash, onClick }) {
+  const armorColor  = hitFlash ? '#ffd8a8' : '#3a2020';
+  const plateColor  = hitFlash ? '#ffe0b0' : '#5a3030';
+  const skinColor   = hitFlash ? '#fff1cf' : '#c89070';
+  const emissive    = hitFlash ? '#ffcf6a' : glow ? '#ff3010' : '#000';
+  const emissInt    = hitFlash ? 1.1 : glow ? 0.4 : 0;
 
+  const mat = (color) => (
+    <meshStandardMaterial color={color} emissive={emissive} emissiveIntensity={emissInt} />
+  );
+
+  return (
+    <group onClick={onClick}>
+      {/* Legs */}
+      <mesh castShadow position={[-0.35, 0.6, 0]}>
+        <cylinderGeometry args={[0.3, 0.35, 1.3, 8]} />
+        {mat('#1e1212')}
+      </mesh>
+      <mesh castShadow position={[0.35, 0.6, 0]}>
+        <cylinderGeometry args={[0.3, 0.35, 1.3, 8]} />
+        {mat('#1e1212')}
+      </mesh>
+      {/* Boots */}
+      <mesh castShadow position={[-0.35, 0.05, 0.1]}>
+        <boxGeometry args={[0.55, 0.3, 0.75]} />
+        {mat('#100c0c')}
+      </mesh>
+      <mesh castShadow position={[0.35, 0.05, 0.1]}>
+        <boxGeometry args={[0.55, 0.3, 0.75]} />
+        {mat('#100c0c')}
+      </mesh>
+      {/* Torso armor */}
+      <mesh castShadow position={[0, 1.8, 0]}>
+        <cylinderGeometry args={[0.68, 0.72, 1.6, 12]} />
+        {mat(armorColor)}
+      </mesh>
+      {/* Chest plate */}
+      <mesh castShadow position={[0, 1.85, 0.5]}>
+        <boxGeometry args={[1.1, 1.4, 0.18]} />
+        {mat(plateColor)}
+      </mesh>
+      {/* Shoulder pauldrons */}
+      <mesh castShadow position={[-0.95, 2.4, 0]}>
+        <sphereGeometry args={[0.38, 10, 8]} />
+        {mat(armorColor)}
+      </mesh>
+      <mesh castShadow position={[0.95, 2.4, 0]}>
+        <sphereGeometry args={[0.38, 10, 8]} />
+        {mat(armorColor)}
+      </mesh>
+      {/* Arms */}
+      <mesh castShadow position={[-1.05, 1.8, 0]} rotation={[0, 0, 0.3]}>
+        <cylinderGeometry args={[0.25, 0.3, 1.5, 8]} />
+        {mat(armorColor)}
+      </mesh>
+      <mesh castShadow position={[1.05, 1.8, 0]} rotation={[0, 0, -0.3]}>
+        <cylinderGeometry args={[0.25, 0.3, 1.5, 8]} />
+        {mat(armorColor)}
+      </mesh>
+      {/* Neck */}
+      <mesh castShadow position={[0, 2.9, 0]}>
+        <cylinderGeometry args={[0.28, 0.3, 0.38, 8]} />
+        {mat(skinColor)}
+      </mesh>
+      {/* Head */}
+      <mesh castShadow position={[0, 3.5, 0]}>
+        <sphereGeometry args={[0.65, 12, 12]} />
+        {mat(skinColor)}
+      </mesh>
+      {/* Helmet */}
+      <mesh castShadow position={[0, 3.75, 0]}>
+        <sphereGeometry args={[0.72, 12, 10]} />
+        {mat('#1a1010')}
+      </mesh>
+      {/* Helmet brim */}
+      <mesh position={[0, 3.4, 0]}>
+        <cylinderGeometry args={[0.88, 0.88, 0.15, 20]} />
+        {mat('#2a1818')}
+      </mesh>
+      {/* Helmet crest */}
+      <mesh position={[0, 4.4, 0]}>
+        <cylinderGeometry args={[0.08, 0.14, 0.6, 6]} />
+        <meshStandardMaterial color="#901818" emissive="#601010" emissiveIntensity={0.4} />
+      </mesh>
+      {/* Red glowing eyes */}
+      <mesh position={[-0.22, 3.52, 0.55]}>
+        <sphereGeometry args={[0.12, 6, 6]} />
+        <meshStandardMaterial color="#ff1818" emissive="#ff1818" emissiveIntensity={1.8} />
+      </mesh>
+      <mesh position={[0.22, 3.52, 0.55]}>
+        <sphereGeometry args={[0.12, 6, 6]} />
+        <meshStandardMaterial color="#ff1818" emissive="#ff1818" emissiveIntensity={1.8} />
+      </mesh>
+      {/* Halberd */}
+      <mesh castShadow position={[1.3, 2.0, -0.4]} rotation={[0.15, 0, 0.1]}>
+        <cylinderGeometry args={[0.07, 0.07, 5.5, 8]} />
+        <meshStandardMaterial color="#888090" metalness={0.5} roughness={0.4} />
+      </mesh>
+      <mesh position={[1.42, 4.6, -0.85]} rotation={[0.15, 0, 0.1]}>
+        <coneGeometry args={[0.22, 1.0, 6]} />
+        <meshStandardMaterial color="#c0c0d8" metalness={0.7} roughness={0.2} />
+      </mesh>
+      {/* Ground glow ring when highlighted */}
+      {glow && (
+        <mesh position={[0, -0.55, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[1.0, 1.4, 24]} />
+          <meshBasicMaterial color="#ff4010" transparent opacity={0.5} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) {
   return (
     <group>
       {enemies.filter((enemy) => !enemy.dead).map((enemy) => {
@@ -152,15 +337,12 @@ function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) 
         const hitAge = attackFx?.enemyId === enemy.id ? Date.now() - attackFx.at : 9999;
         const hitFlash = hitAge < 220;
         return (
-          <group key={enemy.id} position={[enemy.x, -2.3, enemy.z]}>
-            <mesh castShadow onPointerDown={handleEnemyTap(enemy.id)}>
-              <cylinderGeometry args={[0.95, 1.05, 3.6, 10]} />
-              <meshStandardMaterial color={hitFlash ? '#ffd8a8' : glow ? '#ff9f66' : '#7a1f1f'} emissive={hitFlash ? '#ffcf6a' : glow ? '#ff8c52' : '#000'} emissiveIntensity={hitFlash ? 1.2 : glow ? 0.5 : 0} />
-            </mesh>
-            <mesh position={[0, 2.1, 0]} onPointerDown={handleEnemyTap(enemy.id)}>
-              <sphereGeometry args={[0.95, 16, 16]} />
-              <meshStandardMaterial color={hitFlash ? '#fff1cf' : glow ? '#ffd3bf' : '#d26d54'} emissive={hitFlash ? '#ffdb86' : '#000'} emissiveIntensity={hitFlash ? 0.85 : 0} />
-            </mesh>
+          <group key={enemy.id} position={[enemy.x, -2.4, enemy.z]}>
+            <EnemySoldier
+              glow={glow}
+              hitFlash={hitFlash}
+              onClick={(e) => { e.stopPropagation(); onEnemyTap?.(enemy.id); }}
+            />
           </group>
         );
       })}
@@ -257,92 +439,158 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
 
   return (
     <group ref={group} position={[0, 0, 12]}>
-      {/* Inner tunic */}
-      <mesh castShadow position={[0, 1, 0]}>
-        <cylinderGeometry args={[1.3, 1.1, 4.2, 12]} />
+
+      {/* ── LEGS ── */}
+      <mesh castShadow position={[-0.38, 0.55, 0]}>
+        <cylinderGeometry args={[0.28, 0.33, 1.2, 10]} />
+        <meshStandardMaterial color={palette.tunic} />
+      </mesh>
+      <mesh castShadow position={[0.38, 0.55, 0]}>
+        <cylinderGeometry args={[0.28, 0.33, 1.2, 10]} />
+        <meshStandardMaterial color={palette.tunic} />
+      </mesh>
+      {/* Boots */}
+      <mesh castShadow position={[-0.38, 0.0, 0.08]}>
+        <boxGeometry args={[0.5, 0.28, 0.72]} />
+        <meshStandardMaterial color="#2a2040" />
+      </mesh>
+      <mesh castShadow position={[0.38, 0.0, 0.08]}>
+        <boxGeometry args={[0.5, 0.28, 0.72]} />
+        <meshStandardMaterial color="#2a2040" />
+      </mesh>
+
+      {/* ── LOWER ROBE (flared) ── */}
+      <mesh castShadow position={[0, 1.1, 0]}>
+        <cylinderGeometry args={[0.72, 0.92, 1.3, 14]} />
+        <meshStandardMaterial color={palette.cloak} roughness={0.85} />
+      </mesh>
+
+      {/* ── UPPER TORSO ── */}
+      <mesh castShadow position={[0, 2.25, 0]}>
+        <cylinderGeometry args={[0.60, 0.72, 1.65, 12]} />
+        <meshStandardMaterial color={palette.cloak} roughness={0.85} />
+      </mesh>
+
+      {/* Chest collar detail */}
+      <mesh castShadow position={[0, 2.85, 0.45]}>
+        <boxGeometry args={[0.9, 0.6, 0.12]} />
         <meshStandardMaterial color={palette.tunic} />
       </mesh>
 
-      {/* Cloak / shirt */}
-      <mesh castShadow position={[0, 2.5, -0.1]}>
-        <planeGeometry args={[7, 9, 16, 16]} />
-        <meshStandardMaterial color={palette.cloak} roughness={0.9} metalness={0.05} side={THREE.DoubleSide} />
+      {/* ── SASH / BELT ── */}
+      <mesh position={[0, 1.55, 0]}>
+        <torusGeometry args={[0.78, 0.1, 8, 24]} />
+        <meshStandardMaterial color={palette.headband} metalness={0.3} roughness={0.6} />
       </mesh>
 
-      {/* Head */}
-      <mesh position={[0, 4.4, 0]} castShadow>
-        <sphereGeometry args={[1.05, 16, 16]} />
-        <meshStandardMaterial color="#f2c9a7" />
+      {/* ── ARMS ── */}
+      {/* Left arm (holding spear side) */}
+      <mesh castShadow position={[-0.95, 2.1, 0]} rotation={[0, 0, 0.32]}>
+        <cylinderGeometry args={[0.21, 0.26, 1.55, 8]} />
+        <meshStandardMaterial color={palette.cloak} roughness={0.85} />
+      </mesh>
+      {/* Left hand */}
+      <mesh castShadow position={[-1.45, 1.35, 0]}>
+        <sphereGeometry args={[0.22, 8, 8]} />
+        <meshStandardMaterial color="#f2c9a0" />
+      </mesh>
+      {/* Right arm (raised) */}
+      <mesh castShadow position={[0.92, 2.3, -0.2]} rotation={[-0.5, 0, -0.25]}>
+        <cylinderGeometry args={[0.21, 0.26, 1.55, 8]} />
+        <meshStandardMaterial color={palette.cloak} roughness={0.85} />
+      </mesh>
+      {/* Right hand */}
+      <mesh castShadow position={[1.1, 3.1, -0.85]}>
+        <sphereGeometry args={[0.22, 8, 8]} />
+        <meshStandardMaterial color="#f2c9a0" />
       </mesh>
 
-      {/* Hat brim */}
-      <mesh position={[0, 5, -0.3]} rotation={[0.1, 0, 0]}>
-        <cylinderGeometry args={[2.8, 2.8, 0.35, 32]} />
+      {/* ── NECK ── */}
+      <mesh castShadow position={[0, 3.22, 0]}>
+        <cylinderGeometry args={[0.26, 0.3, 0.42, 8]} />
+        <meshStandardMaterial color="#f2c9a0" />
+      </mesh>
+
+      {/* ── HEAD ── */}
+      <mesh castShadow position={[0, 3.85, 0]}>
+        <sphereGeometry args={[0.72, 14, 14]} />
+        <meshStandardMaterial color="#f2c9a0" />
+      </mesh>
+      {/* Eyes */}
+      <mesh position={[-0.24, 3.92, 0.62]}>
+        <sphereGeometry args={[0.1, 6, 6]} />
+        <meshStandardMaterial color="#1a1030" />
+      </mesh>
+      <mesh position={[0.24, 3.92, 0.62]}>
+        <sphereGeometry args={[0.1, 6, 6]} />
+        <meshStandardMaterial color="#1a1030" />
+      </mesh>
+
+      {/* ── HAT BRIM ── */}
+      <mesh castShadow position={[0, 4.46, -0.18]} rotation={[0.1, 0, 0]}>
+        <cylinderGeometry args={[1.55, 1.55, 0.18, 28]} />
         <meshStandardMaterial color={palette.hatBrim} />
       </mesh>
-
-      {/* Hat crown */}
-      <mesh position={[0, 5.8, -0.3]} rotation={[0.1, 0, 0]}>
-        <coneGeometry args={[1.9, 2.6, 24]} />
+      {/* Hat crown (cone) */}
+      <mesh castShadow position={[0, 5.18, -0.18]} rotation={[0.1, 0, 0]}>
+        <coneGeometry args={[1.05, 1.85, 20]} />
         <meshStandardMaterial color={palette.hatCrown} />
       </mesh>
 
-      {/* Sash / headband */}
-      <mesh position={[0, 2.2, 0]}>
-        <torusGeometry args={[1.6, 0.25, 12, 32]} />
-        <meshStandardMaterial color={palette.headband} />
+      {/* ── SPEAR SHAFT ── */}
+      <mesh castShadow position={[0.6, 3.0, -0.5]} rotation={[-0.48, 0.18, 0.12]}>
+        <cylinderGeometry args={[0.07, 0.07, 7.5, 8]} />
+        <meshStandardMaterial color="#c8c0a8" metalness={0.15} roughness={0.7} />
       </mesh>
-
-      {/* Spear */}
-      <mesh position={[0.4, 4.2, -0.8]} rotation={[Math.PI / 10, -Math.PI / 4, Math.PI / 2]}>
-        <cylinderGeometry args={[0.12, 0.12, 16, 12]} />
-        <meshStandardMaterial color="#d8d0c0" />
+      {/* Spear tip */}
+      <mesh position={[0.75, 6.6, -2.55]} rotation={[-0.48, 0.18, 0.12]}>
+        <coneGeometry args={[0.2, 0.9, 6]} />
+        <meshStandardMaterial color={palette.spearTip} metalness={0.6} roughness={0.2} />
       </mesh>
-      <mesh position={[7.4, 7.4, -3.4]} rotation={[Math.PI / 10, -Math.PI / 4, Math.PI / 2]}>
-        <coneGeometry args={[0.45, 1.8, 8]} />
-        <meshStandardMaterial color={palette.spearTip} />
+      {/* Tassel knot */}
+      <mesh position={[0.45, 1.5, 0.3]}>
+        <sphereGeometry args={[0.18, 8, 8]} />
+        <meshStandardMaterial color={palette.tasselTop} emissive={palette.tasselTop} emissiveIntensity={0.3} />
       </mesh>
-
-      {/* Tassel */}
-      <mesh position={[-6.6, 6.1, 1]}>
-        <sphereGeometry args={[0.7, 12, 12]} />
-        <meshStandardMaterial color={palette.tasselTop} emissive={palette.tasselTop} emissiveIntensity={0.2} />
-      </mesh>
-      <mesh position={[-5.4, 6.5, 1]}>
-        <cylinderGeometry args={[0.05, 0.05, 2.6, 8]} />
+      {/* Tassel cord */}
+      <mesh position={[0.45, 1.1, 0.3]}>
+        <cylinderGeometry args={[0.04, 0.04, 0.7, 6]} />
         <meshStandardMaterial color={palette.tasselCord} />
       </mesh>
-      <mesh position={[-4.2, 7.5, 1]}>
-        <sphereGeometry args={[0.55, 12, 12]} />
+      {/* Tassel bottom */}
+      <mesh position={[0.45, 0.7, 0.3]}>
+        <sphereGeometry args={[0.14, 8, 8]} />
         <meshStandardMaterial color={palette.tasselBottom} />
       </mesh>
 
       {accessories.lei && (
-        <mesh position={[0, 3.3, 0]}>
-          <torusGeometry args={[1.8, 0.35, 12, 24]} />
+        <mesh position={[0, 2.6, 0]}>
+          <torusGeometry args={[1.1, 0.22, 10, 22]} />
           <meshStandardMaterial color="#ff7eb9" emissive="#ff9bcf" emissiveIntensity={0.35} />
         </mesh>
       )}
 
       {accessories.sunglasses && (
         <>
-          <mesh position={[0, 4.4, 0.9]}>
-            <boxGeometry args={[2.4, 0.55, 0.25]} />
-            <meshStandardMaterial color="#111" metalness={0.2} roughness={0.2} />
-          </mesh>
-          <mesh position={[0, 4.4, 0.9]}>
-            <torusGeometry args={[1.5, 0.04, 8, 24]} />
-            <meshStandardMaterial color="#333" />
+          <mesh position={[0, 3.88, 0.68]}>
+            <boxGeometry args={[1.3, 0.35, 0.12]} />
+            <meshStandardMaterial color="#111" metalness={0.4} roughness={0.2} />
           </mesh>
         </>
       )}
 
       {flowerOffsets.map((flower) => (
-        <mesh key={flower.key} position={[flower.position[0], flower.position[1], flower.position[2]]}>
-          <sphereGeometry args={[0.3, 8, 8]} />
+        <mesh key={flower.key} position={[flower.position[0] * 0.55, flower.position[1] * 0.55, flower.position[2]]}>
+          <sphereGeometry args={[0.14, 6, 6]} />
           <meshStandardMaterial color={flower.color} />
         </mesh>
       ))}
+
+      {/* Ground shadow disc */}
+      <mesh position={[0, -0.55, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.9, 16]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.18} />
+      </mesh>
     </group>
   );
 }

@@ -24,13 +24,29 @@ const WORLD_BOUNDS = {
 };
 
 // Must match Terrain geometry formula exactly
-function getTerrainHeight(x, z) {
+let terrainChapter = 1;
+export function setTerrainChapter(ch) {
+  terrainChapter = ch;
+}
+
+function defaultTerrainHeight(x, z) {
   return (
     Math.sin(x * 0.08) * 2.8 +
     Math.cos(z * 0.05) * 1.8 +
     Math.cos((x + z) * 0.03) * 1.0 +
     Math.sin(x * 0.02 + z * 0.015) * 4.0
-  ) - 3.5; // terrain is positioned at y=-3.5
+  ) - 3.5;
+}
+
+function chapter2TerrainHeight(x, z) {
+  const lowWaves = Math.sin(x * 0.018) * 1.2 + Math.cos(z * 0.02) * 1.0;
+  const ashRidges = Math.sin((x + z) * 0.01) * 0.8 + Math.cos((x - z) * 0.008) * 0.6;
+  const crater = Math.exp(-((x + 12) ** 2 + (z + 6) ** 2) / 2600) * 1.8;
+  return (lowWaves * 0.7 + ashRidges * 0.9 + crater) - 3.4;
+}
+
+function getTerrainHeight(x, z) {
+  return terrainChapter === 2 ? chapter2TerrainHeight(x, z) : defaultTerrainHeight(x, z);
 }
 
 // Solid obstacle cylinders: [cx, cz, radius, height]
@@ -2014,11 +2030,12 @@ function BurnedTerrain() {
     const pos = g.attributes.position;
     const colors = [];
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i); const y = pos.getY(i);
-      const h = Math.sin(x * 0.08) * 2.8 + Math.cos(y * 0.05) * 1.8 + Math.cos((x + y) * 0.03) * 1.0 + Math.sin(x * 0.02 + y * 0.015) * 4.0;
-      pos.setZ(i, h);
+      const x = pos.getX(i);
+      const z = pos.getY(i);
+      const worldH = chapter2TerrainHeight(x, z);
+      pos.setZ(i, worldH + 3.5);
       // Burned brown/char color but brighter so gameplay readable
-      const t = THREE.MathUtils.clamp((h + 4) / 10, 0, 1);
+      const t = THREE.MathUtils.clamp((worldH + 5) / 8, 0, 1);
       const burn = 0.55 + Math.random() * 0.25; // char variation
       colors.push(burn * (0.35 + t * 0.22), burn * (0.24 + t * 0.18), burn * (0.14 + t * 0.12));
     }
@@ -2247,6 +2264,9 @@ function Horse({ position, isMounted, heroRef }) {
 export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos, chapter }) {
   const mobile = isMobile();
   const bgColor = chapter === 2 ? '#1a0808' : '#7ab8e8';
+  useEffect(() => {
+    setTerrainChapter(chapter);
+  }, [chapter]);
   return (
     <Canvas
       fallback={<div style={{width:'100%',height:'100%',background:'#0a1520',display:'flex',alignItems:'center',justifyContent:'center',color:'#d9b36b',fontFamily:'serif',fontSize:'18px'}}>Loading...</div>}

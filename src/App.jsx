@@ -13,6 +13,7 @@ import {
   tryAcceptQuest,
 } from './core/quests/questSystem';
 import { HERO_SKINS } from './core/hero/skins';
+import VictoryBanquet from './VictoryBanquet';
 import { createEnemies, damageEnemy, knockbackEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
 import { getLevel, getXpProgress, getXpForNext, getStats, SHOP_UPGRADES } from './core/hero/progression';
 
@@ -109,6 +110,8 @@ export default function App() {
   const [highlightedNpcId, setHighlightedNpcId] = useState(null);
   const [heroSkinIndex, setHeroSkinIndex] = useState(0);
   const [showTavernScene, setShowTavernScene] = useState(false);
+  const [showVictoryBanquet, setShowVictoryBanquet] = useState(false);
+  const prevStage = useRef(null);
   const [mobileMove, setMobileMove] = useState({ forward: false, backward: false, left: false, right: false });
   const [slotCooldowns, setSlotCooldowns] = useState({});
   const [interactRadius, setInteractRadius] = useState(6);
@@ -144,6 +147,15 @@ export default function App() {
 
   const openTavernScene = useCallback(() => setShowTavernScene(true), []);
   const closeTavernScene = useCallback(() => setShowTavernScene(false), []);
+
+  // Trigger victory banquet when chapter completes
+  useEffect(() => {
+    const stage = story.chapterState.stage;
+    if (prevStage.current !== 'return_songjiang' && stage === 'complete') {
+      setTimeout(() => setShowVictoryBanquet(true), 800);
+    }
+    prevStage.current = stage;
+  }, [story.chapterState.stage]);
 
   const playerLevel = useMemo(() => getLevel(combatXp), [combatXp]);
   const xpProgress  = useMemo(() => getXpProgress(combatXp), [combatXp]);
@@ -1135,6 +1147,10 @@ export default function App() {
             <button className="shop-close" onClick={() => setShopOpen(false)}>Close</button>
           </div>
         </div>
+      )}
+
+      {showVictoryBanquet && (
+        <VictoryBanquet onClose={() => setShowVictoryBanquet(false)} gold={hud.gold} heroes={hud.heroes} />
       )}
 
       {showTavernScene && (

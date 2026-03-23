@@ -8,6 +8,9 @@
   justify-content: center;
   animation: banquet-fade-in 1.2s ease forwards;
 }
+.banquet-overlay.chapter-two {
+  background: radial-gradient(circle at center, rgba(60,20,10,0.95), #050204 85%);
+}
 
 @keyframes banquet-fade-in {
   from { opacity: 0; }
@@ -27,6 +30,9 @@
   background: #000;
   z-index: 10;
   pointer-events: none;
+}
+.banquet-overlay.chapter-two .banquet-bars {
+  background: #050203;
 }
 .banquet-bars.top    { top: 0; }
 .banquet-bars.bottom { bottom: 0; }
@@ -70,6 +76,9 @@
   pointer-events: none;
   transition: opacity 0.8s ease;
   z-index: 30;
+}
+.banquet-overlay.chapter-two .banquet-title-card {
+  background: rgba(5, 2, 4, 0.82);
 }
 .banquet-title-card.show {
   opacity: 1;

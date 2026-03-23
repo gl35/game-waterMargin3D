@@ -227,6 +227,115 @@ export class WorldScene extends Phaser.Scene {
     this.add.image(6 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(2.0);
     this.add.image(10 * tileSize, 5 * tileSize, this.tx('building')).setOrigin(0).setScale(1.7);
 
+    // --- Ground patches: moss + dirt scattered on grass tiles ---
+    const groundPatches = [
+      { key: 'prop_moss', positions: [[8,18],[14,22],[22,12],[32,8],[40,18],[28,36],[18,40],[44,26],[10,30]] },
+      { key: 'prop_dirt', positions: [[6,20],[17,10],[38,14],[25,38],[42,22],[12,44],[33,28]] },
+    ];
+    groundPatches.forEach(({ key, positions }) => {
+      positions.forEach(([gx, gy]) => {
+        if (this.mapData[gy]?.[gx] !== 0) return;
+        this.add.image(gx * tileSize + 14, gy * tileSize + 12, key)
+          .setDepth(1)
+          .setAlpha(Phaser.Math.FloatBetween(0.6, 0.9))
+          .setScale(Phaser.Math.FloatBetween(0.8, 1.3));
+      });
+    });
+
+    // --- Bamboo groves ---
+    const bambooSpots = [
+      [18,6],[19,6],[17,7],[20,7],[18,8],[42,10],[43,10],[42,11],[44,11],[43,9],
+      [8,38],[9,38],[8,39],[10,39],[9,37],
+    ];
+    bambooSpots.forEach(([bx, by]) => {
+      if (this.mapData[by]?.[bx] !== 0) return;
+      this.add.image(bx * tileSize + Phaser.Math.Between(-4, 4), by * tileSize + Phaser.Math.Between(-4, 4), 'prop_bamboo')
+        .setDepth(Phaser.Math.Between(6, 9))
+        .setScale(Phaser.Math.FloatBetween(0.7, 1.1));
+    });
+
+    // --- Fence rows along some map edges (decorative) ---
+    for (let fx = 4; fx <= 14; fx++) {
+      if (this.mapData[2]?.[fx] === 0) {
+        this.add.image(fx * tileSize + 16, 2 * tileSize + 8, 'prop_fence')
+          .setDepth(5)
+          .setScale(1.1);
+      }
+    }
+    for (let fy = 4; fy <= 12; fy++) {
+      if (this.mapData[fy]?.[4] === 0) {
+        this.add.image(4 * tileSize + 8, fy * tileSize + 16, 'prop_fence')
+          .setDepth(5)
+          .setScale(1.0)
+          .setRotation(Math.PI / 2);
+      }
+    }
+
+    // --- Flower patches near the stronghold zone ---
+    const flowerSpots = [
+      [6,16],[7,17],[8,15],[9,16],[5,18],[10,17],
+      [13,7],[14,8],[12,8],[15,7],
+    ];
+    flowerSpots.forEach(([flx, fly]) => {
+      if (this.mapData[fly]?.[flx] !== 0) return;
+      this.add.image(flx * tileSize + Phaser.Math.Between(0, 8), fly * tileSize + Phaser.Math.Between(4, 12), 'prop_flower')
+        .setDepth(4)
+        .setScale(Phaser.Math.FloatBetween(0.85, 1.2))
+        .setAlpha(Phaser.Math.FloatBetween(0.8, 1.0));
+    });
+
+    // --- Well (one near the stronghold) ---
+    this.add.image(11 * tileSize + 16, 8 * tileSize + 16, 'prop_well').setDepth(8).setScale(1.4);
+
+    // --- Lantern posts flanking the main building ---
+    this.add.image(5 * tileSize + 8, 7 * tileSize, 'prop_lanternpost').setDepth(9).setScale(1.5);
+    this.add.image(14 * tileSize + 8, 7 * tileSize, 'prop_lanternpost').setDepth(9).setScale(1.5);
+    this.add.image(9 * tileSize, 5 * tileSize + 8, 'prop_lanternpost').setDepth(9).setScale(1.3);
+
+    // --- Torch glow halos near buildings (animated in createWorldAnimations) ---
+    this.torchGlows = [];
+    const torchPos = [
+      [6 * tileSize + 20, 5 * tileSize + 50],
+      [9 * tileSize + 90, 5 * tileSize + 50],
+      [5 * tileSize + 8, 7 * tileSize + 10],
+      [14 * tileSize + 20, 7 * tileSize + 10],
+    ];
+    torchPos.forEach(([tx, ty]) => {
+      const glow = this.add.ellipse(tx, ty, 48, 32, 0xff8820, 0.12).setDepth(3);
+      this.torchGlows.push(glow);
+      this.tweens.add({
+        targets: glow,
+        scaleX: { from: 1, to: 1.18 },
+        scaleY: { from: 1, to: 1.12 },
+        alpha: { from: 0.12, to: 0.22 },
+        duration: 700 + Math.random() * 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: Math.random() * 600,
+      });
+    });
+
+    // --- Ambient fireflies / dust motes ---
+    this.fireflies = [];
+    for (let i = 0; i < 24; i++) {
+      const ffx = Phaser.Math.Between(3 * tileSize, 47 * tileSize);
+      const ffy = Phaser.Math.Between(3 * tileSize, 47 * tileSize);
+      const ff = this.add.ellipse(ffx, ffy, 3, 3, 0xccffaa, 0.0).setDepth(15);
+      this.fireflies.push({ obj: ff, baseX: ffx, baseY: ffy, phase: Math.random() * Math.PI * 2, speed: 0.3 + Math.random() * 0.5 });
+      this.tweens.add({
+        targets: ff,
+        alpha: { from: 0, to: 0.7 },
+        scaleX: { from: 0.5, to: 1.4 },
+        scaleY: { from: 0.5, to: 1.4 },
+        duration: 900 + Math.random() * 600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: Math.random() * 2000,
+      });
+    }
+
     this.physics.world.setBounds(0, 0, mapWidth * tileSize, mapHeight * tileSize);
   }
 
@@ -1630,6 +1739,28 @@ export class WorldScene extends Phaser.Scene {
     if (this.playerShadow) {
       this.playerShadow.setPosition(this.player.x, this.player.y + 18);
       this.playerShadow.setScale(1 + Math.sin(time * 0.01) * 0.03, 1);
+    }
+
+    // Player walk bob
+    const isMoving = Math.abs(vx) > 1 || Math.abs(vy) > 1;
+    if (isMoving && !this.playerDown) {
+      const bobY = Math.sin(time * 0.016) * 1.4;
+      const tiltX = 1 + Math.sin(time * 0.016) * 0.03;
+      this.player.setY(this.player.y + bobY * 0.06);
+      this.player.setScale(tiltX * 1.8, 1.8 - Math.abs(bobY) * 0.012);
+    } else if (!this.playerDown) {
+      this.player.setScale(1.8, 1.8);
+    }
+
+    // Firefly drift
+    if (this.fireflies) {
+      this.fireflies.forEach((ff) => {
+        ff.phase += ff.speed * 0.012;
+        ff.obj.setPosition(
+          ff.baseX + Math.sin(ff.phase) * 18,
+          ff.baseY + Math.cos(ff.phase * 0.7) * 12,
+        );
+      });
     }
 
     this.npcs.forEach((npc) => {

@@ -1075,8 +1075,206 @@ export class BootScene extends Phaser.Scene {
     });
   }
 
+  generateProps() {
+    // --- Bamboo stalk (20×52) ---
+    this.makeCanvasTexture('prop_bamboo', 20, 52, (ctx, w, h) => {
+      const segH = 10;
+      const colors = ['#5daf68', '#4a9a55', '#3d8848', '#56a862'];
+      for (let s = 0; s < 5; s++) {
+        const sy = h - (s + 1) * segH;
+        const g = ctx.createLinearGradient(2, sy, w - 2, sy + segH);
+        g.addColorStop(0, colors[s % colors.length]);
+        g.addColorStop(1, '#2d6838');
+        ctx.fillStyle = g;
+        ctx.fillRect(7, sy, 6, segH - 1);
+        // Node ring
+        ctx.fillStyle = '#8eda90';
+        ctx.fillRect(6, sy + segH - 2, 8, 2);
+      }
+      // Leaves
+      const drawLeaf = (lx, ly, angle) => {
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(angle);
+        ctx.fillStyle = '#6acc78';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 7, 2.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#3d8848';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(7, 0); ctx.stroke();
+        ctx.restore();
+      };
+      drawLeaf(5, 5, -0.5);
+      drawLeaf(14, 8, 0.6);
+      drawLeaf(3, 16, -0.7);
+      drawLeaf(16, 20, 0.4);
+    });
+
+    // --- Fence post (12×24) ---
+    this.makeCanvasTexture('prop_fence', 12, 24, (ctx, w, h) => {
+      // Post
+      const pg = ctx.createLinearGradient(1, 0, w - 1, 0);
+      pg.addColorStop(0, '#c8a870');
+      pg.addColorStop(0.5, '#e8c888');
+      pg.addColorStop(1, '#a88850');
+      ctx.fillStyle = pg;
+      ctx.fillRect(4, 4, 4, h - 4);
+      // Cap
+      ctx.fillStyle = '#ead898';
+      ctx.beginPath();
+      ctx.moveTo(3, 4); ctx.lineTo(6, 0); ctx.lineTo(9, 4);
+      ctx.closePath(); ctx.fill();
+      // Rail holes (horizontal beam stubs)
+      ctx.strokeStyle = '#a88850';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, 9); ctx.lineTo(12, 9); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 17); ctx.lineTo(12, 17); ctx.stroke();
+      // Wood grain
+      ctx.strokeStyle = 'rgba(120,80,30,0.3)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(5, 5); ctx.lineTo(5, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(7, 5); ctx.lineTo(7, h); ctx.stroke();
+    });
+
+    // --- Flower patch (24×16) ---
+    this.makeCanvasTexture('prop_flower', 24, 16, (ctx, w, h) => {
+      const drawFlower = (fx, fy, petalColor, centerColor) => {
+        ctx.fillStyle = '#5a9a50';
+        ctx.fillRect(fx, fy + 6, 2, 6);
+        const petals = 5;
+        for (let i = 0; i < petals; i++) {
+          const a = (Math.PI * 2 * i) / petals;
+          ctx.fillStyle = petalColor;
+          ctx.globalAlpha = 0.88;
+          ctx.beginPath();
+          ctx.ellipse(fx + 1 + Math.cos(a) * 3.5, fy + 3 + Math.sin(a) * 3.5, 2.5, 1.8, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = centerColor;
+        ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.arc(fx + 1, fy + 3, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffcc';
+        ctx.beginPath(); ctx.arc(fx + 1, fy + 3, 1, 0, Math.PI * 2); ctx.fill();
+      };
+      drawFlower(3, 2, '#ff88aa', '#dd2244');
+      drawFlower(12, 0, '#ffcc44', '#cc8800');
+      drawFlower(19, 3, '#cc88ff', '#8844cc');
+    });
+
+    // --- Well (32×36) ---
+    this.makeCanvasTexture('prop_well', 32, 36, (ctx, w, h) => {
+      // Stone base
+      const baseG = ctx.createLinearGradient(0, 20, 0, h);
+      baseG.addColorStop(0, '#b0a898');
+      baseG.addColorStop(1, '#807870');
+      ctx.fillStyle = baseG;
+      ctx.beginPath();
+      ctx.ellipse(16, 32, 14, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillRect(2, 20, 28, 14);
+      // Stone rings
+      ctx.strokeStyle = '#908878';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.5;
+      for (let ry = 22; ry < 34; ry += 4) {
+        ctx.beginPath(); ctx.moveTo(2, ry); ctx.lineTo(30, ry); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // Water inside
+      ctx.fillStyle = '#4ab8d8';
+      ctx.beginPath(); ctx.ellipse(16, 21, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#80d8f0';
+      ctx.beginPath(); ctx.ellipse(14, 20, 5, 2, -0.3, 0, Math.PI * 2); ctx.fill();
+      // Posts
+      ctx.fillStyle = '#9a7040';
+      ctx.fillRect(4, 4, 4, 20);
+      ctx.fillRect(24, 4, 4, 20);
+      // Crossbeam
+      ctx.fillStyle = '#b88050';
+      ctx.fillRect(4, 4, 24, 4);
+      // Rope
+      ctx.strokeStyle = '#c8a858';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(16, 7); ctx.lineTo(16, 18); ctx.stroke();
+      // Bucket
+      ctx.fillStyle = '#8a5030';
+      ctx.fillRect(13, 14, 6, 5);
+      ctx.strokeStyle = '#c8a858'; ctx.lineWidth = 0.8;
+      ctx.strokeRect(13, 14, 6, 5);
+    });
+
+    // --- Lantern post (16×48) ---
+    this.makeCanvasTexture('prop_lanternpost', 16, 48, (ctx, w, h) => {
+      // Post
+      const pg = ctx.createLinearGradient(5, 0, 11, 0);
+      pg.addColorStop(0, '#806040');
+      pg.addColorStop(0.5, '#b08860');
+      pg.addColorStop(1, '#705030');
+      ctx.fillStyle = pg;
+      ctx.fillRect(6, 12, 4, h - 12);
+      // Arm
+      ctx.strokeStyle = '#a07050';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(8, 14); ctx.lineTo(12, 10); ctx.stroke();
+      // Lantern body
+      ctx.fillStyle = '#cc1818';
+      ctx.beginPath(); ctx.ellipse(12, 6, 4, 6, 0, 0, Math.PI * 2); ctx.fill();
+      // Lantern glow inner
+      ctx.fillStyle = '#ff8840';
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath(); ctx.ellipse(12, 6, 2.5, 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // Glow corona
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#ffcc60';
+      ctx.beginPath(); ctx.ellipse(12, 6, 9, 11, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // Tassel
+      ctx.strokeStyle = '#ffcc00';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(12, 11); ctx.lineTo(10, 16); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(12, 11); ctx.lineTo(12, 16); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(12, 11); ctx.lineTo(14, 16); ctx.stroke();
+    });
+
+    // --- Ground patch: moss (24×16) ---
+    this.makeCanvasTexture('prop_moss', 24, 16, (ctx, w, h) => {
+      ctx.fillStyle = '#4a8840';
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.ellipse(12, 8, 11, 7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#60aa58';
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath(); ctx.ellipse(10, 7, 7, 5, -0.2, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = '#88cc70';
+      for (let i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.arc(4 + i * 2.5, 6 + Math.sin(i) * 3, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    });
+
+    // --- Ground patch: dry dirt (28×18) ---
+    this.makeCanvasTexture('prop_dirt', 28, 18, (ctx, w, h) => {
+      ctx.fillStyle = '#c8a870';
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath(); ctx.ellipse(14, 9, 13, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e0c090';
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath(); ctx.ellipse(12, 8, 8, 5, -0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#b09060';
+      for (let i = 0; i < 10; i++) {
+        ctx.fillRect(2 + (i * 3) % 24, 3 + (i * 2) % 12, 2, 1);
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
+
   generateAssets() {
     Object.values(STYLE_DEFS).forEach((style) => this.generateStyleAssets(style));
+    this.generateProps();
   }
 
   create() {

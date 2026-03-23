@@ -1949,11 +1949,11 @@ function NightSky() {
     const c = document.createElement('canvas'); c.width = 4; c.height = 256;
     const ctx = c.getContext('2d');
     const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0,    '#000000');
-    g.addColorStop(0.3,  '#050508');
-    g.addColorStop(0.65, '#0e0508');
-    g.addColorStop(0.85, '#2a0a04');
-    g.addColorStop(1,    '#5a1a04');
+    g.addColorStop(0,    '#08070b');
+    g.addColorStop(0.3,  '#12060c');
+    g.addColorStop(0.65, '#250a08');
+    g.addColorStop(0.85, '#3a1208');
+    g.addColorStop(1,    '#6a240a');
     ctx.fillStyle = g; ctx.fillRect(0, 0, 4, 256);
     const tex = new THREE.CanvasTexture(c); tex.needsUpdate = true; return tex;
   }, []);
@@ -1983,11 +1983,11 @@ function NightSky() {
       {/* Horizon fire glow */}
       <mesh position={[0, -20, -200]}>
         <planeGeometry args={[800, 80]} />
-        <meshBasicMaterial color="#ff3300" transparent opacity={0.22} />
+        <meshBasicMaterial color="#ff4414" transparent opacity={0.38} />
       </mesh>
       <mesh position={[0, -10, -200]}>
         <planeGeometry args={[600, 40]} />
-        <meshBasicMaterial color="#ff8800" transparent opacity={0.14} />
+        <meshBasicMaterial color="#ff9930" transparent opacity={0.24} />
       </mesh>
       {/* Moon */}
       <mesh position={[-80, 160, -300]}>
@@ -2017,10 +2017,10 @@ function BurnedTerrain() {
       const x = pos.getX(i); const y = pos.getY(i);
       const h = Math.sin(x * 0.08) * 2.8 + Math.cos(y * 0.05) * 1.8 + Math.cos((x + y) * 0.03) * 1.0 + Math.sin(x * 0.02 + y * 0.015) * 4.0;
       pos.setZ(i, h);
-      // Burned brown/char color
+      // Burned brown/char color but brighter so gameplay readable
       const t = THREE.MathUtils.clamp((h + 4) / 10, 0, 1);
-      const burn = 0.3 + Math.random() * 0.15; // char variation
-      colors.push(burn * (0.22 + t * 0.18), burn * (0.15 + t * 0.12), burn * (0.08 + t * 0.06));
+      const burn = 0.55 + Math.random() * 0.25; // char variation
+      colors.push(burn * (0.35 + t * 0.22), burn * (0.24 + t * 0.18), burn * (0.14 + t * 0.12));
     }
     pos.needsUpdate = true;
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -2038,18 +2038,18 @@ function BurningVillageScene() {
   return (
     <>
       {/* Playable darkness — enough to see but still feels like night */}
-      <ambientLight intensity={0.45} color="#331408" />
-      <directionalLight color="#ff8844" intensity={1.2} position={[20, 60, 10]} castShadow
-        shadow-mapSize-width={512} shadow-mapSize-height={512} />
+      <ambientLight intensity={0.75} color="#4a1c10" />
+      <directionalLight color="#ffb074" intensity={1.6} position={[25, 60, 14]} castShadow
+        shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
       {/* Moon fill — cool blue from above */}
-      <directionalLight color="#aaccff" intensity={0.55} position={[-30, 80, -20]} />
-      <hemisphereLight args={[0x331408, 0x180804, 0.5]} />
+      <directionalLight color="#c8ddff" intensity={0.85} position={[-30, 70, -30]} />
+      <hemisphereLight args={[0x4a1c10, 0x1d0c05, 0.65]} />
       <NightSky />
       <BurnedTerrain />
       {/* Path — ash-covered */}
       <mesh rotation-x={-Math.PI / 2} position={[0, -3.28, 0]} receiveShadow>
         <planeGeometry args={[8, 520]} />
-        <meshStandardMaterial color="#1a1410" roughness={0.95} />
+        <meshStandardMaterial color="#3b2a20" roughness={0.9} />
       </mesh>
       {/* Burning buildings scattered across the village */}
       <BurningBuilding position={[-18, 0, 5]}   scale={1.2} fireColor="#ff5500" />
@@ -2074,19 +2074,28 @@ function BurningVillageScene() {
           <pointLight color="#ff6600" intensity={2} distance={12} decay={2} position={[0,1,0]} />
         </group>
       ))}
+      {/* Soft ground haze adds brightness */}
+      <mesh rotation-x={-Math.PI/2} position={[0, -2.8, 0]}>
+        <planeGeometry args={[600, 600]} />
+        <meshBasicMaterial color="#ffb080" transparent opacity={0.05} />
+      </mesh>
       {/* Ember particles rising */}
       <EmberParticles />
       {/* Wide area fill from fires — makes whole map playable */}
-      <pointLight color="#ff4400" intensity={6} distance={180} decay={0.5} position={[0, 20, 0]} />
-      <pointLight color="#ff6620" intensity={4} distance={140} decay={0.6} position={[-40, 15, -60]} />
-      <pointLight color="#ff5500" intensity={4} distance={130} decay={0.6} position={[50, 12, -40]} />
-      <pointLight color="#ff4400" intensity={3} distance={120} decay={0.7} position={[0, 10, 40]} />
+      <pointLight color="#ff5a20" intensity={8} distance={220} decay={0.45} position={[0, 24, 0]} />
+      <pointLight color="#ff7a30" intensity={6} distance={180} decay={0.5} position={[-40, 18, -60]} />
+      <pointLight color="#ff6620" intensity={5} distance={170} decay={0.5} position={[50, 16, -40]} />
+      <pointLight color="#ff5515" intensity={4.5} distance={150} decay={0.55} position={[0, 12, 40]} />
     </>
   );
 }
 
 function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos, chapter }) {
   const heroRef = useRef();
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.toneMappingExposure = chapter === 2 ? 1.7 : 1.1;
+  }, [chapter, gl]);
   const dragonActive = superFx?.type === 'dragon' && Date.now() - superFx.at < 1200;
   const stormActive  = superFx?.type === 'storm'  && Date.now() - superFx.at < 1400;
   const shadowActive = superFx?.type === 'shadow' && Date.now() - superFx.at < 1100;

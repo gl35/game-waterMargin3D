@@ -406,6 +406,38 @@ html, body, #root {
   50%       { opacity: 0.28; transform: scale(1.05); }
 }
 
+/* ── MOBILE: super bar moves to left side, above joystick ── */
+@media (max-width: 932px), (pointer: coarse) {
+  .super-bar {
+    /* stack vertically on the left, above the joystick */
+    left: calc(8px + var(--safe-left));
+    transform: none;
+    bottom: calc(138px + var(--safe-bottom));
+    flex-direction: column;
+    gap: 7px;
+    align-items: flex-start;
+  }
+
+  .super-btn {
+    width: 64px;
+    height: 52px;
+    border-radius: 12px;
+    border-width: 1.5px;
+  }
+
+  .super-icon {
+    font-size: 18px;
+  }
+
+  .super-name {
+    font-size: 7.5px;
+  }
+
+  .super-cd {
+    font-size: 11px;
+  }
+}
+
 .hud-bottom {
   position: absolute;
   left: 50%;

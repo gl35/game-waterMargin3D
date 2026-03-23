@@ -341,11 +341,11 @@ export class WorldScene extends Phaser.Scene {
 
   createPlayer() {
     this.player = this.physics.add.sprite(9 * 32 + 16, 16 * 32, this.tx('player'));
-    this.player.setScale(1.8);
+    this.player.setScale(1.1);
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(10);
-    this.player.body.setSize(24, 24);
-    this.player.body.setOffset(4, 8);
+    this.player.body.setSize(28, 32);
+    this.player.body.setOffset(10, 20);
 
     this.playerNameTag = this.add.text(0, 0, '勇士', {
       fontSize: '10px',
@@ -371,7 +371,7 @@ export class WorldScene extends Phaser.Scene {
             ? this.tx('tonkey')
             : this.tx('npc');
       const npc = this.physics.add.sprite(data.x * 32 + 16, data.y * 32 + 16, npcTexture);
-      npc.setScale(1.65);
+      npc.setScale(1.0);
       npc.setImmovable(true);
       npc.setDepth(9);
       npc.npcData = data;
@@ -398,7 +398,7 @@ export class WorldScene extends Phaser.Scene {
 
   createEnemy(data) {
     const enemy = this.physics.add.sprite(data.x * 32, data.y * 32, this.tx('enemy'));
-    enemy.setScale(1.65);
+    enemy.setScale(1.0);
     enemy.setDepth(9);
     enemy.enemyId = data.id;
     enemy.displayName = data.name;
@@ -421,7 +421,7 @@ export class WorldScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(13);
 
     if (enemy.isMiniBoss) {
-      enemy.setScale(2.1);
+      enemy.setScale(1.5);
       enemy.setTint(0xff9999);
       enemy.enraged = false;
       enemy.chargeState = 'idle';
@@ -954,7 +954,7 @@ export class WorldScene extends Phaser.Scene {
   setupCamera() {
     this.cameras.main.setBounds(0, 0, 50 * 32, 50 * 32);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setZoom(0.8);
+    this.cameras.main.setZoom(1.4);
   }
 
   setupInput() {
@@ -1699,6 +1699,7 @@ export class WorldScene extends Phaser.Scene {
         scaleY: 1.25,
         yoyo: true,
         duration: 90,
+        onComplete: () => this.player.setScale(1.1),
       });
     }
 
@@ -1747,9 +1748,9 @@ export class WorldScene extends Phaser.Scene {
       const bobY = Math.sin(time * 0.016) * 1.4;
       const tiltX = 1 + Math.sin(time * 0.016) * 0.03;
       this.player.setY(this.player.y + bobY * 0.06);
-      this.player.setScale(tiltX * 1.8, 1.8 - Math.abs(bobY) * 0.012);
+      this.player.setScale(tiltX * 1.1, 1.1 - Math.abs(bobY) * 0.008);
     } else if (!this.playerDown) {
-      this.player.setScale(1.8, 1.8);
+      this.player.setScale(1.1, 1.1);
     }
 
     // Firefly drift

@@ -449,132 +449,148 @@ export class BootScene extends Phaser.Scene {
       ctx.globalAlpha = 1;
     });
 
-    this.makeCanvasTexture(`${style.id}_player`, 32, 32, (ctx) => {
-      const robeBase = style.id === 'ink' ? '#f0ece2' : '#f4f2ff';
-      const robeShade = style.id === 'ink' ? '#cdc7b8' : '#cac4e8';
-      const robeDark = style.id === 'ink' ? '#a09888' : '#9890c8';
+    this.makeCanvasTexture(`${style.id}_player`, 48, 56, (ctx) => {
+      const robe  = style.id === 'ink' ? '#f0ece0' : '#eeeaff';
+      const shade = style.id === 'ink' ? '#c8c0a8' : '#c0b8e8';
+      const dark  = style.id === 'ink' ? '#908870' : '#8070c0';
+      const skin  = '#e8c880';
+      const hair  = '#1a1030';
 
-      // Spear shaft
-      ctx.strokeStyle = '#c8c4b0';
-      ctx.lineWidth = 1.5;
+      // ── Spear shaft (behind body) ──
+      ctx.save();
+      ctx.strokeStyle = '#b8b490';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(6, 30);
-      ctx.lineTo(29, 3);
+      ctx.moveTo(10, 54); ctx.lineTo(38, 4);
       ctx.stroke();
-
-      // Spear tip
-      ctx.fillStyle = '#d4d8e8';
+      // shaft highlight
+      ctx.strokeStyle = 'rgba(255,255,220,0.45)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(29, 3);
-      ctx.lineTo(26, 6);
-      ctx.lineTo(31, 5);
-      ctx.closePath();
+      ctx.moveTo(11, 53); ctx.lineTo(37, 5);
+      ctx.stroke();
+      ctx.restore();
+
+      // ── Spear tip ──
+      ctx.fillStyle = '#d0d4e8';
+      ctx.beginPath();
+      ctx.moveTo(38, 4); ctx.lineTo(32, 10); ctx.lineTo(42, 8); ctx.closePath();
       ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(29, 3);
-      ctx.lineTo(30, 4);
-      ctx.lineTo(27.5, 5);
-      ctx.closePath();
+      ctx.moveTo(38, 4); ctx.lineTo(40, 6); ctx.lineTo(35, 8); ctx.closePath();
       ctx.fill();
 
-      // Flowing robe body - layered for depth
-      ctx.fillStyle = robeShade;
+      // ── Robe shadow layer ──
+      ctx.fillStyle = shade;
       ctx.beginPath();
-      ctx.moveTo(10, 12);
-      ctx.lineTo(6, 18);
-      ctx.lineTo(5, 27);
-      ctx.lineTo(9, 32);
-      ctx.lineTo(14, 32);
-      ctx.lineTo(15, 22);
-      ctx.lineTo(13, 12);
-      ctx.closePath();
+      ctx.moveTo(16, 18); ctx.lineTo(10, 26); ctx.lineTo(9, 38);
+      ctx.lineTo(13, 56); ctx.lineTo(20, 56); ctx.lineTo(21, 38);
+      ctx.lineTo(19, 18); ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = robeBase;
+      // ── Main robe body ──
+      ctx.fillStyle = robe;
       ctx.beginPath();
-      ctx.moveTo(13, 11);
-      ctx.lineTo(9, 17);
-      ctx.lineTo(9, 27);
-      ctx.lineTo(13, 32);
-      ctx.lineTo(21, 32);
-      ctx.lineTo(24, 24);
-      ctx.lineTo(23, 14);
-      ctx.lineTo(18, 11);
-      ctx.closePath();
+      ctx.moveTo(19, 17); ctx.lineTo(13, 25); ctx.lineTo(12, 40);
+      ctx.lineTo(16, 56); ctx.lineTo(32, 56); ctx.lineTo(36, 40);
+      ctx.lineTo(35, 24); ctx.lineTo(28, 17); ctx.closePath();
       ctx.fill();
 
-      // Robe fold lines (painted strokes)
-      ctx.strokeStyle = robeShade;
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.7;
-      [[11,15,10,30],[14,13,13,32],[17,12,16,31],[20,14,20,30]].forEach(([x1,y1,x2,y2]) => {
+      // ── Robe fold strokes ──
+      ctx.strokeStyle = shade; ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.65;
+      [[16,22,15,54],[20,18,19,56],[24,17,23,56],[28,19,28,54]].forEach(([x1,y1,x2,y2]) => {
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo(x1 - 1, (y1+y2)/2, x2, y2);
+        ctx.moveTo(x1,y1); ctx.quadraticCurveTo(x1-2,(y1+y2)/2,x2,y2);
         ctx.stroke();
       });
       ctx.globalAlpha = 1;
 
-      // Inner robe / collar contrast
-      ctx.fillStyle = robeDark;
+      // ── Hem flare ──
+      ctx.fillStyle = shade;
       ctx.beginPath();
-      ctx.moveTo(14, 11);
-      ctx.lineTo(12, 16);
-      ctx.lineTo(16, 14);
-      ctx.closePath();
+      ctx.moveTo(14,50); ctx.lineTo(10,56); ctx.lineTo(22,56); ctx.lineTo(20,50); ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(28,50); ctx.lineTo(26,56); ctx.lineTo(38,56); ctx.lineTo(36,50); ctx.closePath();
       ctx.fill();
 
-      // Sash
-      ctx.fillStyle = '#6040a8';
-      ctx.fillRect(10, 18, 11, 2);
-      ctx.fillStyle = '#8060c8';
-      ctx.fillRect(11, 18, 4, 1);
-
-      // Arms
-      ctx.strokeStyle = robeBase;
-      ctx.lineWidth = 3;
+      // ── Collar / inner dark ──
+      ctx.fillStyle = dark;
       ctx.beginPath();
-      ctx.moveTo(10, 14);
-      ctx.quadraticCurveTo(6, 17, 8, 21);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(22, 13);
-      ctx.quadraticCurveTo(27, 16, 25, 20);
-      ctx.stroke();
-
-      // Neck
-      ctx.fillStyle = '#e8c888';
-      ctx.fillRect(14, 8, 4, 4);
-
-      // Head
-      ctx.fillStyle = '#e8c888';
-      ctx.beginPath();
-      ctx.ellipse(16, 6, 4, 4.5, 0, 0, Math.PI * 2);
+      ctx.moveTo(20,17); ctx.lineTo(17,24); ctx.lineTo(24,22); ctx.closePath();
       ctx.fill();
 
-      // Hair bun / topknot
-      ctx.fillStyle = '#1a1228';
-      ctx.beginPath();
-      ctx.ellipse(16, 2, 3.5, 2.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#2a1e38';
-      ctx.beginPath();
-      ctx.ellipse(16, 4, 4.5, 2.5, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // ── Sash ──
+      ctx.fillStyle = '#5030a0';
+      ctx.fillRect(14,30,20,3);
+      ctx.fillStyle = '#7050c8';
+      ctx.fillRect(15,30,8,1.5);
 
+      // ── Left arm ──
+      ctx.fillStyle = robe;
+      ctx.beginPath();
+      ctx.moveTo(14,20); ctx.quadraticCurveTo(7,26,10,34); ctx.lineTo(14,33);
+      ctx.quadraticCurveTo(12,27,18,22); ctx.closePath();
+      ctx.fill();
+      // left hand
+      ctx.fillStyle = skin;
+      ctx.beginPath(); ctx.ellipse(10,35,3,3,0,0,Math.PI*2); ctx.fill();
+
+      // ── Right arm ──
+      ctx.fillStyle = robe;
+      ctx.beginPath();
+      ctx.moveTo(34,19); ctx.quadraticCurveTo(40,25,38,33); ctx.lineTo(34,32);
+      ctx.quadraticCurveTo(37,26,30,21); ctx.closePath();
+      ctx.fill();
+      // right hand on spear
+      ctx.fillStyle = skin;
+      ctx.beginPath(); ctx.ellipse(38,34,3,3,0,0,Math.PI*2); ctx.fill();
+
+      // ── Boots ──
+      ctx.fillStyle = '#282040';
+      ctx.beginPath(); ctx.roundRect(14,52,8,5,2); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(26,52,8,5,2); ctx.fill();
+      ctx.fillStyle = '#3a3060';
+      ctx.fillRect(15,52,3,2); ctx.fillRect(27,52,3,2);
+
+      // ── Neck ──
+      ctx.fillStyle = skin;
+      ctx.fillRect(20,12,8,6);
+
+      // ── Head ──
+      ctx.fillStyle = skin;
+      ctx.beginPath(); ctx.ellipse(24,9,7,8,0,0,Math.PI*2); ctx.fill();
+      // Face shadow
+      ctx.fillStyle = 'rgba(180,130,60,0.3)';
+      ctx.beginPath(); ctx.ellipse(26,11,4,5,0.2,0,Math.PI*2); ctx.fill();
+      // Eyes
+      ctx.fillStyle = '#2a1a10';
+      ctx.beginPath(); ctx.ellipse(21,9,1.5,1.2,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(27,9,1.5,1.2,0,0,Math.PI*2); ctx.fill();
+      // Eyebrows
+      ctx.strokeStyle = '#2a1a10'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(19,7); ctx.lineTo(23,7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(25,7); ctx.lineTo(29,7); ctx.stroke();
+
+      // ── Hair / topknot ──
+      ctx.fillStyle = hair;
+      ctx.beginPath(); ctx.ellipse(24,4,6,4,0,0,Math.PI*2); ctx.fill();
+      // bun wrap
+      ctx.beginPath(); ctx.ellipse(24,2,4,3,0,0,Math.PI*2); ctx.fill();
       // Hair pin
-      ctx.strokeStyle = '#d8c070';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(19, 1);
-      ctx.lineTo(17, 5);
-      ctx.stroke();
+      ctx.strokeStyle = '#e0c060'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(28,0); ctx.lineTo(25,5); ctx.stroke();
+      ctx.fillStyle = '#ffd860';
+      ctx.beginPath(); ctx.arc(28,0,1.5,0,Math.PI*2); ctx.fill();
 
-      // Shoes/boots
-      ctx.fillStyle = '#2a2040';
-      ctx.fillRect(10, 30, 4, 3);
-      ctx.fillRect(17, 30, 4, 3);
+      // ── Name glow aura (very faint) ──
+      ctx.globalAlpha = 0.07;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.ellipse(24,30,14,22,0,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
     });
 
     this.makeCanvasTexture(`${style.id}_npc`, 32, 32, (ctx) => {
@@ -680,116 +696,135 @@ export class BootScene extends Phaser.Scene {
       ctx.fillRect(18, 30, 4, 2);
     });
 
-    this.makeCanvasTexture(`${style.id}_enemy`, 32, 32, (ctx) => {
-      // Dark armor torso with rivets
-      const armorBase = '#2a1f1f';
-      const armorHighlight = '#443030';
+    this.makeCanvasTexture(`${style.id}_enemy`, 44, 56, (ctx) => {
+      const aBase = '#2a1a1a';
+      const aPlate = '#3e2828';
+      const aRim = '#5a3a3a';
+      const skin = '#c09070';
 
-      // Body shadow
-      ctx.fillStyle = '#180f0f';
-      ctx.beginPath();
-      ctx.ellipse(17, 24, 8, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Legs
-      ctx.fillStyle = '#1e1414';
-      ctx.fillRect(11, 22, 4, 10);
-      ctx.fillRect(17, 22, 4, 10);
-      ctx.fillStyle = '#100c0c';
-      ctx.fillRect(11, 30, 5, 3);
-      ctx.fillRect(16, 30, 5, 3);
-
-      // Torso armor
-      ctx.fillStyle = armorBase;
-      ctx.fillRect(9, 12, 14, 12);
-      ctx.fillStyle = armorHighlight;
-      ctx.fillRect(10, 12, 12, 3);
-
-      // Armor plate lines
-      ctx.strokeStyle = '#3d2a2a';
+      // ── Halberd shaft (behind) ──
+      ctx.strokeStyle = '#706878';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(32, 56); ctx.lineTo(34, 4); ctx.stroke();
+      ctx.strokeStyle = 'rgba(200,200,220,0.3)';
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(16, 12); ctx.lineTo(16, 24);
-      ctx.moveTo(9, 17); ctx.lineTo(23, 17);
-      ctx.moveTo(9, 21); ctx.lineTo(23, 21);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(33, 55); ctx.lineTo(35, 5); ctx.stroke();
 
-      // Rivet dots
-      ctx.fillStyle = '#5a4040';
-      [[10,13],[14,13],[18,13],[22,13],[10,20],[22,20]].forEach(([rx,ry]) => {
-        ctx.beginPath(); ctx.arc(rx, ry, 0.8, 0, Math.PI*2); ctx.fill();
+      // Halberd blade
+      ctx.fillStyle = '#a8a8c0';
+      ctx.beginPath();
+      ctx.moveTo(34,4); ctx.lineTo(28,10); ctx.lineTo(34,14); ctx.lineTo(40,8); ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#d8d8f0';
+      ctx.beginPath();
+      ctx.moveTo(34,4); ctx.lineTo(36,6); ctx.lineTo(32,10); ctx.closePath();
+      ctx.fill();
+      // Crossguard
+      ctx.fillStyle = '#706878';
+      ctx.fillRect(28,14,12,3);
+
+      // ── Legs ──
+      ctx.fillStyle = '#1e1212';
+      ctx.beginPath(); ctx.roundRect(13,38,8,16,2); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(23,38,8,16,2); ctx.fill();
+      // Greaves highlight
+      ctx.fillStyle = aRim;
+      ctx.fillRect(14,38,3,14); ctx.fillRect(24,38,3,14);
+      // Boots
+      ctx.fillStyle = '#120c0c';
+      ctx.beginPath(); ctx.roundRect(11,50,11,6,2); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(22,50,11,6,2); ctx.fill();
+
+      // ── Torso armor ──
+      ctx.fillStyle = aBase;
+      ctx.beginPath();
+      ctx.moveTo(10,22); ctx.lineTo(8,38); ctx.lineTo(36,38); ctx.lineTo(34,22);
+      ctx.quadraticCurveTo(22,18,10,22); ctx.closePath();
+      ctx.fill();
+      // Chest plate
+      ctx.fillStyle = aPlate;
+      ctx.beginPath();
+      ctx.moveTo(13,23); ctx.lineTo(11,36); ctx.lineTo(33,36); ctx.lineTo(31,23);
+      ctx.quadraticCurveTo(22,20,13,23); ctx.closePath();
+      ctx.fill();
+      // Plate ridge
+      ctx.strokeStyle = aRim; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(22,22); ctx.lineTo(22,36); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(11,29); ctx.lineTo(33,29); ctx.stroke();
+      // Rivets
+      ctx.fillStyle = aRim;
+      [[13,24],[19,24],[25,24],[31,24],[13,34],[31,34]].forEach(([rx,ry]) => {
+        ctx.beginPath(); ctx.arc(rx,ry,1.2,0,Math.PI*2); ctx.fill();
       });
+      // Shoulder pauldrons
+      ctx.fillStyle = aBase;
+      ctx.beginPath(); ctx.ellipse(9,23,6,4,0.3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(35,23,6,4,-0.3,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = aRim;
+      ctx.beginPath(); ctx.ellipse(9,21,5,2.5,0.3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(35,21,5,2.5,-0.3,0,Math.PI*2); ctx.fill();
 
-      // Weapon (halberd) - behind body
-      ctx.strokeStyle = '#888090';
-      ctx.lineWidth = 1.5;
+      // ── Arms ──
+      ctx.fillStyle = aBase;
       ctx.beginPath();
-      ctx.moveTo(24, 32); ctx.lineTo(26, 4);
-      ctx.stroke();
-      // Blade
-      ctx.fillStyle = '#aaa8b8';
-      ctx.beginPath();
-      ctx.moveTo(26, 4);
-      ctx.lineTo(22, 8);
-      ctx.lineTo(27, 10);
-      ctx.lineTo(29, 5);
-      ctx.closePath();
+      ctx.moveTo(10,24); ctx.quadraticCurveTo(4,30,6,38); ctx.lineTo(10,37);
+      ctx.quadraticCurveTo(8,31,14,26); ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = '#d0d0e0';
       ctx.beginPath();
-      ctx.moveTo(26, 4);
-      ctx.lineTo(27, 5);
-      ctx.lineTo(25, 8);
-      ctx.closePath();
+      ctx.moveTo(34,24); ctx.quadraticCurveTo(40,30,38,38); ctx.lineTo(34,37);
+      ctx.quadraticCurveTo(37,31,30,26); ctx.closePath();
       ctx.fill();
+      // Gauntlets
+      ctx.fillStyle = aRim;
+      ctx.beginPath(); ctx.ellipse(7,38,4,4,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(37,38,4,4,0,0,Math.PI*2); ctx.fill();
 
-      // Arms
-      ctx.strokeStyle = armorBase;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(9, 14); ctx.lineTo(5, 20);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(23, 14); ctx.lineTo(27, 19);
-      ctx.stroke();
+      // ── Neck ──
+      ctx.fillStyle = skin;
+      ctx.fillRect(18,14,8,7);
 
-      // Neck
-      ctx.fillStyle = '#c09070';
-      ctx.fillRect(13, 8, 6, 4);
+      // ── Head ──
+      ctx.fillStyle = skin;
+      ctx.beginPath(); ctx.ellipse(22,10,8,9,0,0,Math.PI*2); ctx.fill();
 
-      // Head
-      ctx.fillStyle = '#c09070';
+      // ── Helmet ──
+      ctx.fillStyle = '#1a1010';
       ctx.beginPath();
-      ctx.ellipse(16, 6, 5, 5, 0, 0, Math.PI * 2);
+      ctx.moveTo(12,12); ctx.quadraticCurveTo(14,2,22,1);
+      ctx.quadraticCurveTo(30,2,32,12); ctx.lineTo(28,14);
+      ctx.quadraticCurveTo(22,11,16,14); ctx.closePath();
       ctx.fill();
-
-      // Helmet
-      ctx.fillStyle = '#1e1414';
+      // Nasal guard
+      ctx.fillStyle = '#2a1818';
+      ctx.fillRect(20,10,4,8);
+      // Cheek guards
+      ctx.fillStyle = '#1a1010';
+      ctx.fillRect(12,10,5,6); ctx.fillRect(27,10,5,6);
+      // Crest
+      ctx.fillStyle = '#901010';
       ctx.beginPath();
-      ctx.ellipse(16, 4, 5.5, 4, 0, 0, Math.PI * 2);
+      ctx.moveTo(18,3); ctx.lineTo(22,0); ctx.lineTo(26,3);
+      ctx.lineTo(24,6); ctx.lineTo(20,6); ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = '#2e2020';
-      ctx.fillRect(10, 6, 12, 3);
-      // Helmet crest
-      ctx.fillStyle = '#8a1818';
+      ctx.fillStyle = '#cc2020';
       ctx.beginPath();
-      ctx.moveTo(14, 2);
-      ctx.lineTo(16, -1);
-      ctx.lineTo(18, 2);
-      ctx.lineTo(16, 4);
-      ctx.closePath();
+      ctx.moveTo(20,3); ctx.lineTo(22,1); ctx.lineTo(24,3); ctx.lineTo(22,5); ctx.closePath();
       ctx.fill();
 
-      // Glowing red eyes
-      ctx.fillStyle = '#ff2020';
-      ctx.beginPath(); ctx.ellipse(13, 7, 1.4, 1, 0, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(19, 7, 1.4, 1, 0, 0, Math.PI*2); ctx.fill();
-      // Eye glow
-      ctx.globalAlpha = 0.4;
-      ctx.fillStyle = '#ff6060';
-      ctx.beginPath(); ctx.ellipse(13, 7, 2.5, 1.8, 0, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(19, 7, 2.5, 1.8, 0, 0, Math.PI*2); ctx.fill();
+      // ── Glowing red eyes ──
+      ctx.fillStyle = '#ff1818';
+      ctx.beginPath(); ctx.ellipse(18,10,2.5,1.8,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(26,10,2.5,1.8,0,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#ff5050';
+      ctx.beginPath(); ctx.ellipse(18,10,4,3,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(26,10,4,3,0,0,Math.PI*2); ctx.fill();
       ctx.globalAlpha = 1;
+      // Eye glint
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(19,9,0.8,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(27,9,0.8,0,Math.PI*2); ctx.fill();
     });
 
     this.makeCanvasTexture(`${style.id}_tree`, 36, 46, (ctx) => {

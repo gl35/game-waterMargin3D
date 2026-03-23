@@ -121,13 +121,24 @@ export default function App() {
   const [superCooldowns, setSuperCooldowns] = useState({});
   const [damagePopups, setDamagePopups] = useState([]);
   const [comboCount, setComboCount] = useState(0);
+  const [comboStep, setComboStep] = useState(0);       // 0,1,2 = light1,light2,light3
   const [screenShake, setScreenShake] = useState(false);
   const [isSprinting, setIsSprinting] = useState(false);
+  const [isDodging, setIsDodging] = useState(false);
+  const [isCharging, setIsCharging] = useState(false);
+  const [chargeLevel, setChargeLevel] = useState(0);    // 0-1
+  const [stamina, setStamina] = useState(100);
+  const [lockedTarget, setLockedTarget] = useState(null);
+  const [killFlash, setKillFlash] = useState(false);
+  const [slowMo, setSlowMo] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [statBonuses, setStatBonuses] = useState({ maxHp: 0, damage: 0, speed: 0, range: 0 });
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
   const lastComboAt = useRef(0);
   const autoAttackTimer = useRef(0);
+  const chargeStartRef = useRef(0);
+  const dodgeUntilRef = useRef(0);
+  const lastStaminaUse = useRef(0);
 
   const heroSkin = HERO_SKINS[heroSkinIndex];
 
@@ -403,61 +414,132 @@ export default function App() {
     resetMobileMove();
   }, [resetMobileMove]);
 
+  // ── LIGHT ATTACK (3-hit combo) ──
   const handleAttack = useCallback((forcedEnemyId = null, isAuto = false) => {
-    const target = forcedEnemyId
-      ? enemies.find((enemy) => enemy.id === forcedEnemyId && !enemy.dead)
-      : highlightedEnemyId
-        ? enemies.find((enemy) => enemy.id === highlightedEnemyId && !enemy.dead)
-        : getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, heroStats.attackRange);
+    if (isDodging) return; // i-frames during dodge
+    if (stamina < 8) { setQuestNotice('⚡ No stamina!'); return; }
 
-    if (!target) {
-      if (!isAuto) setQuestNotice('No enemy in range.');
-      return;
-    }
+    const target = forcedEnemyId
+      ? enemies.find((e) => e.id === forcedEnemyId && !e.dead)
+      : lockedTarget
+        ? enemies.find((e) => e.id === lockedTarget && !e.dead)
+        : highlightedEnemyId
+          ? enemies.find((e) => e.id === highlightedEnemyId && !e.dead)
+          : getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, heroStats.attackRange);
+
+    if (!target) { if (!isAuto) setQuestNotice('No enemy in range.'); return; }
 
     const now = Date.now();
-
-    // Combo multiplier: hits within 2s chain
     const timeSinceLast = now - lastComboAt.current;
-    const newCombo = timeSinceLast < 2000 ? comboCount + 1 : 1;
-    setComboCount(newCombo);
+
+    // 3-hit light combo: step resets if > 1.8s between hits
+    const nextStep = timeSinceLast < 1800 ? (comboStep + 1) % 3 : 0;
+    setComboStep(nextStep);
     lastComboAt.current = now;
 
-    const comboMult = 1 + Math.min(newCombo - 1, 5) * 0.18;
-    const isCrit = Math.random() < 0.15 + (newCombo > 4 ? 0.15 : 0);
-    const baseDamage = Math.round((heroStats.damage + Math.floor(Math.random() * 8)) * comboMult * (isCrit ? 2.0 : 1.0));
+    const stepMult = [1.0, 1.15, 1.5][nextStep];    // hit 3 is the launcher
+    const newCombo = timeSinceLast < 1800 ? comboCount + 1 : 1;
+    setComboCount(newCombo);
 
-    let nextEnemies = enemies;
-    const dmgResult = damageEnemy(nextEnemies, target.id, baseDamage, now);
-    nextEnemies = dmgResult.enemies;
-    // Knockback
-    nextEnemies = knockbackEnemy(nextEnemies, target.id, heroPosition.current.x, heroPosition.current.z, 8 + newCombo);
-    setEnemies(nextEnemies);
+    const isCrit = Math.random() < 0.12 + (newCombo > 5 ? 0.18 : 0);
+    const base = heroStats.damage + Math.floor(Math.random() * 6);
+    const dmg = Math.round(base * stepMult * (isCrit ? 2.2 : 1));
 
-    setAttackFx({ at: now, enemyId: target.id, damage: baseDamage });
-    const popText = isCrit ? `💥 CRIT ${baseDamage}` : newCombo >= 3 ? `🔥x${newCombo} ${baseDamage}` : `-${baseDamage}`;
-    setDamagePopups((prev) => [...prev, { id: `${now}-${target.id}`, text: popText, crit: isCrit || newCombo >= 3 }]);
+    // Stamina cost
+    setStamina((s) => Math.max(0, s - 10));
+    lastStaminaUse.current = now;
 
-    // Screenshake on big hits
-    if (isCrit || baseDamage > 30) {
-      setScreenShake(true);
-      setTimeout(() => setScreenShake(false), 200);
-    }
+    let next = knockbackEnemy(enemies, target.id, heroPosition.current.x, heroPosition.current.z, 5 + nextStep * 3);
+    const res = damageEnemy(next, target.id, dmg, now);
+    next = res.enemies;
+    setEnemies(next);
+    setAttackFx({ at: now, enemyId: target.id, damage: dmg, step: nextStep });
 
-    const { killed, enemy } = dmgResult;
-    if (!enemy) return;
+    const label = isCrit ? `💥CRIT ${dmg}` : nextStep === 2 ? `⚡ ${dmg}` : newCombo >= 3 ? `🔥×${newCombo} ${dmg}` : `-${dmg}`;
+    setDamagePopups((p) => [...p, { id: `${now}-${target.id}`, text: label, crit: isCrit || nextStep === 2 }]);
 
-    if (killed) {
+    if (isCrit || nextStep === 2) { setScreenShake(true); setTimeout(() => setScreenShake(false), 180); }
+
+    if (res.killed) {
+      // Kill flash + slow-mo
+      setKillFlash(true); setSlowMo(true);
+      setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 600);
       setStory((prev) => {
-        const rewardStory = { ...prev, player: { ...prev.player, gold: prev.player.gold + enemy.goldDrop } };
-        return enemy.type === 'captain' ? recordMiniBossDefeat(rewardStory) : recordRaiderKill(rewardStory);
+        const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
+        return res.enemy.type === 'captain' ? recordMiniBossDefeat(r) : recordRaiderKill(r);
       });
-      setCombatXp((xp) => xp + enemy.xp);
-      setComboCount(0);
-      setQuestNotice(`☠️ ${enemy.label} defeated! +${enemy.goldDrop}g +${enemy.xp}xp`);
-      setHighlightedEnemyId(null);
+      setCombatXp((xp) => xp + res.enemy.xp);
+      setComboCount(0); setComboStep(0);
+      setLockedTarget(null); setHighlightedEnemyId(null);
+      setQuestNotice(`☠️ ${res.enemy.label} defeated! +${res.enemy.goldDrop}g +${res.enemy.xp}xp`);
     }
-  }, [enemies, highlightedEnemyId, heroStats, comboCount]);
+  }, [enemies, highlightedEnemyId, lockedTarget, heroStats, comboCount, comboStep, isDodging, stamina]);
+
+  // ── CHARGED HEAVY ATTACK ──
+  const handleChargeStart = useCallback(() => {
+    if (isDodging || stamina < 20) return;
+    chargeStartRef.current = Date.now();
+    setIsCharging(true);
+  }, [isDodging, stamina]);
+
+  const handleChargeRelease = useCallback(() => {
+    if (!isCharging) return;
+    setIsCharging(false);
+    setChargeLevel(0);
+    const held = Math.min((Date.now() - chargeStartRef.current) / 1200, 1);
+    if (held < 0.2) return; // too short = nothing
+
+    const target = lockedTarget
+      ? enemies.find((e) => e.id === lockedTarget && !e.dead)
+      : getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, heroStats.attackRange * 1.4);
+    if (!target) return;
+
+    const now = Date.now();
+    const dmg = Math.round(heroStats.damage * (1.8 + held * 2.5));
+    const isCrit = held > 0.8;
+
+    setStamina((s) => Math.max(0, s - 28));
+    lastStaminaUse.current = now;
+
+    let next = knockbackEnemy(enemies, target.id, heroPosition.current.x, heroPosition.current.z, 12 + held * 8);
+    const res = damageEnemy(next, target.id, dmg, now);
+    setEnemies(res.enemies);
+    setAttackFx({ at: now, enemyId: target.id, damage: dmg, heavy: true, chargeLevel: held });
+    setDamagePopups((p) => [...p, { id: `${now}-heavy`, text: `⚡HEAVY ${dmg}`, crit: true }]);
+    setScreenShake(true); setTimeout(() => setScreenShake(false), 300);
+
+    if (res.killed) {
+      setKillFlash(true); setSlowMo(true);
+      setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 700);
+      setStory((prev) => {
+        const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
+        return res.enemy.type === 'captain' ? recordMiniBossDefeat(r) : recordRaiderKill(r);
+      });
+      setCombatXp((xp) => xp + res.enemy.xp);
+      setLockedTarget(null);
+      setQuestNotice(`☠️ ${res.enemy.label} slain! +${res.enemy.goldDrop}g`);
+    }
+  }, [isCharging, enemies, lockedTarget, heroStats, isDodging]);
+
+  // ── DODGE ROLL ──
+  const handleDodge = useCallback(() => {
+    if (stamina < 18) { setQuestNotice('⚡ No stamina to dodge!'); return; }
+    const now = Date.now();
+    if (now < dodgeUntilRef.current + 600) return; // dodge cooldown
+    dodgeUntilRef.current = now;
+    setIsDodging(true);
+    setStamina((s) => Math.max(0, s - 20));
+    lastStaminaUse.current = now;
+    setTimeout(() => setIsDodging(false), 500); // 500ms i-frames
+    setAttackFx((prev) => ({ ...prev, dodge: now })); // signal Scene
+  }, [stamina]);
+
+  // ── LOCK-ON ──
+  const handleLockOn = useCallback(() => {
+    if (lockedTarget) { setLockedTarget(null); return; }
+    const nearest = getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 50);
+    if (nearest) { setLockedTarget(nearest.id); setQuestNotice(`🎯 Locked: ${nearest.label}`); }
+  }, [enemies, lockedTarget]);
 
   const handleSuperMove = useCallback((superId) => {
     const now = Date.now();
@@ -641,28 +723,52 @@ export default function App() {
     return () => window.cancelAnimationFrame(raf);
   }, []);
 
-  // Auto-attack listener
-  useEffect(() => {
-    const onAutoAttack = () => handleAttack(null, true);
-    window.addEventListener('game:autoattack', onAutoAttack);
-    return () => window.removeEventListener('game:autoattack', onAutoAttack);
-  }, [handleAttack]);
+  // Auto-attack listener — disabled, player controls combat now
+  // (kept for super move area hits)
 
   // Combo timeout
   useEffect(() => {
     if (comboCount === 0) return;
-    const t = setTimeout(() => setComboCount(0), 2200);
+    const t = setTimeout(() => { setComboCount(0); setComboStep(0); }, 2000);
     return () => clearTimeout(t);
   }, [comboCount]);
 
-  // Sprint key
+  // Stamina regen (regen after 1.2s of no use)
   useEffect(() => {
-    const onDown = (e) => { if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') setIsSprinting(true); };
-    const onUp   = (e) => { if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') setIsSprinting(false); };
+    const id = setInterval(() => {
+      const now = Date.now();
+      if (now - lastStaminaUse.current > 1200) {
+        setStamina((s) => Math.min(100, s + 3));
+      }
+    }, 80);
+    return () => clearInterval(id);
+  }, []);
+
+  // Charge level update
+  useEffect(() => {
+    if (!isCharging) { setChargeLevel(0); return; }
+    const id = setInterval(() => {
+      setChargeLevel(Math.min((Date.now() - chargeStartRef.current) / 1200, 1));
+    }, 40);
+    return () => clearInterval(id);
+  }, [isCharging]);
+
+  // Sprint + dodge + lock-on + charge keys
+  useEffect(() => {
+    const onDown = (e) => {
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') setIsSprinting(true);
+      if (e.code === 'Space' && !e.repeat) handleDodge();
+      if (e.code === 'Tab') { e.preventDefault(); handleLockOn(); }
+      if (e.code === 'KeyJ' && !e.repeat) handleChargeStart();
+    };
+    const onUp = (e) => {
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') setIsSprinting(false);
+      if (e.code === 'KeyJ') handleChargeRelease();
+    };
     window.addEventListener('keydown', onDown);
     window.addEventListener('keyup', onUp);
     return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp); };
-  }, []);
+  }, [handleDodge, handleLockOn, handleChargeStart, handleChargeRelease]);
 
   useEffect(() => {
     const nearestEnemy = getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 22);
@@ -710,7 +816,7 @@ export default function App() {
         } else {
           attemptInteraction();
         }
-      } else if (event.code === 'KeyF') {
+      } else if (event.code === 'KeyF' || event.code === 'KeyZ') {
         handleAttack();
       } else if (event.code === 'Digit1') {
         handleSuperMove('dragon');
@@ -730,13 +836,13 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [attemptInteraction, closeTavernScene, dialog, dismissDialog, handleAttack, handleSuperMove, showTavernScene]);
+  }, [attemptInteraction, closeTavernScene, dialog, dismissDialog, handleAttack, handleSuperMove, showTavernScene, handleDodge, handleLockOn]);
 
   return (
     <div className={`hud-shell ${dialog ? 'dialog-open' : ''}`}>
       <div className="hud-frame">
         {webglSupported ? (
-          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} />
+          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} />
         ) : (
           <div className="webgl-fallback">
             <div className="webgl-fallback-title">3D engine failed to start</div>
@@ -894,6 +1000,45 @@ export default function App() {
         })}
       </div>
 
+      {/* Stamina bar */}
+      <div className="stamina-bar-wrap">
+        <div className="stamina-bar" style={{ width: `${stamina}%`, background: stamina < 25 ? '#ff4444' : stamina < 50 ? '#ffaa22' : '#44ddff' }} />
+      </div>
+
+      {/* Charge indicator */}
+      {isCharging && (
+        <div className="charge-indicator">
+          <div className="charge-fill" style={{ width: `${chargeLevel * 100}%` }} />
+          <span className="charge-label">{chargeLevel > 0.8 ? '⚡ RELEASE!' : '⚡ Charging...'}</span>
+        </div>
+      )}
+
+      {/* Lock-on marker */}
+      {lockedTarget && (() => {
+        const e = enemies.find((en) => en.id === lockedTarget && !en.dead);
+        if (!e) return null;
+        return <div className="lockon-hud">🎯 {e.label} — {e.hp}/{e.maxHp} HP</div>;
+      })()}
+
+      {/* Boss HP bar (captain) */}
+      {(() => {
+        const boss = enemies.find((e) => e.type === 'captain' && !e.dead);
+        if (!boss) return null;
+        const pct = Math.round((boss.hp / boss.maxHp) * 100);
+        return (
+          <div className="boss-bar-wrap">
+            <div className="boss-bar-label">⚔️ {boss.label}</div>
+            <div className="boss-bar-track">
+              <div className="boss-bar-fill" style={{ width: `${pct}%`, background: pct > 50 ? '#dd3322' : pct > 25 ? '#dd7700' : '#ffcc00' }} />
+            </div>
+            <div className="boss-bar-hp">{boss.hp} / {boss.maxHp}</div>
+          </div>
+        );
+      })()}
+
+      {/* Kill flash overlay */}
+      {killFlash && <div className="kill-flash" />}
+
       <div className="hud-mobile-controls">
         <div
           className="touchpad"
@@ -909,20 +1054,35 @@ export default function App() {
           />
         </div>
         <div className="mobile-btns">
+          {/* Light attack */}
           <button
-            className={`mobile-action attack-btn ${highlightedEnemyId ? 'enemy-near' : ''}`}
+            className={`mobile-action attack-btn ${lockedTarget || highlightedEnemyId ? 'enemy-near' : ''}`}
             onPointerDown={(e) => { e.preventDefault(); handleAttack(); }}
             onPointerUp={(e) => e.preventDefault()}
-          >
-            ⚔️
-          </button>
+          >⚔️</button>
+          {/* Heavy charge */}
+          <button
+            className={`mobile-action heavy-btn ${isCharging ? 'charging' : ''}`}
+            onPointerDown={(e) => { e.preventDefault(); handleChargeStart(); }}
+            onPointerUp={(e) => { e.preventDefault(); handleChargeRelease(); }}
+          >💢</button>
+          {/* Dodge */}
+          <button
+            className={`mobile-action dodge-btn ${isDodging ? 'dodging' : ''}`}
+            onPointerDown={(e) => { e.preventDefault(); handleDodge(); }}
+            onPointerUp={(e) => e.preventDefault()}
+          >💨</button>
+          {/* Lock-on */}
+          <button
+            className={`mobile-action lockon-btn ${lockedTarget ? 'locked' : ''}`}
+            onPointerDown={(e) => { e.preventDefault(); handleLockOn(); }}
+            onPointerUp={(e) => e.preventDefault()}
+          >🎯</button>
           <button
             className="mobile-action interact-btn"
             onPointerDown={handleInteractPointer}
             onPointerUp={(e) => e.preventDefault()}
-          >
-            {highlightedNpcId ? 'Talk' : 'E'}
-          </button>
+          >{highlightedNpcId ? 'Talk' : 'E'}</button>
         </div>
       </div>
 

@@ -315,6 +315,157 @@ html, body, #root {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* ── STAMINA BAR ── */
+.stamina-bar-wrap {
+  position: absolute;
+  bottom: calc(var(--safe-bottom, 0px) + 90px);
+  left: 50%; transform: translateX(-50%);
+  width: min(280px, 60vw);
+  height: 5px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  z-index: 100;
+}
+.stamina-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.08s linear, background 0.3s;
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* ── CHARGE INDICATOR ── */
+.charge-indicator {
+  position: absolute;
+  bottom: calc(var(--safe-bottom, 0px) + 100px);
+  left: 50%; transform: translateX(-50%);
+  width: min(220px, 50vw);
+  height: 10px;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid #ffaa20;
+  border-radius: 5px;
+  overflow: hidden;
+  z-index: 101;
+}
+.charge-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff8800, #ffee00);
+  border-radius: 5px;
+  transition: width 0.04s linear;
+  box-shadow: 0 0 12px #ffaa00;
+}
+.charge-label {
+  position: absolute;
+  width: 100%;
+  text-align: center;
+  top: -18px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffcc40;
+  text-shadow: 0 0 6px #ff8800, 0 1px 3px #000;
+  letter-spacing: 0.08em;
+}
+
+/* ── LOCK-ON HUD ── */
+.lockon-hud {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -120px);
+  background: rgba(0,0,0,0.6);
+  border: 1px solid #00ffff;
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #00ffff;
+  text-shadow: 0 0 8px #00ffff;
+  pointer-events: none;
+  z-index: 200;
+}
+
+/* ── BOSS HP BAR ── */
+.boss-bar-wrap {
+  position: absolute;
+  bottom: calc(var(--safe-bottom, 0px) + 110px);
+  left: 50%; transform: translateX(-50%);
+  width: min(420px, 85vw);
+  z-index: 150;
+  text-align: center;
+}
+.boss-bar-label {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ff6644;
+  text-shadow: 0 0 8px #ff2200, 0 1px 3px #000;
+  margin-bottom: 4px;
+  letter-spacing: 0.06em;
+}
+.boss-bar-track {
+  height: 12px;
+  background: rgba(0,0,0,0.7);
+  border: 1px solid rgba(255,80,40,0.6);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.boss-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.25s ease, background 0.4s;
+  box-shadow: 0 0 10px currentColor;
+}
+.boss-bar-hp {
+  font-size: 10px;
+  color: rgba(255,150,130,0.7);
+  margin-top: 2px;
+}
+
+/* ── KILL FLASH ── */
+.kill-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(255,220,80,0.22) 0%, rgba(255,100,20,0.12) 50%, transparent 80%);
+  pointer-events: none;
+  z-index: 400;
+  animation: kill-flash-anim 0.6s ease-out forwards;
+}
+@keyframes kill-flash-anim {
+  0%   { opacity: 1; }
+  40%  { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* ── MOBILE COMBAT BUTTONS ── */
+.heavy-btn {
+  font-size: 24px;
+  background: radial-gradient(circle at 30% 30%, #ff6622, #aa2200) !important;
+}
+.heavy-btn.charging {
+  box-shadow: 0 0 20px #ffaa00 !important;
+  animation: charge-pulse 0.3s ease-in-out infinite alternate;
+}
+@keyframes charge-pulse {
+  from { transform: scale(1); }
+  to   { transform: scale(1.08); box-shadow: 0 0 28px #ffee00; }
+}
+.dodge-btn {
+  font-size: 22px;
+  background: radial-gradient(circle at 30% 30%, #44aaff, #1155aa) !important;
+}
+.dodge-btn.dodging {
+  opacity: 0.5;
+}
+.lockon-btn {
+  font-size: 20px;
+  background: radial-gradient(circle at 30% 30%, #22ffcc, #008866) !important;
+  width: 64px !important;
+  height: 64px !important;
+}
+.lockon-btn.locked {
+  box-shadow: 0 0 16px #00ffcc !important;
+  border-color: #00ffcc !important;
+}
+
 /* ── COMBO COUNTER ── */
 .combo-counter {
   position: absolute;
@@ -1044,8 +1195,8 @@ html, body, #root {
 
   .mobile-action {
     pointer-events: auto;
-    width: 86px;
-    height: 86px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
     border: 2px solid rgba(255,255,255,.65);
     background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.9), rgba(86,133,177,.9));

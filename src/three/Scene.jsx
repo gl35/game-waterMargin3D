@@ -403,7 +403,7 @@ function useMovementControls() {
   return stateRef;
 }
 
-function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, isSprinting, screenShake }) {
+function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel }) {
   const group = heroRef || useRef();
   const controls = useMovementControls();
   const velocity = useRef(new THREE.Vector3());
@@ -445,6 +445,13 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
     attackState.current = { active: true, t: 0, lastAt: attackFx.at };
   }, [attackFx]);
 
+  // Dodge state
+  const dodgeState = useRef({ active: false, t: 0, dir: new THREE.Vector3() });
+  const lastDodge = useRef(0);
+
+  // Charge glow ref
+  const chargeGlowRef = useRef();
+
   // Super move state
   const superState = useRef({ active: false, type: null, t: 0 });
   const lastSuperAt = useRef(0);
@@ -480,6 +487,35 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
     group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ);
 
     const t = state.clock.getElapsedTime();
+
+    // ── Dodge roll ──
+    if (isDodging && !dodgeState.current.active) {
+      dodgeState.current.active = true;
+      dodgeState.current.t = 0;
+      dodgeState.current.dir.copy(velocity.current.clone().normalize());
+      if (dodgeState.current.dir.lengthSq() < 0.01) dodgeState.current.dir.set(0, 0, -1);
+    }
+    if (dodgeState.current.active) {
+      dodgeState.current.t = Math.min(dodgeState.current.t + delta * 3.5, 1);
+      const dp = Math.sin(dodgeState.current.t * Math.PI);
+      // Forward lunge
+      group.current.position.addScaledVector(dodgeState.current.dir, dp * delta * 22);
+      // Full body rotation roll
+      if (torsoRef.current) torsoRef.current.rotation.x = dp * Math.PI * 1.1;
+      if (dodgeState.current.t >= 1) {
+        dodgeState.current.active = false;
+        if (torsoRef.current) torsoRef.current.rotation.x = 0;
+      }
+    }
+    if (!isDodging && !dodgeState.current.active) {
+      // fade torso back
+    }
+
+    // ── Charge glow ──
+    if (chargeGlowRef.current) {
+      chargeGlowRef.current.material.opacity = isCharging ? chargeLevel * 0.65 : 0;
+      chargeGlowRef.current.scale.setScalar(1 + chargeLevel * 1.5);
+    }
 
     // ── Walk bob ──
     if (isMoving) {
@@ -747,6 +783,12 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
         </mesh>
       ))}
 
+      {/* Charge glow aura */}
+      <mesh ref={chargeGlowRef} position={[0, 2.5, 0]}>
+        <sphereGeometry args={[2.2, 10, 8]} />
+        <meshBasicMaterial color="#ffcc20" transparent opacity={0} />
+      </mesh>
+
       {/* Ground shadow */}
       <mesh position={[0, -0.55, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[0.9, 16]} />
@@ -815,18 +857,33 @@ function SkyDome() {
   );
 }
 
-function CameraRig({ target, screenShake }) {
+function CameraRig({ target, screenShake, slowMo, lockedTarget, enemies }) {
   const { camera } = useThree();
   const offset = useMemo(() => new THREE.Vector3(0, 16, 34), []);
   const shakeRef = useRef(0);
   useEffect(() => { if (screenShake) shakeRef.current = 0.35; }, [screenShake]);
   useFrame((state, delta) => {
     if (!target.current) return;
-    const desired = target.current.position.clone().add(offset);
+    // Lock-on: orbit around target
+    let followOffset = offset;
+    if (lockedTarget) {
+      const enemy = enemies.find((e) => e.id === lockedTarget && !e.dead);
+      if (enemy) {
+        const toEnemy = new THREE.Vector3(enemy.x - target.current.position.x, 0, enemy.z - target.current.position.z).normalize();
+        followOffset = new THREE.Vector3(-toEnemy.x * 10, 16, -toEnemy.z * 10 + 28);
+      }
+    }
+    const desired = target.current.position.clone().add(followOffset);
     camera.position.lerp(desired, 1 - Math.pow(0.001, delta));
     const lookAt = target.current.position.clone();
     lookAt.y += 3;
     camera.lookAt(lookAt);
+
+    // Slow-mo FOV squeeze
+    const targetFov = slowMo ? 38 : 52;
+    camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.12);
+    camera.updateProjectionMatrix();
+
     // Screenshake
     if (shakeRef.current > 0) {
       camera.position.x += (Math.random() - 0.5) * shakeRef.current;
@@ -1571,7 +1628,31 @@ function ShadowBlinkVfx({ heroRef, active }) {
   );
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake }) {
+// Lock-on ring that orbits the targeted enemy
+function LockOnRing({ enemies, lockedTarget }) {
+  const ringRef = useRef();
+  useFrame(({ clock }) => {
+    if (!ringRef.current) return;
+    ringRef.current.rotation.y = clock.getElapsedTime() * 2.5;
+    ringRef.current.rotation.x = Math.sin(clock.getElapsedTime() * 1.5) * 0.3;
+  });
+  const target = enemies.find((e) => e.id === lockedTarget && !e.dead);
+  if (!target) return null;
+  return (
+    <group position={[target.x, -1.5, target.z]}>
+      <mesh ref={ringRef}>
+        <torusGeometry args={[2.2, 0.12, 6, 32]} />
+        <meshBasicMaterial color="#00ffff" transparent opacity={0.8} />
+      </mesh>
+      <mesh rotation={[-Math.PI/2, 0, 0]}>
+        <ringGeometry args={[1.8, 2.0, 24]} />
+        <meshBasicMaterial color="#00ffff" transparent opacity={0.25} />
+      </mesh>
+    </group>
+  );
+}
+
+function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo }) {
   const heroRef = useRef();
   const mobile = isMobile();
   const dragonActive = superFx?.type === 'dragon' && Date.now() - superFx.at < 1200;
@@ -1599,17 +1680,18 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
       <AmbientVillagers />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
       <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} attackFx={attackFx} />
-      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} />
+      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} />
+      {lockedTarget && <LockOnRing enemies={enemies} lockedTarget={lockedTarget} />}
       <DragonStrikeVfx heroRef={heroRef} active={dragonActive} />
       <StormSweepVfx  heroRef={heroRef} active={stormActive} />
       <ShadowBlinkVfx heroRef={heroRef} active={shadowActive} />
       <FloatingRune />
-      <CameraRig target={heroRef} screenShake={screenShake} />
+      <CameraRig target={heroRef} screenShake={screenShake} slowMo={slowMo} lockedTarget={lockedTarget} enemies={enemies} />
     </>
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo }) {
   const mobile = isMobile();
   return (
     <Canvas
@@ -1626,7 +1708,7 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
       }}
     >
       <Suspense fallback={null}>
-        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} />
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} />
       </Suspense>
     </Canvas>
   );

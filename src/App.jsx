@@ -113,7 +113,37 @@ export default function App() {
   const [showTavernScene, setShowTavernScene] = useState(false);
   const [showVictoryBanquet, setShowVictoryBanquet] = useState(false);
   const [showOpening, setShowOpening] = useState(() => !sessionStorage.getItem('cine_seen'));
+  const [showMainMenu, setShowMainMenu] = useState(false);
   const prevStage = useRef(null);
+
+  const handleFullRestart = useCallback(() => {
+    // Wipe all saved state
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    // Reset all React state to initial
+    setStory(createStoryProgress());
+    setQuestProgress(loadQuestProgress());
+    setEnemies(createEnemies());
+    setCombatXp(0);
+    setComboCount(0);
+    setComboStep(0);
+    setStamina(100);
+    setIsMounted(false);
+    setLockedTarget(null);
+    setHighlightedEnemyId(null);
+    setHighlightedNpcId(null);
+    setStatBonuses({ maxHp: 0, damage: 0, speed: 0, range: 0 });
+    setSlotCooldowns({});
+    setSuperCooldowns({});
+    setShowVictoryBanquet(false);
+    setShowMainMenu(false);
+    setDialog(null);
+    prevStage.current = null;
+    // Replay opening cinematic
+    setShowOpening(true);
+  }, []);
 
   // Hide the HTML loading screen as soon as React mounts
   useEffect(() => { window.__hideLoading?.(); }, []);
@@ -1289,6 +1319,34 @@ export default function App() {
               ))}
             </div>
             <button className="shop-close" onClick={() => setShopOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MAIN MENU BUTTON ── */}
+      <button className="main-menu-btn" onClick={() => setShowMainMenu(true)}>☰</button>
+
+      {/* ── MAIN MENU OVERLAY ── */}
+      {showMainMenu && (
+        <div className="main-menu-overlay">
+          <div className="main-menu-panel">
+            <div className="main-menu-title">夢</div>
+            <div className="main-menu-subtitle">Dream of Water Margin</div>
+            <div className="main-menu-divider" />
+            <button className="main-menu-item" onClick={() => setShowMainMenu(false)}>
+              ▶ Resume Game
+            </button>
+            <button className="main-menu-item" onClick={() => {
+              setShowMainMenu(false);
+              sessionStorage.removeItem('cine_seen');
+              setShowOpening(true);
+            }}>
+              🎬 Watch Opening Again
+            </button>
+            <button className="main-menu-item danger" onClick={handleFullRestart}>
+              🔄 Restart from Beginning
+            </button>
+            <div className="main-menu-note">Restart replays the cinematic and resets all progress</div>
           </div>
         </div>
       )}

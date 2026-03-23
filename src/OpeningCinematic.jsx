@@ -15,6 +15,10 @@ function ModernRoomScene() {
     <>
       <ambientLight intensity={0.35} color="#203050" />
       <pointLight ref={lampRef} position={[1.5, 3, -1]} color="#ffcc88" intensity={3.5} distance={18} decay={1.5} />
+      {/* Focused desk lamp spotlight on student */}
+      <spotLight position={[1.2, 3.2, -1.2]} angle={0.75} penumbra={0.5} intensity={3.2} distance={14} color="#ffd8a8" target-position={[0, -0.3, -1.5]} />
+      {/* Soft bounce off the desk */}
+      <pointLight position={[0, 0.1, -1.4]} color="#ffdcb5" intensity={2.4} distance={5.5} decay={1.6} />
       {/* Fill light from window */}
       <pointLight position={[3, 1.5, -2]} color="#4466ff" intensity={1.2} distance={10} decay={2} />
       {/* Rim light so character is visible */}
@@ -58,14 +62,14 @@ function ModernRoomScene() {
       <pointLight position={[0.5,-0.3,-1.8]} color="#4466ff" intensity={1.8} distance={6} decay={1.8} />
       {/* Student figure slumped */}
       <group position={[0,-0.2,-1.5]}>
-        <mesh position={[0,0.1,0]}><sphereGeometry args={[0.35,8,8]} /><meshStandardMaterial color="#d8b07a" /></mesh>
+        <mesh position={[0,0.1,0]}><sphereGeometry args={[0.35,8,8]} /><meshStandardMaterial color="#d8b07a" emissive="#c47a44" emissiveIntensity={0.25} /></mesh>
         {/* Hair */}
         <mesh position={[0,0.2,0]}><sphereGeometry args={[0.38,8,7]} /><meshStandardMaterial color="#1a1010" /></mesh>
         {/* Body slumped on desk */}
-        <mesh position={[0,-0.5,0.2]} rotation={[0.4,0,0]}><boxGeometry args={[0.7,0.8,0.4]} /><meshStandardMaterial color="#2a3a5a" /></mesh>
+        <mesh position={[0,-0.5,0.2]} rotation={[0.4,0,0]}><boxGeometry args={[0.7,0.8,0.4]} /><meshStandardMaterial color="#2a3a5a" emissive="#1a2740" emissiveIntensity={0.2} /></mesh>
         {/* Arms on desk */}
-        <mesh position={[-0.4,-0.3,-0.1]} rotation={[0.5,0.2,0.3]}><boxGeometry args={[0.18,0.6,0.18]} /><meshStandardMaterial color="#2a3a5a" /></mesh>
-        <mesh position={[0.4,-0.3,-0.1]} rotation={[0.5,-0.2,-0.3]}><boxGeometry args={[0.18,0.6,0.18]} /><meshStandardMaterial color="#2a3a5a" /></mesh>
+        <mesh position={[-0.4,-0.3,-0.1]} rotation={[0.5,0.2,0.3]}><boxGeometry args={[0.18,0.6,0.18]} /><meshStandardMaterial color="#2a3a5a" emissive="#1a2740" emissiveIntensity={0.2} /></mesh>
+        <mesh position={[0.4,-0.3,-0.1]} rotation={[0.5,-0.2,-0.3]}><boxGeometry args={[0.18,0.6,0.18]} /><meshStandardMaterial color="#2a3a5a" emissive="#1a2740" emissiveIntensity={0.2} /></mesh>
       </group>
       {/* Coffee mug */}
       <mesh position={[1.2,-0.5,-1.6]}>
@@ -517,4 +521,5 @@ export default function OpeningCinematic({ onComplete }) {
     </div>
   );
 }
+
 

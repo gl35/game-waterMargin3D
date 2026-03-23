@@ -1906,8 +1906,8 @@ function BurningBuilding({ position, scale = 1, fireColor = '#ff5500' }) {
         <sphereGeometry args={[1.4, 6, 5]} />
         <meshStandardMaterial color="#1a1818" transparent opacity={0.35} roughness={1} />
       </mesh>
-      {/* Fire light */}
-      <pointLight ref={fireLight} color={fireColor} intensity={3.5} distance={28} decay={1.8} position={[0, 3, 0]} />
+      {/* Fire light — stronger so it actually lights up surroundings */}
+      <pointLight ref={fireLight} color={fireColor} intensity={8} distance={45} decay={1.2} position={[0, 3, 0]} />
     </group>
   );
 }
@@ -2035,12 +2035,15 @@ function BurnedTerrain() {
 }
 
 function BurningVillageScene() {
-  // Dim, mostly fire-driven lighting
   return (
     <>
-      <ambientLight intensity={0.08} color="#220808" />
-      <directionalLight color="#1a0808" intensity={0.3} position={[0, 40, 0]} />
-      <hemisphereLight args={[0x110404, 0x080402, 0.2]} />
+      {/* Playable darkness — enough to see but still feels like night */}
+      <ambientLight intensity={0.45} color="#331408" />
+      <directionalLight color="#ff8844" intensity={1.2} position={[20, 60, 10]} castShadow
+        shadow-mapSize-width={512} shadow-mapSize-height={512} />
+      {/* Moon fill — cool blue from above */}
+      <directionalLight color="#aaccff" intensity={0.55} position={[-30, 80, -20]} />
+      <hemisphereLight args={[0x331408, 0x180804, 0.5]} />
       <NightSky />
       <BurnedTerrain />
       {/* Path — ash-covered */}
@@ -2073,10 +2076,11 @@ function BurningVillageScene() {
       ))}
       {/* Ember particles rising */}
       <EmberParticles />
-      {/* Distant burning horizon glow */}
-      <pointLight color="#ff3300" intensity={4} distance={120} decay={0.8} position={[-40, 15, -60]} />
-      <pointLight color="#ff5500" intensity={3} distance={100} decay={0.9} position={[50, 12, -40]} />
-      <pointLight color="#ff4400" intensity={2.5} distance={80} decay={1} position={[0, 10, 40]} />
+      {/* Wide area fill from fires — makes whole map playable */}
+      <pointLight color="#ff4400" intensity={6} distance={180} decay={0.5} position={[0, 20, 0]} />
+      <pointLight color="#ff6620" intensity={4} distance={140} decay={0.6} position={[-40, 15, -60]} />
+      <pointLight color="#ff5500" intensity={4} distance={130} decay={0.6} position={[50, 12, -40]} />
+      <pointLight color="#ff4400" intensity={3} distance={120} decay={0.7} position={[0, 10, 40]} />
     </>
   );
 }
@@ -2233,7 +2237,7 @@ function Horse({ position, isMounted, heroRef }) {
 
 export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos, chapter }) {
   const mobile = isMobile();
-  const bgColor = chapter === 2 ? '#0a0404' : '#7ab8e8';
+  const bgColor = chapter === 2 ? '#1a0808' : '#7ab8e8';
   return (
     <Canvas
       fallback={<div style={{width:'100%',height:'100%',background:'#0a1520',display:'flex',alignItems:'center',justifyContent:'center',color:'#d9b36b',fontFamily:'serif',fontSize:'18px'}}>Loading...</div>}

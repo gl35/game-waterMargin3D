@@ -315,6 +315,97 @@ html, body, #root {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* ── SUPER MOVES BAR ── */
+.super-bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: clamp(110px, 14vh, 140px);
+  display: flex;
+  gap: 10px;
+  z-index: 50;
+}
+
+.super-btn {
+  position: relative;
+  width: 88px;
+  height: 72px;
+  border-radius: 14px;
+  border: 2px solid var(--super-color, #888);
+  background: rgba(10, 8, 20, 0.82);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.12s, box-shadow 0.15s;
+  box-shadow: 0 0 10px rgba(0,0,0,0.6), inset 0 0 12px rgba(0,0,0,0.4);
+}
+
+.super-btn.ready {
+  box-shadow: 0 0 14px var(--super-color, #888), inset 0 0 8px rgba(255,255,255,0.06);
+}
+.super-btn.ready:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 22px var(--super-color, #888);
+}
+.super-btn.ready:active {
+  transform: scale(0.95);
+}
+.super-btn.cooling {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.super-btn.cooling::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0;
+  width: var(--cd-pct, 100%);
+  height: 3px;
+  background: var(--super-color, #888);
+  border-radius: 0 0 12px 12px;
+  transition: width 1s linear;
+}
+
+.super-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.super-name {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  line-height: 1.2;
+}
+.super-cd {
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--super-color, #aaa);
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-shadow: 0 1px 4px #000;
+}
+.super-ready-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  animation: super-pulse 1.6s ease-in-out infinite;
+  background: radial-gradient(ellipse at center, var(--super-color, #888) 0%, transparent 70%);
+  opacity: 0.18;
+  pointer-events: none;
+}
+@keyframes super-pulse {
+  0%, 100% { opacity: 0.12; transform: scale(0.9); }
+  50%       { opacity: 0.28; transform: scale(1.05); }
+}
+
 .hud-bottom {
   position: absolute;
   left: 50%;

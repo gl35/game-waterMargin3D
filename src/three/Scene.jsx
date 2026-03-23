@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { NPCS } from '../core/story/config';
@@ -216,7 +216,20 @@ function NpcField({ highlightedNpcId, onNpcTap }) {
   );
 }
 
-function EnemySoldier({ glow, hitFlash, onClick }) {
+function EnemySoldier({ glow, hitFlash, onClick, enemyId, attackFx }) {
+  const bodyRef = useRef();
+
+  useFrame(() => {
+    if (!bodyRef.current) return;
+    const hitAge = attackFx?.enemyId === enemyId ? Date.now() - attackFx.at : 9999;
+    const stagger = hitAge < 340 ? Math.sin((hitAge / 340) * Math.PI) * 0.65 : 0;
+    bodyRef.current.position.z = stagger;
+    if (hitAge < 140) {
+      bodyRef.current.rotation.z = Math.sin(hitAge * 0.3) * 0.22;
+    } else {
+      bodyRef.current.rotation.z = THREE.MathUtils.lerp(bodyRef.current.rotation.z, 0, 0.15);
+    }
+  });
   const armorColor  = hitFlash ? '#ffd8a8' : '#3a2020';
   const plateColor  = hitFlash ? '#ffe0b0' : '#5a3030';
   const skinColor   = hitFlash ? '#fff1cf' : '#c89070';
@@ -229,6 +242,7 @@ function EnemySoldier({ glow, hitFlash, onClick }) {
 
   return (
     <group onClick={onClick}>
+      <group ref={bodyRef}>
       {/* Legs */}
       <mesh castShadow position={[-0.35, 0.6, 0]}>
         <cylinderGeometry args={[0.3, 0.35, 1.3, 8]} />
@@ -325,6 +339,7 @@ function EnemySoldier({ glow, hitFlash, onClick }) {
           <meshBasicMaterial color="#ff4010" transparent opacity={0.5} />
         </mesh>
       )}
+      </group>{/* end bodyRef stagger group */}
     </group>
   );
 }
@@ -341,6 +356,8 @@ function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) 
             <EnemySoldier
               glow={glow}
               hitFlash={hitFlash}
+              enemyId={enemy.id}
+              attackFx={attackFx}
               onClick={(e) => { e.stopPropagation(); onEnemyTap?.(enemy.id); }}
             />
           </group>
@@ -386,13 +403,26 @@ function useMovementControls() {
   return stateRef;
 }
 
-function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
+function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx }) {
   const group = heroRef || useRef();
   const controls = useMovementControls();
   const velocity = useRef(new THREE.Vector3());
   const moveCallback = useRef(onMove);
   const palette = heroSkin?.colors || DEFAULT_COLORS;
   const accessories = heroSkin?.accessories || {};
+
+  // Bone refs for animation
+  const leftLegRef  = useRef();
+  const rightLegRef = useRef();
+  const leftArmRef  = useRef();
+  const rightArmRef = useRef();
+  const torsoRef    = useRef();
+  const spearRef    = useRef();
+  const slashRef    = useRef();
+
+  // Attack state
+  const attackState = useRef({ active: false, t: 0, lastAt: 0 });
+
   const flowerOffsets = useMemo(() => (
     accessories.shirtPattern
       ? [
@@ -404,9 +434,27 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
         ]
       : []
   ), [accessories.shirtPattern]);
+
+  useEffect(() => { moveCallback.current = onMove; }, [onMove]);
+
+  // Trigger attack anim when attackFx changes
+  const lastAttackAt = useRef(0);
   useEffect(() => {
-    moveCallback.current = onMove;
-  }, [onMove]);
+    if (!attackFx?.at || attackFx.at === lastAttackAt.current) return;
+    lastAttackAt.current = attackFx.at;
+    attackState.current = { active: true, t: 0, lastAt: attackFx.at };
+  }, [attackFx]);
+
+  // Super move state
+  const superState = useRef({ active: false, type: null, t: 0 });
+  const lastSuperAt = useRef(0);
+  useEffect(() => {
+    if (!superFx?.at || superFx.at === lastSuperAt.current) return;
+    lastSuperAt.current = superFx.at;
+    superState.current = { active: true, type: superFx.type, t: 0 };
+    // Also trigger normal attack anim
+    attackState.current = { active: true, t: 0, lastAt: superFx.at };
+  }, [superFx]);
 
   useFrame((state, delta) => {
     if (!group.current) return;
@@ -416,7 +464,9 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
       0,
       (controls.current.forward || input.forward ? -1 : 0) + (controls.current.backward || input.backward ? 1 : 0),
     );
-    if (dir.lengthSq() > 0) {
+
+    const isMoving = dir.lengthSq() > 0;
+    if (isMoving) {
       dir.normalize();
       velocity.current.lerp(dir.multiplyScalar(18), 0.2);
       group.current.rotation.y = Math.atan2(dir.x, -dir.z);
@@ -428,139 +478,253 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
     group.current.position.x = THREE.MathUtils.clamp(group.current.position.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX);
     group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ);
 
-    group.current.position.y = -0.6 + Math.sin(state.clock.getElapsedTime() * 2 + group.current.position.x * 0.2) * 0.1;
+    const t = state.clock.getElapsedTime();
 
-    moveCallback.current?.({
-      x: group.current.position.x,
-      y: group.current.position.y,
-      z: group.current.position.z,
-    });
+    // ── Walk bob ──
+    if (isMoving) {
+      group.current.position.y = -0.6 + Math.abs(Math.sin(t * 9)) * 0.18;
+    } else {
+      group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, -0.6 + Math.sin(t * 1.4) * 0.04, 0.08);
+    }
+
+    moveCallback.current?.({ x: group.current.position.x, y: group.current.position.y, z: group.current.position.z });
+
+    // ── Attack animation ──
+    const atk = attackState.current;
+    if (atk.active) {
+      atk.t = Math.min(atk.t + delta * 5.5, 1);
+
+      // Thrust: lunge forward then snap back (sin curve peaks at t=0.4)
+      const thrustCurve = Math.sin(atk.t * Math.PI);
+      const lunge = thrustCurve * 1.2;
+
+      // Body lean into strike
+      if (torsoRef.current) {
+        torsoRef.current.rotation.x = -thrustCurve * 0.55;
+        torsoRef.current.rotation.z = thrustCurve * 0.15;
+      }
+
+      // Right arm thrusts spear forward hard
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = -thrustCurve * 1.8;
+        rightArmRef.current.rotation.z = -0.25 - thrustCurve * 0.3;
+      }
+
+      // Left arm swings back for balance
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = thrustCurve * 0.8;
+      }
+
+      // Spear lunges along z axis
+      if (spearRef.current) {
+        spearRef.current.position.z = -0.5 - lunge * 1.4;
+        spearRef.current.rotation.x = -thrustCurve * 0.9;
+      }
+
+      // Slash arc: visible during first half
+      if (slashRef.current) {
+        const slashProgress = Math.min(atk.t * 2.2, 1);
+        slashRef.current.scale.set(slashProgress * 2.2, slashProgress * 2.2, 1);
+        slashRef.current.material.opacity = (1 - slashProgress) * 0.75;
+        slashRef.current.rotation.z = -slashProgress * 1.4;
+      }
+
+      if (atk.t >= 1) {
+        atk.active = false;
+        // Reset all bones
+        if (torsoRef.current)    { torsoRef.current.rotation.x = 0; torsoRef.current.rotation.z = 0; }
+        if (rightArmRef.current) { rightArmRef.current.rotation.x = 0; rightArmRef.current.rotation.z = -0.25; }
+        if (leftArmRef.current)  { leftArmRef.current.rotation.x = 0; }
+        if (spearRef.current)    { spearRef.current.position.z = -0.5; spearRef.current.rotation.x = 0; }
+        if (slashRef.current)    { slashRef.current.scale.set(0, 0, 1); slashRef.current.material.opacity = 0; }
+      }
+    }
+
+    // ── Super move hero animation ──
+    const sup = superState.current;
+    if (sup.active) {
+      sup.t = Math.min(sup.t + delta * 3, 1);
+      const s = Math.sin(sup.t * Math.PI);
+
+      if (sup.type === 'storm') {
+        // Full body spin
+        if (group.current) group.current.rotation.y += delta * 22 * s;
+        if (torsoRef.current) { torsoRef.current.rotation.x = -s * 0.4; }
+        if (leftArmRef.current)  leftArmRef.current.rotation.z =  0.32 + s * 1.2;
+        if (rightArmRef.current) rightArmRef.current.rotation.z = -0.25 - s * 1.2;
+      }
+      if (sup.type === 'shadow') {
+        // Crouch + explosive leap effect
+        if (group.current) group.current.position.y += s * 1.8;
+        if (torsoRef.current) torsoRef.current.rotation.x = -s * 0.7;
+        if (rightArmRef.current) rightArmRef.current.rotation.x = -s * 2.2;
+      }
+      if (sup.t >= 1) {
+        sup.active = false;
+        if (torsoRef.current) { torsoRef.current.rotation.x = 0; }
+        if (leftArmRef.current)  leftArmRef.current.rotation.z =  0.32;
+        if (rightArmRef.current) rightArmRef.current.rotation.z = -0.25;
+      }
+    }
+
+    // ── Walk leg swing ──
+    if (isMoving) {
+      const swing = Math.sin(t * 10) * 0.55;
+      if (leftLegRef.current)  leftLegRef.current.rotation.x  =  swing;
+      if (rightLegRef.current) rightLegRef.current.rotation.x = -swing;
+      if (!atk.active) {
+        if (leftArmRef.current)  leftArmRef.current.rotation.x  = -swing * 0.6;
+        if (rightArmRef.current) rightArmRef.current.rotation.x  =  swing * 0.6;
+      }
+    } else if (!atk.active) {
+      if (leftLegRef.current)  leftLegRef.current.rotation.x  = THREE.MathUtils.lerp(leftLegRef.current.rotation.x,  0, 0.12);
+      if (rightLegRef.current) rightLegRef.current.rotation.x = THREE.MathUtils.lerp(rightLegRef.current.rotation.x, 0, 0.12);
+      if (leftArmRef.current)  leftArmRef.current.rotation.x  = THREE.MathUtils.lerp(leftArmRef.current.rotation.x,  0, 0.12);
+      if (rightArmRef.current) rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, 0, 0.12);
+    }
+
+    // ── Idle breathe ──
+    if (!isMoving && !atk.active && torsoRef.current) {
+      torsoRef.current.position.y = 2.25 + Math.sin(t * 1.6) * 0.04;
+    }
   });
 
   return (
     <group ref={group} position={[0, 0, 12]}>
 
-      {/* ── LEGS ── */}
-      <mesh castShadow position={[-0.38, 0.55, 0]}>
-        <cylinderGeometry args={[0.28, 0.33, 1.2, 10]} />
-        <meshStandardMaterial color={palette.tunic} />
-      </mesh>
-      <mesh castShadow position={[0.38, 0.55, 0]}>
-        <cylinderGeometry args={[0.28, 0.33, 1.2, 10]} />
-        <meshStandardMaterial color={palette.tunic} />
-      </mesh>
-      {/* Boots */}
-      <mesh castShadow position={[-0.38, 0.0, 0.08]}>
-        <boxGeometry args={[0.5, 0.28, 0.72]} />
-        <meshStandardMaterial color="#2a2040" />
-      </mesh>
-      <mesh castShadow position={[0.38, 0.0, 0.08]}>
-        <boxGeometry args={[0.5, 0.28, 0.72]} />
-        <meshStandardMaterial color="#2a2040" />
-      </mesh>
+      {/* ── LEGS (animated) ── */}
+      <group ref={leftLegRef} position={[-0.38, 1.15, 0]}>
+        <mesh castShadow position={[0, -0.6, 0]}>
+          <cylinderGeometry args={[0.28, 0.33, 1.2, 10]} />
+          <meshStandardMaterial color={palette.tunic} />
+        </mesh>
+        <mesh castShadow position={[0, -1.2, 0.08]}>
+          <boxGeometry args={[0.5, 0.28, 0.72]} />
+          <meshStandardMaterial color="#2a2040" />
+        </mesh>
+      </group>
+      <group ref={rightLegRef} position={[0.38, 1.15, 0]}>
+        <mesh castShadow position={[0, -0.6, 0]}>
+          <cylinderGeometry args={[0.28, 0.33, 1.2, 10]} />
+          <meshStandardMaterial color={palette.tunic} />
+        </mesh>
+        <mesh castShadow position={[0, -1.2, 0.08]}>
+          <boxGeometry args={[0.5, 0.28, 0.72]} />
+          <meshStandardMaterial color="#2a2040" />
+        </mesh>
+      </group>
 
-      {/* ── LOWER ROBE (flared) ── */}
+      {/* ── LOWER ROBE ── */}
       <mesh castShadow position={[0, 1.1, 0]}>
         <cylinderGeometry args={[0.72, 0.92, 1.3, 14]} />
         <meshStandardMaterial color={palette.cloak} roughness={0.85} />
       </mesh>
 
-      {/* ── UPPER TORSO ── */}
-      <mesh castShadow position={[0, 2.25, 0]}>
-        <cylinderGeometry args={[0.60, 0.72, 1.65, 12]} />
-        <meshStandardMaterial color={palette.cloak} roughness={0.85} />
-      </mesh>
+      {/* ── TORSO (animated) ── */}
+      <group ref={torsoRef} position={[0, 2.25, 0]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[0.60, 0.72, 1.65, 12]} />
+          <meshStandardMaterial color={palette.cloak} roughness={0.85} />
+        </mesh>
+        <mesh castShadow position={[0, 0.6, 0.45]}>
+          <boxGeometry args={[0.9, 0.6, 0.12]} />
+          <meshStandardMaterial color={palette.tunic} />
+        </mesh>
 
-      {/* Chest collar detail */}
-      <mesh castShadow position={[0, 2.85, 0.45]}>
-        <boxGeometry args={[0.9, 0.6, 0.12]} />
-        <meshStandardMaterial color={palette.tunic} />
-      </mesh>
+        {/* ── SASH ── */}
+        <mesh position={[0, -0.7, 0]}>
+          <torusGeometry args={[0.78, 0.1, 8, 24]} />
+          <meshStandardMaterial color={palette.headband} metalness={0.3} roughness={0.6} />
+        </mesh>
 
-      {/* ── SASH / BELT ── */}
-      <mesh position={[0, 1.55, 0]}>
-        <torusGeometry args={[0.78, 0.1, 8, 24]} />
-        <meshStandardMaterial color={palette.headband} metalness={0.3} roughness={0.6} />
-      </mesh>
+        {/* ── LEFT ARM (pivot from shoulder) ── */}
+        <group ref={leftArmRef} position={[-0.95, 0.1, 0]}>
+          <mesh castShadow position={[0, -0.65, 0]} rotation={[0, 0, 0.32]}>
+            <cylinderGeometry args={[0.21, 0.26, 1.55, 8]} />
+            <meshStandardMaterial color={palette.cloak} roughness={0.85} />
+          </mesh>
+          <mesh castShadow position={[-0.42, -1.25, 0]}>
+            <sphereGeometry args={[0.22, 8, 8]} />
+            <meshStandardMaterial color="#f2c9a0" />
+          </mesh>
+        </group>
 
-      {/* ── ARMS ── */}
-      {/* Left arm (holding spear side) */}
-      <mesh castShadow position={[-0.95, 2.1, 0]} rotation={[0, 0, 0.32]}>
-        <cylinderGeometry args={[0.21, 0.26, 1.55, 8]} />
-        <meshStandardMaterial color={palette.cloak} roughness={0.85} />
-      </mesh>
-      {/* Left hand */}
-      <mesh castShadow position={[-1.45, 1.35, 0]}>
-        <sphereGeometry args={[0.22, 8, 8]} />
-        <meshStandardMaterial color="#f2c9a0" />
-      </mesh>
-      {/* Right arm (raised) */}
-      <mesh castShadow position={[0.92, 2.3, -0.2]} rotation={[-0.5, 0, -0.25]}>
-        <cylinderGeometry args={[0.21, 0.26, 1.55, 8]} />
-        <meshStandardMaterial color={palette.cloak} roughness={0.85} />
-      </mesh>
-      {/* Right hand */}
-      <mesh castShadow position={[1.1, 3.1, -0.85]}>
-        <sphereGeometry args={[0.22, 8, 8]} />
-        <meshStandardMaterial color="#f2c9a0" />
-      </mesh>
+        {/* ── RIGHT ARM (pivot from shoulder, holds spear) ── */}
+        <group ref={rightArmRef} position={[0.92, 0.15, -0.2]} rotation={[0, 0, -0.25]}>
+          <mesh castShadow position={[0, -0.65, 0]}>
+            <cylinderGeometry args={[0.21, 0.26, 1.55, 8]} />
+            <meshStandardMaterial color={palette.cloak} roughness={0.85} />
+          </mesh>
+          <mesh castShadow position={[0.15, -1.25, -0.3]}>
+            <sphereGeometry args={[0.22, 8, 8]} />
+            <meshStandardMaterial color="#f2c9a0" />
+          </mesh>
+        </group>
 
-      {/* ── NECK ── */}
-      <mesh castShadow position={[0, 3.22, 0]}>
-        <cylinderGeometry args={[0.26, 0.3, 0.42, 8]} />
-        <meshStandardMaterial color="#f2c9a0" />
-      </mesh>
+        {/* ── NECK + HEAD ── */}
+        <mesh castShadow position={[0, 1.1, 0]}>
+          <cylinderGeometry args={[0.26, 0.3, 0.42, 8]} />
+          <meshStandardMaterial color="#f2c9a0" />
+        </mesh>
+        <mesh castShadow position={[0, 1.72, 0]}>
+          <sphereGeometry args={[0.72, 14, 14]} />
+          <meshStandardMaterial color="#f2c9a0" />
+        </mesh>
+        <mesh position={[-0.24, 1.78, 0.62]}>
+          <sphereGeometry args={[0.1, 6, 6]} />
+          <meshStandardMaterial color="#1a1030" />
+        </mesh>
+        <mesh position={[0.24, 1.78, 0.62]}>
+          <sphereGeometry args={[0.1, 6, 6]} />
+          <meshStandardMaterial color="#1a1030" />
+        </mesh>
 
-      {/* ── HEAD ── */}
-      <mesh castShadow position={[0, 3.85, 0]}>
-        <sphereGeometry args={[0.72, 14, 14]} />
-        <meshStandardMaterial color="#f2c9a0" />
-      </mesh>
-      {/* Eyes */}
-      <mesh position={[-0.24, 3.92, 0.62]}>
-        <sphereGeometry args={[0.1, 6, 6]} />
-        <meshStandardMaterial color="#1a1030" />
-      </mesh>
-      <mesh position={[0.24, 3.92, 0.62]}>
-        <sphereGeometry args={[0.1, 6, 6]} />
-        <meshStandardMaterial color="#1a1030" />
-      </mesh>
+        {/* ── HAT ── */}
+        <mesh castShadow position={[0, 2.32, -0.18]} rotation={[0.1, 0, 0]}>
+          <cylinderGeometry args={[1.55, 1.55, 0.18, 28]} />
+          <meshStandardMaterial color={palette.hatBrim} />
+        </mesh>
+        <mesh castShadow position={[0, 3.04, -0.18]} rotation={[0.1, 0, 0]}>
+          <coneGeometry args={[1.05, 1.85, 20]} />
+          <meshStandardMaterial color={palette.hatCrown} />
+        </mesh>
+      </group>
 
-      {/* ── HAT BRIM ── */}
-      <mesh castShadow position={[0, 4.46, -0.18]} rotation={[0.1, 0, 0]}>
-        <cylinderGeometry args={[1.55, 1.55, 0.18, 28]} />
-        <meshStandardMaterial color={palette.hatBrim} />
-      </mesh>
-      {/* Hat crown (cone) */}
-      <mesh castShadow position={[0, 5.18, -0.18]} rotation={[0.1, 0, 0]}>
-        <coneGeometry args={[1.05, 1.85, 20]} />
-        <meshStandardMaterial color={palette.hatCrown} />
-      </mesh>
+      {/* ── SPEAR (animated separately) ── */}
+      <group ref={spearRef} position={[0.6, 3.0, -0.5]}>
+        <mesh castShadow rotation={[-0.48, 0.18, 0.12]}>
+          <cylinderGeometry args={[0.07, 0.07, 7.5, 8]} />
+          <meshStandardMaterial color="#c8c0a8" metalness={0.15} roughness={0.7} />
+        </mesh>
+        <mesh position={[0.15, 3.6, -2.05]} rotation={[-0.48, 0.18, 0.12]}>
+          <coneGeometry args={[0.2, 0.9, 6]} />
+          <meshStandardMaterial color={palette.spearTip} metalness={0.6} roughness={0.2} />
+        </mesh>
+        {/* Spear tip glow on attack */}
+        <mesh position={[0.15, 3.6, -2.05]}>
+          <sphereGeometry args={[0.3, 8, 8]} />
+          <meshStandardMaterial color={palette.spearTip} emissive={palette.spearTip} emissiveIntensity={0.6} transparent opacity={0.3} />
+        </mesh>
+      </group>
 
-      {/* ── SPEAR SHAFT ── */}
-      <mesh castShadow position={[0.6, 3.0, -0.5]} rotation={[-0.48, 0.18, 0.12]}>
-        <cylinderGeometry args={[0.07, 0.07, 7.5, 8]} />
-        <meshStandardMaterial color="#c8c0a8" metalness={0.15} roughness={0.7} />
-      </mesh>
-      {/* Spear tip */}
-      <mesh position={[0.75, 6.6, -2.55]} rotation={[-0.48, 0.18, 0.12]}>
-        <coneGeometry args={[0.2, 0.9, 6]} />
-        <meshStandardMaterial color={palette.spearTip} metalness={0.6} roughness={0.2} />
-      </mesh>
-      {/* Tassel knot */}
+      {/* ── TASSEL ── */}
       <mesh position={[0.45, 1.5, 0.3]}>
         <sphereGeometry args={[0.18, 8, 8]} />
         <meshStandardMaterial color={palette.tasselTop} emissive={palette.tasselTop} emissiveIntensity={0.3} />
       </mesh>
-      {/* Tassel cord */}
       <mesh position={[0.45, 1.1, 0.3]}>
         <cylinderGeometry args={[0.04, 0.04, 0.7, 6]} />
         <meshStandardMaterial color={palette.tasselCord} />
       </mesh>
-      {/* Tassel bottom */}
       <mesh position={[0.45, 0.7, 0.3]}>
         <sphereGeometry args={[0.14, 8, 8]} />
         <meshStandardMaterial color={palette.tasselBottom} />
+      </mesh>
+
+      {/* ── SLASH ARC VFX ── (starts invisible, animated on attack) */}
+      <mesh ref={slashRef} position={[0, 2.8, -1.2]} rotation={[Math.PI / 2, 0, 0]} scale={[0, 0, 1]}>
+        <torusGeometry args={[1.8, 0.25, 8, 24, Math.PI * 1.1]} />
+        <meshBasicMaterial color="#b8e8ff" transparent opacity={0} side={THREE.DoubleSide} />
       </mesh>
 
       {accessories.lei && (
@@ -569,16 +733,12 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
           <meshStandardMaterial color="#ff7eb9" emissive="#ff9bcf" emissiveIntensity={0.35} />
         </mesh>
       )}
-
       {accessories.sunglasses && (
-        <>
-          <mesh position={[0, 3.88, 0.68]}>
-            <boxGeometry args={[1.3, 0.35, 0.12]} />
-            <meshStandardMaterial color="#111" metalness={0.4} roughness={0.2} />
-          </mesh>
-        </>
+        <mesh position={[0, 3.88, 0.68]}>
+          <boxGeometry args={[1.3, 0.35, 0.12]} />
+          <meshStandardMaterial color="#111" metalness={0.4} roughness={0.2} />
+        </mesh>
       )}
-
       {flowerOffsets.map((flower) => (
         <mesh key={flower.key} position={[flower.position[0] * 0.55, flower.position[1] * 0.55, flower.position[2]]}>
           <sphereGeometry args={[0.14, 6, 6]} />
@@ -586,7 +746,7 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput }) {
         </mesh>
       ))}
 
-      {/* Ground shadow disc */}
+      {/* Ground shadow */}
       <mesh position={[0, -0.55, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[0.9, 16]} />
         <meshBasicMaterial color="#000000" transparent opacity={0.18} />
@@ -668,9 +828,110 @@ function CameraRig({ target }) {
   return null;
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx }) {
+// ── SUPER MOVE VFX ──────────────────────────────────────────────
+function DragonStrikeVfx({ heroRef, active }) {
+  const ring1 = useRef(); const ring2 = useRef(); const beam = useRef();
+  const t = useRef(0);
+  useFrame((_, delta) => {
+    if (!active || !heroRef.current) return;
+    t.current = Math.min(t.current + delta * 3, 1);
+    const s = Math.sin(t.current * Math.PI);
+    if (ring1.current) { ring1.current.scale.setScalar(1 + s * 5); ring1.current.material.opacity = s * 0.7; }
+    if (ring2.current) { ring2.current.scale.setScalar(1 + s * 8); ring2.current.material.opacity = s * 0.4; }
+    if (beam.current)  { beam.current.scale.z = s * 12; beam.current.material.opacity = s * 0.85; }
+  });
+  useEffect(() => { t.current = 0; }, [active]);
+  if (!heroRef.current) return null;
+  const p = heroRef.current.position;
+  return (
+    <group position={[p.x, p.y + 2, p.z]}>
+      <mesh ref={ring1} rotation={[-Math.PI/2,0,0]} scale={[1,1,1]}>
+        <torusGeometry args={[1.5, 0.25, 8, 32]} />
+        <meshBasicMaterial color="#ff6820" transparent opacity={0} />
+      </mesh>
+      <mesh ref={ring2} rotation={[-Math.PI/2,0,0]} scale={[1,1,1]}>
+        <torusGeometry args={[2.2, 0.12, 8, 32]} />
+        <meshBasicMaterial color="#ffcc40" transparent opacity={0} />
+      </mesh>
+      <mesh ref={beam} position={[0,0,-1]} rotation={[Math.PI/2,0,0]} scale={[1,1,0]}>
+        <cylinderGeometry args={[0.18, 0.05, 1, 8]} />
+        <meshBasicMaterial color="#ff8830" transparent opacity={0} />
+      </mesh>
+    </group>
+  );
+}
+
+function StormSweepVfx({ heroRef, active }) {
+  const spiralRef = useRef(); const flashRef = useRef();
+  const t = useRef(0);
+  useFrame((_, delta) => {
+    if (!active || !heroRef.current) return;
+    t.current = Math.min(t.current + delta * 2.8, 1);
+    const s = Math.sin(t.current * Math.PI);
+    if (spiralRef.current) {
+      spiralRef.current.rotation.y += delta * 18;
+      spiralRef.current.scale.setScalar(1 + s * 3.5);
+      spiralRef.current.material.opacity = s * 0.65;
+    }
+    if (flashRef.current) { flashRef.current.scale.setScalar(1 + s * 6); flashRef.current.material.opacity = s * 0.35; }
+  });
+  useEffect(() => { t.current = 0; }, [active]);
+  if (!heroRef.current) return null;
+  const p = heroRef.current.position;
+  return (
+    <group position={[p.x, p.y + 1.5, p.z]}>
+      <mesh ref={spiralRef} rotation={[-Math.PI/2, 0, 0]}>
+        <torusGeometry args={[2.5, 0.3, 6, 28, Math.PI * 1.5]} />
+        <meshBasicMaterial color="#60c8ff" transparent opacity={0} />
+      </mesh>
+      <mesh ref={flashRef} rotation={[-Math.PI/2,0,0]}>
+        <circleGeometry args={[1.5, 24]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0} />
+      </mesh>
+    </group>
+  );
+}
+
+function ShadowBlinkVfx({ heroRef, active }) {
+  const auraRef = useRef(); const trailRef = useRef();
+  const t = useRef(0);
+  useFrame((_, delta) => {
+    if (!active || !heroRef.current) return;
+    t.current = Math.min(t.current + delta * 3.5, 1);
+    const s = Math.sin(t.current * Math.PI);
+    if (auraRef.current) {
+      auraRef.current.scale.setScalar(0.5 + s * 4);
+      auraRef.current.material.opacity = s * 0.8;
+      auraRef.current.rotation.y += delta * 10;
+    }
+    if (trailRef.current) {
+      trailRef.current.scale.y = s * 3;
+      trailRef.current.material.opacity = s * 0.55;
+    }
+  });
+  useEffect(() => { t.current = 0; }, [active]);
+  if (!heroRef.current) return null;
+  const p = heroRef.current.position;
+  return (
+    <group position={[p.x, p.y + 2, p.z]}>
+      <mesh ref={auraRef}>
+        <octahedronGeometry args={[1.2, 0]} />
+        <meshBasicMaterial color="#a060ff" transparent opacity={0} wireframe />
+      </mesh>
+      <mesh ref={trailRef} position={[0, -1, 0]} scale={[1, 0, 1]}>
+        <cylinderGeometry args={[0.05, 0.5, 1, 8]} />
+        <meshBasicMaterial color="#d080ff" transparent opacity={0} />
+      </mesh>
+    </group>
+  );
+}
+
+function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx }) {
   const heroRef = useRef();
   const mobile = isMobile();
+  const dragonActive = superFx?.type === 'dragon' && Date.now() - superFx.at < 1200;
+  const stormActive  = superFx?.type === 'storm'  && Date.now() - superFx.at < 1400;
+  const shadowActive = superFx?.type === 'shadow' && Date.now() - superFx.at < 1100;
   return (
     <>
       <primitive attach="fog" object={new THREE.Fog(0xb8e4ff, mobile ? 70 : 90, mobile ? 320 : 430)} />
@@ -682,14 +943,17 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
       <TreeField />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
       <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} attackFx={attackFx} />
-      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} />
+      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} />
+      <DragonStrikeVfx heroRef={heroRef} active={dragonActive} />
+      <StormSweepVfx  heroRef={heroRef} active={stormActive} />
+      <ShadowBlinkVfx heroRef={heroRef} active={shadowActive} />
       <FloatingRune />
       <CameraRig target={heroRef} />
     </>
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx }) {
   const mobile = isMobile();
   return (
     <Canvas
@@ -703,7 +967,7 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
       }}
     >
       <Suspense fallback={null}>
-        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} />
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} />
       </Suspense>
     </Canvas>
   );

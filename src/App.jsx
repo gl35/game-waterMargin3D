@@ -35,6 +35,33 @@ const ACTION_SLOTS = [
   { id: 'camp', label: 'Camp Rest', cooldownMs: 22000 },
 ];
 
+const SUPER_MOVES = [
+  {
+    id: 'dragon',
+    label: '🐉 Dragon Strike',
+    desc: 'Unleash a piercing spear lunge — deals 60 damage to all enemies nearby',
+    cooldownMs: 18000,
+    color: '#ff6820',
+    key: 'Digit1',
+  },
+  {
+    id: 'storm',
+    label: '⚡ Storm Sweep',
+    desc: 'Spinning blade storm hits all enemies in range for 35 damage each',
+    cooldownMs: 22000,
+    color: '#60c8ff',
+    key: 'Digit2',
+  },
+  {
+    id: 'shadow',
+    label: '🌑 Shadow Blink',
+    desc: 'Vanish and reappear behind the nearest enemy dealing 80 crit damage',
+    cooldownMs: 28000,
+    color: '#a060ff',
+    key: 'Digit3',
+  },
+];
+
 const TAVERN_CREW = [
   {
     id: 'scout',
@@ -89,6 +116,8 @@ export default function App() {
   const [combatXp, setCombatXp] = useState(0);
   const [lastEnemyHitAt, setLastEnemyHitAt] = useState(0);
   const [attackFx, setAttackFx] = useState({ at: 0, enemyId: null, damage: 0 });
+  const [superFx, setSuperFx] = useState({ at: 0, type: null });
+  const [superCooldowns, setSuperCooldowns] = useState({});
   const [damagePopups, setDamagePopups] = useState([]);
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
 
@@ -374,6 +403,76 @@ export default function App() {
     }
   }, [enemies, highlightedEnemyId, playerLevel]);
 
+  const handleSuperMove = useCallback((superId) => {
+    const now = Date.now();
+    const move = SUPER_MOVES.find((m) => m.id === superId);
+    if (!move) return;
+    const readyAt = superCooldowns[superId] || 0;
+    if (readyAt > now) {
+      const sec = Math.ceil((readyAt - now) / 1000);
+      setQuestNotice(`${move.label} — cooldown: ${sec}s`);
+      return;
+    }
+
+    setSuperCooldowns((prev) => ({ ...prev, [superId]: now + move.cooldownMs }));
+    setSuperFx({ at: now, type: superId });
+
+    if (superId === 'dragon') {
+      // Pierce: heavy single-target
+      const target = getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 40);
+      if (!target) { setQuestNotice('No enemy in range for Dragon Strike!'); return; }
+      const dmg = 55 + Math.floor(Math.random() * 15);
+      const { enemies: next, killed, enemy } = damageEnemy(enemies, target.id, dmg, now);
+      setEnemies(next);
+      setAttackFx({ at: now, enemyId: target.id, damage: dmg });
+      setDamagePopups((prev) => [...prev, { id: `super-${now}`, text: `🐉 -${dmg}`, crit: true }]);
+      setQuestNotice(`Dragon Strike! Hit ${enemy?.label} for ${dmg}!`);
+      if (killed) {
+        setStory((prev) => recordRaiderKill(prev));
+        setCombatXp((xp) => xp + (enemy?.xp || 30));
+      }
+    }
+
+    if (superId === 'storm') {
+      // AoE sweep all nearby
+      let totalDmg = 0;
+      let hitCount = 0;
+      let nextEnemies = enemies;
+      const liveTargets = enemies.filter((e) => !e.dead && Math.hypot(e.x - heroPosition.current.x, e.z - heroPosition.current.z) < 36);
+      liveTargets.forEach((e) => {
+        const dmg = 28 + Math.floor(Math.random() * 16);
+        const result = damageEnemy(nextEnemies, e.id, dmg, now);
+        nextEnemies = result.enemies;
+        totalDmg += dmg;
+        hitCount += 1;
+        setAttackFx({ at: now + hitCount * 60, enemyId: e.id, damage: dmg });
+        if (result.killed) {
+          setStory((prev) => recordRaiderKill(prev));
+          setCombatXp((xp) => xp + (result.enemy?.xp || 20));
+        }
+      });
+      setEnemies(nextEnemies);
+      setDamagePopups((prev) => [...prev, { id: `super-${now}`, text: `⚡ ${hitCount} hit${hitCount !== 1 ? 's' : ''}!`, crit: true }]);
+      setQuestNotice(hitCount > 0 ? `Storm Sweep hit ${hitCount} enemies for ${totalDmg} total!` : 'Storm Sweep — no enemies in range!');
+    }
+
+    if (superId === 'shadow') {
+      // Crit blink — teleport + massive damage
+      const target = getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, 60);
+      if (!target) { setQuestNotice('No enemy in range for Shadow Blink!'); return; }
+      const dmg = 75 + Math.floor(Math.random() * 20);
+      const { enemies: next, killed, enemy } = damageEnemy(enemies, target.id, dmg, now);
+      setEnemies(next);
+      setAttackFx({ at: now, enemyId: target.id, damage: dmg });
+      setDamagePopups((prev) => [...prev, { id: `super-${now}`, text: `🌑 CRIT -${dmg}`, crit: true }]);
+      setQuestNotice(`Shadow Blink! Backstab ${enemy?.label} for ${dmg} crit!`);
+      if (killed) {
+        setStory((prev) => recordRaiderKill(prev));
+        setCombatXp((xp) => xp + (enemy?.xp || 40));
+      }
+    }
+  }, [enemies, superCooldowns]);
+
   const handleInteractPointer = useCallback((event) => {
     event.preventDefault();
     if (dialog) {
@@ -522,6 +621,12 @@ export default function App() {
         }
       } else if (event.code === 'KeyF') {
         handleAttack();
+      } else if (event.code === 'Digit1') {
+        handleSuperMove('dragon');
+      } else if (event.code === 'Digit2') {
+        handleSuperMove('storm');
+      } else if (event.code === 'Digit3') {
+        handleSuperMove('shadow');
       } else if (event.code === 'Space' || event.code === 'Escape') {
         if (showTavernScene) {
           closeTavernScene();
@@ -534,13 +639,13 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [attemptInteraction, closeTavernScene, dialog, dismissDialog, handleAttack, showTavernScene]);
+  }, [attemptInteraction, closeTavernScene, dialog, dismissDialog, handleAttack, handleSuperMove, showTavernScene]);
 
   return (
     <div className={`hud-shell ${dialog ? 'dialog-open' : ''}`}>
       <div className="hud-frame">
         {webglSupported ? (
-          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} />
+          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} />
         ) : (
           <div className="webgl-fallback">
             <div className="webgl-fallback-title">3D engine failed to start</div>
@@ -632,6 +737,31 @@ export default function App() {
         <div className="ring outer">
           <div className="ring inner" />
         </div>
+      </div>
+
+      {/* ── SUPER MOVES BAR ── */}
+      <div className="super-bar">
+        {SUPER_MOVES.map((move) => {
+          const now = Date.now();
+          const cooldownMs = Math.max(0, (superCooldowns[move.id] || 0) - now);
+          const cooling = cooldownMs > 0;
+          const pct = cooling ? Math.round((cooldownMs / move.cooldownMs) * 100) : 0;
+          return (
+            <button
+              key={move.id}
+              className={`super-btn ${cooling ? 'cooling' : 'ready'}`}
+              style={{ '--super-color': move.color, '--cd-pct': `${pct}%` }}
+              onClick={() => handleSuperMove(move.id)}
+              disabled={cooling}
+              title={move.desc}
+            >
+              <span className="super-icon">{move.label.split(' ')[0]}</span>
+              <span className="super-name">{move.label.slice(move.label.indexOf(' ') + 1)}</span>
+              {cooling && <span className="super-cd">{Math.ceil(cooldownMs / 1000)}s</span>}
+              {!cooling && <span className="super-ready-glow" />}
+            </button>
+          );
+        })}
       </div>
 
       <div className="hud-bottom">

@@ -155,16 +155,6 @@ export default function App() {
   const openTavernScene = useCallback(() => setShowTavernScene(true), []);
   const closeTavernScene = useCallback(() => setShowTavernScene(false), []);
 
-  // Detect level-up
-  useEffect(() => {
-    if (playerLevel > prevLevel.current) {
-      prevLevel.current = playerLevel;
-      setLevelUpFlash(true);
-      setQuestNotice(`🌟 LEVEL UP! You are now Level ${playerLevel}! +HP +DMG +SPD`);
-      setTimeout(() => setLevelUpFlash(false), 1800);
-    }
-  }, [playerLevel]);
-
   // Trigger victory banquet when chapter completes (any path)
   useEffect(() => {
     const stage = story.chapterState.stage;
@@ -187,6 +177,16 @@ export default function App() {
       attackRange: base.attackRange + statBonuses.range,
     };
   }, [playerLevel, statBonuses]);
+
+  // Detect level-up (must be after playerLevel is defined)
+  useEffect(() => {
+    if (playerLevel > prevLevel.current) {
+      prevLevel.current = playerLevel;
+      setLevelUpFlash(true);
+      setQuestNotice(`🌟 LEVEL UP! You are now Level ${playerLevel}! +HP +DMG +SPD`);
+      setTimeout(() => setLevelUpFlash(false), 1800);
+    }
+  }, [playerLevel]);
 
   const hud = useMemo(() => ({
     hp: story.player.hp,

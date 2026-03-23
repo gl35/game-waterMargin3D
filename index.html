@@ -36,13 +36,22 @@
       }
       @keyframes load-progress {
         0%   { width: 0%; }
-        40%  { width: 55%; }
-        80%  { width: 82%; }
-        100% { width: 95%; }
+        40%  { width: 60%; }
+        70%  { width: 85%; }
+        90%  { width: 95%; }
+        100% { width: 100%; }
       }
       #loading-hint {
-        margin-top: 20px; font-size: clamp(10px, 2vw, 13px);
-        color: #556677; font-family: sans-serif;
+        margin-top: 20px; font-size: clamp(11px, 2vw, 14px);
+        color: #7a9aaa; font-family: sans-serif;
+        animation: hint-pulse 2s ease-in-out 2.5s infinite;
+      }
+      @keyframes hint-pulse {
+        0%,100% { opacity: 0.5; }
+        50%     { opacity: 1; }
+      }
+      #loading-screen {
+        cursor: pointer;
       }
     </style>
   </head>
@@ -51,16 +60,19 @@
       <div id="loading-title">夢 Dream of Water Margin</div>
       <div id="loading-sub">Forged by oath, steel, and storm</div>
       <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
-      <div id="loading-hint">Loading world...</div>
+      <div id="loading-hint">Tap or click to continue if this takes too long</div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // Hide loading screen once React has mounted
       window.__hideLoading = function() {
         const el = document.getElementById('loading-screen');
-        if (el) { el.classList.add('fade-out'); setTimeout(() => el.remove(), 700); }
+        if (el) { el.classList.add('fade-out'); setTimeout(() => el.remove(), 600); }
       };
+      // Hard fallback: force-hide after 3.5 seconds no matter what
+      setTimeout(window.__hideLoading, 3500);
+      // Also hide on tap/click
+      document.getElementById('loading-screen').addEventListener('click', window.__hideLoading);
     </script>
   </body>
 </html>

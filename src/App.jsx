@@ -439,8 +439,6 @@ export default function App() {
           ? enemies.find((e) => e.id === highlightedEnemyId && !e.dead)
           : getClosestLiveEnemy(enemies, heroPosition.current.x, heroPosition.current.z, heroStats.attackRange);
 
-    if (!target) { if (!isAuto) setQuestNotice('No enemy in range.'); return; }
-
     const now = Date.now();
     const timeSinceLast = now - lastComboAt.current;
 
@@ -448,18 +446,20 @@ export default function App() {
     const nextStep = timeSinceLast < 1800 ? (comboStep + 1) % 3 : 0;
     setComboStep(nextStep);
     lastComboAt.current = now;
-
-    const stepMult = [1.0, 1.15, 1.5][nextStep];    // hit 3 is the launcher
     const newCombo = timeSinceLast < 1800 ? comboCount + 1 : 1;
     setComboCount(newCombo);
 
+    // Stamina cost + animation always fires regardless of target
+    setStamina((s) => Math.max(0, s - 10));
+    lastStaminaUse.current = now;
+    setAttackFx({ at: now, enemyId: target?.id ?? null, damage: 0, step: nextStep });
+
+    if (!target) return; // swing in air — animation plays, no damage
+
+    const stepMult = [1.0, 1.15, 1.5][nextStep];
     const isCrit = Math.random() < 0.12 + (newCombo > 5 ? 0.18 : 0);
     const base = heroStats.damage + Math.floor(Math.random() * 6);
     const dmg = Math.round(base * stepMult * (isCrit ? 2.2 : 1));
-
-    // Stamina cost
-    setStamina((s) => Math.max(0, s - 10));
-    lastStaminaUse.current = now;
 
     let next = knockbackEnemy(enemies, target.id, heroPosition.current.x, heroPosition.current.z, 5 + nextStep * 3);
     const res = damageEnemy(next, target.id, dmg, now);
@@ -473,7 +473,6 @@ export default function App() {
     if (isCrit || nextStep === 2) { setScreenShake(true); setTimeout(() => setScreenShake(false), 180); }
 
     if (res.killed) {
-      // Kill flash + slow-mo
       setKillFlash(true); setSlowMo(true);
       setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 600);
       setStory((prev) => {

@@ -1906,35 +1906,20 @@ function Horse({ position, isMounted, heroRef }) {
   const neckRef = useRef(); const tailRef = useRef();
 
   useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
     if (!groupRef.current) return;
-
-    // When mounted — horse follows hero exactly
-    if (isMounted && heroRef?.current) {
-      const hx = heroRef.current.position.x;
-      const hz = heroRef.current.position.z;
-      const gy = getTerrainHeight(hx, hz);
-      groupRef.current.position.set(hx, gy, hz);
-      groupRef.current.rotation.y = heroRef.current.rotation.y;
-    } else {
-      // Idle — stay at spawn position on terrain
-      const gy = getTerrainHeight(position.x, position.z);
-      groupRef.current.position.set(position.x, gy, position.z);
-    }
-
-    const moving = isMounted && heroRef?.current &&
-      (Math.abs(heroRef.current.position.x - (groupRef.current._lastX || 0)) > 0.01 ||
-       Math.abs(heroRef.current.position.z - (groupRef.current._lastZ || 0)) > 0.01);
-    if (heroRef?.current) {
-      groupRef.current._lastX = heroRef.current.position.x;
-      groupRef.current._lastZ = heroRef.current.position.z;
-    }
-
-    // Gallop speed based on whether actually moving
+    const t = clock.getElapsedTime();
+    const px = isMounted && heroRef?.current ? heroRef.current.position.x : position.x;
+    const pz = isMounted && heroRef?.current ? heroRef.current.position.z : position.z;
+    const gy = getTerrainHeight(px, pz);
+    groupRef.current.position.set(px, gy, pz);
+    if (isMounted && heroRef?.current) groupRef.current.rotation.y = heroRef.current.rotation.y;
+    const lastX = groupRef.current._lx ?? px;
+    const lastZ = groupRef.current._lz ?? pz;
+    const moving = Math.abs(px - lastX) > 0.005 || Math.abs(pz - lastZ) > 0.005;
+    groupRef.current._lx = px; groupRef.current._lz = pz;
     const speed = moving ? 8 : 1.0;
     const gallop = Math.sin(t * speed);
-    const swing = gallop * (moving ? 0.55 : 0.12);
-
+    const swing = gallop * (moving ? 0.55 : 0.1);
     if (legFL.current) legFL.current.rotation.x =  swing;
     if (legFR.current) legFR.current.rotation.x = -swing;
     if (legBL.current) legBL.current.rotation.x = -swing;
@@ -1943,157 +1928,77 @@ function Horse({ position, isMounted, heroRef }) {
     if (tailRef.current) tailRef.current.rotation.z = Math.sin(t * 1.5) * 0.22;
   });
 
-  const horseColor = '#8a6030';
-  const darkBrown = '#5a3a18';
-  const manColor = '#2a1808';
+  const H = '#8a6030'; const D = '#5a3a18'; const M = '#2a1808';
+  const SADDLE_Y = 1.96;
 
   return (
     <group ref={groupRef} position={[position.x, getTerrainHeight(position.x, position.z), position.z]}>
-      {/* Rider — sits exactly on saddle at y=1.96 */}
+      {/* Body */}
+      <mesh castShadow position={[0,1.2,0]}><boxGeometry args={[1.6,1.1,3.2]} /><meshStandardMaterial color={H} roughness={0.8} /></mesh>
+      <mesh position={[0,0.9,0]}><cylinderGeometry args={[0.7,0.65,2.8,10]} /><meshStandardMaterial color={H} roughness={0.8} /></mesh>
+      {/* Neck+head */}
+      <group ref={neckRef} position={[0,1.6,1.3]}>
+        <mesh castShadow rotation={[0.4,0,0]}><cylinderGeometry args={[0.38,0.5,1.4,8]} /><meshStandardMaterial color={H} roughness={0.8} /></mesh>
+        <mesh castShadow position={[0,0.9,0.5]} rotation={[0.3,0,0]}><boxGeometry args={[0.55,0.6,1.1]} /><meshStandardMaterial color={H} roughness={0.8} /></mesh>
+        <mesh position={[0,0.7,1.1]} rotation={[0.3,0,0]}><boxGeometry args={[0.45,0.35,0.5]} /><meshStandardMaterial color={D} roughness={0.9} /></mesh>
+        <mesh position={[-0.22,1.0,0.75]}><sphereGeometry args={[0.08,6,6]} /><meshStandardMaterial color="#1a1010" /></mesh>
+        <mesh position={[0.22,1.0,0.75]}><sphereGeometry args={[0.08,6,6]} /><meshStandardMaterial color="#1a1010" /></mesh>
+        <mesh position={[0,0.8,0]} rotation={[0.2,0,0]}><boxGeometry args={[0.2,0.8,1.2]} /><meshStandardMaterial color={M} roughness={1} /></mesh>
+        <mesh position={[-0.2,1.4,0.5]}><coneGeometry args={[0.08,0.3,5]} /><meshStandardMaterial color={H} /></mesh>
+        <mesh position={[0.2,1.4,0.5]}><coneGeometry args={[0.08,0.3,5]} /><meshStandardMaterial color={H} /></mesh>
+      </group>
+      {/* Tail */}
+      <group ref={tailRef} position={[0,1.2,-1.6]}>
+        <mesh rotation={[-0.4,0,0]} position={[0,-0.3,-0.3]}><cylinderGeometry args={[0.12,0.04,1.2,6]} /><meshStandardMaterial color={M} roughness={1} /></mesh>
+      </group>
+      {/* Legs */}
+      {[[-0.5,0,1.0],[0.5,0,1.0],[-0.5,0,-0.9],[0.5,0,-0.9]].map(([lx,,lz],i) => (
+        <group key={i} ref={[legFL,legFR,legBL,legBR][i]} position={[lx,0.4,lz]}>
+          <mesh castShadow position={[0,-0.3,0]}><cylinderGeometry args={[0.18,0.14,1.2,7]} /><meshStandardMaterial color={D} roughness={0.9} /></mesh>
+          <mesh castShadow position={[0,-0.95,0]}><boxGeometry args={[0.22,0.18,0.28]} /><meshStandardMaterial color="#1a1010" /></mesh>
+        </group>
+      ))}
+      {/* Saddle */}
+      <mesh position={[0,1.82,-0.1]}><boxGeometry args={[0.9,0.2,1.0]} /><meshStandardMaterial color="#3a1808" roughness={0.7} /></mesh>
+      <mesh position={[0,1.92,-0.1]}><boxGeometry args={[0.7,0.12,0.8]} /><meshStandardMaterial color="#5a2818" roughness={0.7} /></mesh>
+      {/* Mountable ring */}
+      {!isMounted && (
+        <mesh position={[0,0.05,0]} rotation={[-Math.PI/2,0,0]}>
+          <ringGeometry args={[2.2,2.8,24]} /><meshBasicMaterial color="#ffe060" transparent opacity={0.4} />
+        </mesh>
+      )}
+      {/* Rider — hips at SADDLE_Y */}
       {isMounted && (
-        // Saddle top is at y=1.96 from group root. Rider hips start here.
-        <group position={[0, 1.96, -0.1]}>
-          {/* Legs straddling (spread apart, angled down like riding) */}
-          <mesh castShadow position={[-0.45, -0.3, 0]} rotation={[0, 0, 0.6]}>
-            <cylinderGeometry args={[0.16, 0.2, 0.9, 8]} />
-            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
-          </mesh>
-          <mesh castShadow position={[0.45, -0.3, 0]} rotation={[0, 0, -0.6]}>
-            <cylinderGeometry args={[0.16, 0.2, 0.9, 8]} />
-            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
-          </mesh>
+        <group position={[0,SADDLE_Y,-0.1]}>
+          {/* Legs straddling horse */}
+          <mesh castShadow position={[-0.52,-0.28,0]} rotation={[0,0,0.55]}><cylinderGeometry args={[0.16,0.2,0.85,8]} /><meshStandardMaterial color="#f0ece0" roughness={0.8} /></mesh>
+          <mesh castShadow position={[0.52,-0.28,0]} rotation={[0,0,-0.55]}><cylinderGeometry args={[0.16,0.2,0.85,8]} /><meshStandardMaterial color="#f0ece0" roughness={0.8} /></mesh>
           {/* Boots */}
-          <mesh castShadow position={[-0.82, -0.65, 0.1]}><boxGeometry args={[0.28, 0.22, 0.55]} /><meshStandardMaterial color="#1a1820" /></mesh>
-          <mesh castShadow position={[0.82, -0.65, 0.1]}><boxGeometry args={[0.28, 0.22, 0.55]} /><meshStandardMaterial color="#1a1820" /></mesh>
+          <mesh castShadow position={[-0.9,-0.6,0.1]}><boxGeometry args={[0.28,0.22,0.55]} /><meshStandardMaterial color="#1a1820" /></mesh>
+          <mesh castShadow position={[0.9,-0.6,0.1]}><boxGeometry args={[0.28,0.22,0.55]} /><meshStandardMaterial color="#1a1820" /></mesh>
           {/* Torso */}
-          <mesh castShadow position={[0, 0.55, 0]}>
-            <cylinderGeometry args={[0.36, 0.44, 1.1, 10]} />
-            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
-          </mesh>
-          {/* Left arm — holding reins */}
-          <mesh castShadow position={[-0.58, 0.5, 0.45]} rotation={[0.6, 0, 0.25]}>
-            <cylinderGeometry args={[0.14, 0.18, 0.9, 8]} />
-            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
-          </mesh>
-          {/* Right arm — holding spear up */}
-          <mesh castShadow position={[0.6, 0.7, -0.3]} rotation={[-0.5, 0, -0.2]}>
-            <cylinderGeometry args={[0.14, 0.18, 0.9, 8]} />
-            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
-          </mesh>
+          <mesh castShadow position={[0,0.52,0]}><cylinderGeometry args={[0.36,0.44,1.05,10]} /><meshStandardMaterial color="#f0ece0" roughness={0.8} /></mesh>
+          {/* Arms */}
+          <mesh castShadow position={[-0.55,0.45,0.4]} rotation={[0.55,0,0.22]}><cylinderGeometry args={[0.13,0.17,0.85,8]} /><meshStandardMaterial color="#f0ece0" roughness={0.8} /></mesh>
+          <mesh castShadow position={[0.58,0.65,-0.25]} rotation={[-0.45,0,-0.18]}><cylinderGeometry args={[0.13,0.17,0.85,8]} /><meshStandardMaterial color="#f0ece0" roughness={0.8} /></mesh>
           {/* Neck */}
-          <mesh castShadow position={[0, 1.22, 0]}><cylinderGeometry args={[0.2, 0.24, 0.38, 8]} /><meshStandardMaterial color="#f2c9a0" /></mesh>
+          <mesh castShadow position={[0,1.15,0]}><cylinderGeometry args={[0.19,0.23,0.36,8]} /><meshStandardMaterial color="#f2c9a0" /></mesh>
           {/* Head */}
-          <mesh castShadow position={[0, 1.56, 0]}><sphereGeometry args={[0.38, 12, 12]} /><meshStandardMaterial color="#f2c9a0" /></mesh>
-          {/* Eyes */}
-          <mesh position={[-0.16, 1.62, 0.32]}><sphereGeometry args={[0.07, 6, 6]} /><meshStandardMaterial color="#1a1020" /></mesh>
-          <mesh position={[0.16, 1.62, 0.32]}><sphereGeometry args={[0.07, 6, 6]} /><meshStandardMaterial color="#1a1020" /></mesh>
-          {/* Hat brim */}
-          <mesh position={[0, 1.88, -0.08]} rotation={[0.08,0,0]}><cylinderGeometry args={[0.82,0.82,0.13,22]} /><meshStandardMaterial color="#8b6240" /></mesh>
-          {/* Hat crown */}
-          <mesh position={[0, 2.1, -0.08]} rotation={[0.08,0,0]}><coneGeometry args={[0.55,0.85,16]} /><meshStandardMaterial color="#9f7c55" /></mesh>
-          {/* Spear — held high at right side */}
-          <mesh castShadow position={[0.65, 1.2, -0.5]} rotation={[-0.35,0.15,0.08]}>
-            <cylinderGeometry args={[0.055,0.055,5.5,6]} />
-            <meshStandardMaterial color="#c8c0a8" metalness={0.15} roughness={0.7} />
-          </mesh>
-          {/* Spear tip */}
-          <mesh position={[0.78, 3.6, -2.1]} rotation={[-0.35,0.15,0.08]}>
-            <coneGeometry args={[0.15,0.7,5]} />
-            <meshStandardMaterial color="#f7d99a" metalness={0.6} roughness={0.2} />
-          </mesh>
+          <mesh castShadow position={[0,1.48,0]}><sphereGeometry args={[0.37,12,12]} /><meshStandardMaterial color="#f2c9a0" /></mesh>
+          <mesh position={[-0.15,1.54,0.3]}><sphereGeometry args={[0.065,6,6]} /><meshStandardMaterial color="#1a1020" /></mesh>
+          <mesh position={[0.15,1.54,0.3]}><sphereGeometry args={[0.065,6,6]} /><meshStandardMaterial color="#1a1020" /></mesh>
+          {/* Hat */}
+          <mesh position={[0,1.78,-0.07]} rotation={[0.08,0,0]}><cylinderGeometry args={[0.78,0.78,0.13,20]} /><meshStandardMaterial color="#8b6240" /></mesh>
+          <mesh position={[0,1.99,-0.07]} rotation={[0.08,0,0]}><coneGeometry args={[0.52,0.82,16]} /><meshStandardMaterial color="#9f7c55" /></mesh>
+          {/* Spear */}
+          <mesh castShadow position={[0.6,1.1,-0.45]} rotation={[-0.32,0.12,0.06]}><cylinderGeometry args={[0.055,0.055,5.5,6]} /><meshStandardMaterial color="#c8c0a8" metalness={0.15} roughness={0.7} /></mesh>
+          <mesh position={[0.72,3.4,-2.0]} rotation={[-0.32,0.12,0.06]}><coneGeometry args={[0.14,0.65,5]} /><meshStandardMaterial color="#f7d99a" metalness={0.6} roughness={0.2} /></mesh>
         </group>
       )}
-      <group>
-        {/* Body */}
-        <mesh position={[0, 1.2, 0]}>
-          <boxGeometry args={[1.6, 1.1, 3.2]} />
-          <meshStandardMaterial color={horseColor} roughness={0.8} />
-        </mesh>
-        {/* Belly rounding */}
-        <mesh position={[0, 0.9, 0]}>
-          <cylinderGeometry args={[0.7, 0.65, 2.8, 10]} />
-          <meshStandardMaterial color={horseColor} roughness={0.8} />
-        </mesh>
-
-        {/* Neck */}
-        <group ref={neckRef} position={[0, 1.6, 1.3]}>
-          <mesh rotation={[0.4, 0, 0]}>
-            <cylinderGeometry args={[0.38, 0.5, 1.4, 8]} />
-            <meshStandardMaterial color={horseColor} roughness={0.8} />
-          </mesh>
-          {/* Head */}
-          <mesh position={[0, 0.9, 0.5]} rotation={[0.3, 0, 0]}>
-            <boxGeometry args={[0.55, 0.6, 1.1]} />
-            <meshStandardMaterial color={horseColor} roughness={0.8} />
-          </mesh>
-          {/* Nose */}
-          <mesh position={[0, 0.7, 1.1]} rotation={[0.3, 0, 0]}>
-            <boxGeometry args={[0.45, 0.35, 0.5]} />
-            <meshStandardMaterial color={darkBrown} roughness={0.9} />
-          </mesh>
-          {/* Eye */}
-          <mesh position={[-0.22, 1.0, 0.75]}>
-            <sphereGeometry args={[0.08, 6, 6]} />
-            <meshStandardMaterial color="#1a1010" />
-          </mesh>
-          <mesh position={[0.22, 1.0, 0.75]}>
-            <sphereGeometry args={[0.08, 6, 6]} />
-            <meshStandardMaterial color="#1a1010" />
-          </mesh>
-          {/* Mane */}
-          <mesh position={[0, 0.8, 0]} rotation={[0.2, 0, 0]}>
-            <boxGeometry args={[0.2, 0.8, 1.2]} />
-            <meshStandardMaterial color={manColor} roughness={1} />
-          </mesh>
-          {/* Ears */}
-          <mesh position={[-0.2, 1.4, 0.5]}><coneGeometry args={[0.08, 0.3, 5]} /><meshStandardMaterial color={horseColor} /></mesh>
-          <mesh position={[0.2, 1.4, 0.5]}><coneGeometry args={[0.08, 0.3, 5]} /><meshStandardMaterial color={horseColor} /></mesh>
-        </group>
-
-        {/* Tail */}
-        <group ref={tailRef} position={[0, 1.2, -1.6]}>
-          <mesh rotation={[-0.4, 0, 0]} position={[0, -0.3, -0.3]}>
-            <cylinderGeometry args={[0.12, 0.04, 1.2, 6]} />
-            <meshStandardMaterial color={manColor} roughness={1} />
-          </mesh>
-        </group>
-
-        {/* Legs */}
-        {[[-0.5, 0, 1.0], [0.5, 0, 1.0], [-0.5, 0, -0.9], [0.5, 0, -0.9]].map(([lx,_ly,lz], i) => (
-          <group key={i} ref={[legFL, legFR, legBL, legBR][i]} position={[lx, 0.4, lz]}>
-            <mesh position={[0, -0.3, 0]}>
-              <cylinderGeometry args={[0.18, 0.14, 1.2, 7]} />
-              <meshStandardMaterial color={darkBrown} roughness={0.9} />
-            </mesh>
-            {/* Hoof */}
-            <mesh position={[0, -0.95, 0]}>
-              <boxGeometry args={[0.22, 0.18, 0.28]} />
-              <meshStandardMaterial color="#1a1010" />
-            </mesh>
-          </group>
-        ))}
-
-        {/* Saddle */}
-        <mesh position={[0, 1.8, -0.1]}>
-          <boxGeometry args={[0.9, 0.2, 1.0]} />
-          <meshStandardMaterial color="#3a1808" roughness={0.7} />
-        </mesh>
-        <mesh position={[0, 1.9, -0.1]}>
-          <boxGeometry args={[0.7, 0.12, 0.8]} />
-          <meshStandardMaterial color="#5a2818" roughness={0.7} />
-        </mesh>
-
-        {/* Glow ring when near & unmounted = mountable */}
-        {!isMounted && (
-          <mesh position={[0, 0.05, 0]} rotation={[-Math.PI/2, 0, 0]}>
-            <ringGeometry args={[2.2, 2.8, 24]} />
-            <meshBasicMaterial color="#ffe060" transparent opacity={0.4} />
-          </mesh>
-        )}
-      </group>{/* end horse body group */}
     </group>
   );
 }
+
 
 export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake, isDodging, isCharging, chargeLevel, lockedTarget, killFlash, slowMo, isMounted, horsePos }) {
   const mobile = isMobile();

@@ -13,8 +13,12 @@ function ModernRoomScene() {
   });
   return (
     <>
-      <ambientLight intensity={0.08} color="#102030" />
-      <pointLight ref={lampRef} position={[1.5, 3, -1]} color="#ffcc88" intensity={1.8} distance={12} decay={2} />
+      <ambientLight intensity={0.35} color="#203050" />
+      <pointLight ref={lampRef} position={[1.5, 3, -1]} color="#ffcc88" intensity={3.5} distance={18} decay={1.5} />
+      {/* Fill light from window */}
+      <pointLight position={[3, 1.5, -2]} color="#4466ff" intensity={1.2} distance={10} decay={2} />
+      {/* Rim light so character is visible */}
+      <directionalLight position={[-4, 5, 4]} intensity={0.6} color="#ffddaa" />
       {/* Floor */}
       <mesh rotation={[-Math.PI/2,0,0]} position={[0,-1.8,0]}>
         <planeGeometry args={[14,10]} />
@@ -49,9 +53,9 @@ function ModernRoomScene() {
       {/* Laptop / notes glow */}
       <mesh position={[0.5,-0.5,-1.8]} rotation={[-0.3,0,0]}>
         <boxGeometry args={[1.4,0.04,1]} />
-        <meshStandardMaterial color="#222" emissive="#3355ff" emissiveIntensity={0.3} />
+        <meshStandardMaterial color="#222" emissive="#3355ff" emissiveIntensity={1.2} />
       </mesh>
-      <pointLight position={[0.5,-0.3,-1.8]} color="#4466ff" intensity={0.6} distance={3} decay={2} />
+      <pointLight position={[0.5,-0.3,-1.8]} color="#4466ff" intensity={1.8} distance={6} decay={1.8} />
       {/* Student figure slumped */}
       <group position={[0,-0.2,-1.5]}>
         <mesh position={[0,0.1,0]}><sphereGeometry args={[0.35,8,8]} /><meshStandardMaterial color="#d8b07a" /></mesh>
@@ -111,10 +115,10 @@ function FeverDreamScene() {
 
   return (
     <>
-      <ambientLight intensity={0.1} color="#441122" />
-      <pointLight position={[0,0,0]} color="#ff4488" intensity={3} distance={20} decay={1.5} />
-      <pointLight position={[4,2,-3]} color="#4422ff" intensity={2} distance={15} decay={2} />
-      <pointLight position={[-4,-2,3]} color="#ff8800" intensity={1.5} distance={12} decay={2} />
+      <ambientLight intensity={0.4} color="#441122" />
+      <pointLight position={[0,0,0]} color="#ff4488" intensity={5} distance={25} decay={1.2} />
+      <pointLight position={[4,2,-3]} color="#4422ff" intensity={3.5} distance={20} decay={1.5} />
+      <pointLight position={[-4,-2,3]} color="#ff8800" intensity={3} distance={18} decay={1.5} />
       {/* Central swirl */}
       <group ref={vortexRef}>
         {[1.5,2.5,3.8,5].map((r,i) => (
@@ -231,10 +235,11 @@ function RaiderScene() {
   });
   return (
     <>
-      <ambientLight intensity={0.15} color="#331100" />
-      <pointLight position={[-3,3,2]} color="#ff6010" intensity={4} distance={18} decay={1.5} />
-      <pointLight position={[4,4,-1]} color="#ff8020" intensity={3} distance={15} decay={2} />
-      <pointLight position={[0,0,5]} color="#ff4400" intensity={1.5} distance={10} decay={2} />
+      <ambientLight intensity={0.4} color="#331100" />
+      <directionalLight position={[0, 8, 5]} intensity={1.0} color="#ff6622" />
+      <pointLight position={[-3,3,2]} color="#ff6010" intensity={6} distance={25} decay={1.2} />
+      <pointLight position={[4,4,-1]} color="#ff8020" intensity={4} distance={20} decay={1.5} />
+      <pointLight position={[0,0,5]} color="#ff4400" intensity={3} distance={15} decay={1.5} />
       {/* Night sky */}
       <mesh position={[0,5,-20]}><planeGeometry args={[80,30]} /><meshBasicMaterial color="#0a0808" /></mesh>
       {/* Ground */}
@@ -249,15 +254,15 @@ function RaiderScene() {
       {/* Flames */}
       <mesh ref={fire1} position={[-5,0.5,-3]}>
         <coneGeometry args={[0.7,2.5,7]} />
-        <meshStandardMaterial color="#ff6010" emissive="#ff4400" emissiveIntensity={1.5} transparent opacity={0.85} />
+        <meshStandardMaterial color="#ff6010" emissive="#ff4400" emissiveIntensity={2.5} transparent opacity={0.85} />
       </mesh>
       <mesh ref={fire2} position={[3,0.5,-4]}>
         <coneGeometry args={[0.9,3,8]} />
-        <meshStandardMaterial color="#ff8020" emissive="#ff5500" emissiveIntensity={1.3} transparent opacity={0.8} />
+        <meshStandardMaterial color="#ff8020" emissive="#ff5500" emissiveIntensity={2.2} transparent opacity={0.8} />
       </mesh>
       <mesh ref={fire3} position={[-1,0.5,-5]}>
         <coneGeometry args={[0.6,2,6]} />
-        <meshStandardMaterial color="#ffaa30" emissive="#ff6600" emissiveIntensity={1.2} transparent opacity={0.9} />
+        <meshStandardMaterial color="#ffaa30" emissive="#ff6600" emissiveIntensity={2.0} transparent opacity={0.9} />
       </mesh>
       {/* Raider silhouette */}
       <group position={[2,-1,1]}>
@@ -403,11 +408,12 @@ function SceneCanvas({ SceneComp, bg, camera }) {
   return (
     <Canvas
       camera={{ position: camera.position, fov: camera.fov, near: 0.1, far: 500 }}
-      gl={{ antialias: false, powerPreference: 'high-performance' }}
+      gl={{ antialias: false, powerPreference: 'high-performance', toneMappingExposure: 1.4 }}
       dpr={[1, 1]}
       onCreated={({ gl, scene }) => {
         gl.setClearColor(bg, 1);
         scene.background = new THREE.Color(bg);
+        gl.toneMappingExposure = 1.4;
       }}
     >
       <Suspense fallback={null}>
@@ -511,3 +517,4 @@ export default function OpeningCinematic({ onComplete }) {
     </div>
   );
 }
+

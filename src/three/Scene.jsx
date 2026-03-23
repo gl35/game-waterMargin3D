@@ -600,10 +600,13 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
     group.current.position.x = THREE.MathUtils.clamp(group.current.position.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX);
     group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ);
 
-    // ── Terrain following — snap Y to ground height ──
-    const groundY = getTerrainHeight(group.current.position.x, group.current.position.z);
-    const targetY = groundY + (isMounted ? 2.0 : 0.0);
-    group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, targetY, 0.22);
+    // ── Terrain following ──
+    // When mounted: hero group still tracks position for camera/combat, but is invisible
+    // When on foot: snap Y to terrain
+    if (!isMounted) {
+      const groundY = getTerrainHeight(group.current.position.x, group.current.position.z);
+      group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, groundY, 0.22);
+    }
 
     // ── Solid obstacle collision ──
     const resolved = resolveCollisions(group.current.position.x, group.current.position.z);
@@ -752,7 +755,7 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
   });
 
   return (
-    <group ref={group} position={[0, 0, 12]}>
+    <group ref={group} position={[0, 0, 12]} visible={!isMounted}>
 
       {/* ── LEGS (animated) ── */}
       <group ref={leftLegRef} position={[-0.38, 1.15, 0]}>
@@ -1897,33 +1900,47 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
 
 // ── HORSE ────────────────────────────────────────────────────────
 function Horse({ position, isMounted, heroRef }) {
-  const bodyRef = useRef();
+  const groupRef = useRef();
   const legFL = useRef(); const legFR = useRef();
   const legBL = useRef(); const legBR = useRef();
   const neckRef = useRef(); const tailRef = useRef();
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
-    const speed = isMounted ? 9 : 1.2;
-    const gallop = Math.sin(t * speed);
+    if (!groupRef.current) return;
 
-    if (isMounted && heroRef?.current && bodyRef.current) {
-      // Follow hero when mounted
-      bodyRef.current.parent.position.x = heroRef.current.position.x;
-      bodyRef.current.parent.position.z = heroRef.current.position.z;
-      bodyRef.current.parent.rotation.y = heroRef.current.rotation.y;
-      // Gallop bob
-      bodyRef.current.parent.position.y = -0.8 + Math.abs(gallop) * 0.3;
+    // When mounted — horse follows hero exactly
+    if (isMounted && heroRef?.current) {
+      const hx = heroRef.current.position.x;
+      const hz = heroRef.current.position.z;
+      const gy = getTerrainHeight(hx, hz);
+      groupRef.current.position.set(hx, gy, hz);
+      groupRef.current.rotation.y = heroRef.current.rotation.y;
+    } else {
+      // Idle — stay at spawn position on terrain
+      const gy = getTerrainHeight(position.x, position.z);
+      groupRef.current.position.set(position.x, gy, position.z);
     }
 
-    // Leg animation
-    const swing = gallop * 0.5;
+    const moving = isMounted && heroRef?.current &&
+      (Math.abs(heroRef.current.position.x - (groupRef.current._lastX || 0)) > 0.01 ||
+       Math.abs(heroRef.current.position.z - (groupRef.current._lastZ || 0)) > 0.01);
+    if (heroRef?.current) {
+      groupRef.current._lastX = heroRef.current.position.x;
+      groupRef.current._lastZ = heroRef.current.position.z;
+    }
+
+    // Gallop speed based on whether actually moving
+    const speed = moving ? 8 : 1.0;
+    const gallop = Math.sin(t * speed);
+    const swing = gallop * (moving ? 0.55 : 0.12);
+
     if (legFL.current) legFL.current.rotation.x =  swing;
     if (legFR.current) legFR.current.rotation.x = -swing;
     if (legBL.current) legBL.current.rotation.x = -swing;
     if (legBR.current) legBR.current.rotation.x =  swing;
     if (neckRef.current) neckRef.current.rotation.x = Math.sin(t * speed * 0.5) * 0.08;
-    if (tailRef.current) tailRef.current.rotation.z = Math.sin(t * 1.5) * 0.2;
+    if (tailRef.current) tailRef.current.rotation.z = Math.sin(t * 1.5) * 0.22;
   });
 
   const horseColor = '#8a6030';
@@ -1931,8 +1948,22 @@ function Horse({ position, isMounted, heroRef }) {
   const manColor = '#2a1808';
 
   return (
-    <group position={[position.x, -1.2, position.z]}>
-      <group ref={bodyRef}>
+    <group ref={groupRef} position={[position.x, getTerrainHeight(position.x, position.z), position.z]}>
+      {/* Rider (hero sits here when mounted) — shown only when mounted */}
+      {isMounted && (
+        <group position={[0, 2.2, 0]}>
+          {/* Simple rider torso */}
+          <mesh castShadow position={[0, 0.6, 0]}><cylinderGeometry args={[0.38, 0.48, 1.2, 10]} /><meshStandardMaterial color="#f0ece0" roughness={0.8} /></mesh>
+          <mesh castShadow position={[0, 1.35, 0]}><sphereGeometry args={[0.42, 10, 10]} /><meshStandardMaterial color="#f2c9a0" /></mesh>
+          {/* Rider hat */}
+          <mesh position={[0, 1.72, -0.1]} rotation={[0.08,0,0]}><cylinderGeometry args={[0.85,0.85,0.14,20]} /><meshStandardMaterial color="#8b6240" /></mesh>
+          <mesh position={[0, 1.94, -0.1]} rotation={[0.08,0,0]}><coneGeometry args={[0.58,0.9,16]} /><meshStandardMaterial color="#9f7c55" /></mesh>
+          {/* Spear */}
+          <mesh castShadow position={[0.5, 0.5, -0.4]} rotation={[-0.3,0.1,0.1]}><cylinderGeometry args={[0.06,0.06,5,6]} /><meshStandardMaterial color="#c8c0a8" /></mesh>
+          <mesh position={[0.62, 2.6, -1.2]} rotation={[-0.3,0.1,0.1]}><coneGeometry args={[0.15,0.7,5]} /><meshStandardMaterial color="#f7d99a" metalness={0.5} /></mesh>
+        </group>
+      )}
+      <group>
         {/* Body */}
         <mesh position={[0, 1.2, 0]}>
           <boxGeometry args={[1.6, 1.1, 3.2]} />
@@ -2019,7 +2050,7 @@ function Horse({ position, isMounted, heroRef }) {
             <meshBasicMaterial color="#ffe060" transparent opacity={0.4} />
           </mesh>
         )}
-      </group>
+      </group>{/* end horse body group */}
     </group>
   );
 }

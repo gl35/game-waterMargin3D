@@ -1158,6 +1158,321 @@ function FallingLeaves() {
   );
 }
 
+// ── LIANGSHAN FORTRESS ──────────────────────────────────────────
+
+function FortressBanner({ position, color = '#cc1818' }) {
+  const poleRef = useRef();
+  useFrame(({ clock }) => {
+    if (!poleRef.current) return;
+    const t = clock.getElapsedTime();
+    poleRef.current.rotation.z = Math.sin(t * 1.8 + position[0] * 0.1) * 0.08;
+  });
+  return (
+    <group position={position}>
+      {/* Pole */}
+      <mesh position={[0, 4, 0]}>
+        <cylinderGeometry args={[0.12, 0.14, 8, 6]} />
+        <meshStandardMaterial color="#9a7040" />
+      </mesh>
+      {/* Banner cloth */}
+      <group ref={poleRef} position={[0, 7.5, 0]}>
+        <mesh position={[0.9, 0, 0]}>
+          <boxGeometry args={[1.8, 3.2, 0.08]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+        {/* 梁 character hint — dark stripe */}
+        <mesh position={[0.9, 0.2, 0.05]}>
+          <boxGeometry args={[0.3, 2.0, 0.05]} />
+          <meshStandardMaterial color="#ffd060" />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+function WallTower({ position, height = 14 }) {
+  return (
+    <group position={position}>
+      {/* Tower base */}
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[5, height, 5]} />
+        <meshStandardMaterial color="#8a7a60" roughness={0.9} />
+      </mesh>
+      {/* Battlement top */}
+      {[-1.5, 0, 1.5].map((ox, i) => (
+        <mesh key={i} position={[ox, height + 1.2, 0]}>
+          <boxGeometry args={[1, 2.4, 5.2]} />
+          <meshStandardMaterial color="#7a6a50" roughness={0.9} />
+        </mesh>
+      ))}
+      {[-1.5, 0, 1.5].map((oz, i) => (
+        <mesh key={`z${i}`} position={[0, height + 1.2, oz]}>
+          <boxGeometry args={[5.2, 2.4, 1]} />
+          <meshStandardMaterial color="#7a6a50" roughness={0.9} />
+        </mesh>
+      ))}
+      {/* Roof */}
+      <mesh position={[0, height + 3.4, 0]} rotation={[0, Math.PI / 4, 0]}>
+        <coneGeometry args={[4.2, 3.5, 4]} />
+        <meshStandardMaterial color="#5a2a1a" roughness={0.8} />
+      </mesh>
+      {/* Torch on tower */}
+      <Campfire position={[0, height + 0.5, 2]} />
+    </group>
+  );
+}
+
+function FortressWall({ from, to, height = 10, thickness = 3 }) {
+  const dx = to[0] - from[0];
+  const dz = to[2] - from[2];
+  const len = Math.sqrt(dx * dx + dz * dz);
+  const cx = (from[0] + to[0]) / 2;
+  const cz = (from[2] + to[2]) / 2;
+  const angle = Math.atan2(dx, dz);
+  return (
+    <group position={[cx, from[1] + height / 2, cz]} rotation={[0, angle, 0]}>
+      <mesh>
+        <boxGeometry args={[thickness, height, len]} />
+        <meshStandardMaterial color="#8a7a60" roughness={0.9} />
+      </mesh>
+      {/* Battlements */}
+      {Array.from({ length: Math.floor(len / 4) }, (_, i) => {
+        const z = -len / 2 + i * 4 + 2;
+        return (
+          <mesh key={i} position={[0, height / 2 + 1.2, z]}>
+            <boxGeometry args={[thickness + 0.4, 2.4, 1.8]} />
+            <meshStandardMaterial color="#7a6a50" roughness={0.9} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function LiangshanFortress() {
+  // Mountain sits at position (-60, 0, -80) in world space
+  const MX = -60, MY = 0, MZ = -80;
+
+  return (
+    <group position={[MX, MY, MZ]}>
+
+      {/* ── MOUNTAIN MOUND ── */}
+      <mesh position={[0, 8, 0]}>
+        <cylinderGeometry args={[18, 32, 22, 12]} />
+        <meshStandardMaterial color="#6a7a50" roughness={1} flatShading />
+      </mesh>
+      {/* Rocky cap */}
+      <mesh position={[0, 18, 0]}>
+        <cylinderGeometry args={[10, 18, 8, 10]} />
+        <meshStandardMaterial color="#7a7060" roughness={1} flatShading />
+      </mesh>
+      {/* Summit plateau */}
+      <mesh position={[0, 22, 0]}>
+        <cylinderGeometry args={[12, 12, 2, 12]} />
+        <meshStandardMaterial color="#8a8070" roughness={1} />
+      </mesh>
+      {/* Mountain skirt trees */}
+      {Array.from({ length: 14 }, (_, i) => {
+        const a = (i / 14) * Math.PI * 2;
+        const r = 20 + Math.sin(i * 1.7) * 5;
+        return (
+          <mesh key={i} position={[Math.cos(a) * r, 5 + Math.sin(i * 0.9) * 2, Math.sin(a) * r]}>
+            <coneGeometry args={[2.2, 7, 6]} />
+            <meshStandardMaterial color="#3e8554" flatShading />
+          </mesh>
+        );
+      })}
+
+      {/* ── OUTER WALL (square perimeter on summit) ── */}
+      <FortressWall from={[-10, 22, -10]} to={[10, 22, -10]} height={9} />
+      <FortressWall from={[10, 22, -10]}  to={[10, 22, 10]}  height={9} />
+      <FortressWall from={[10, 22, 10]}   to={[-10, 22, 10]} height={9} />
+      <FortressWall from={[-10, 22, 10]}  to={[-10, 22, -10]} height={9} />
+
+      {/* ── CORNER TOWERS ── */}
+      <WallTower position={[-10, 22, -10]} height={12} />
+      <WallTower position={[10,  22, -10]} height={12} />
+      <WallTower position={[10,  22, 10]}  height={12} />
+      <WallTower position={[-10, 22, 10]}  height={12} />
+
+      {/* ── GATEHOUSE (south face, facing player spawn) ── */}
+      {/* Gate arch pillars */}
+      <mesh position={[-3, 26.5, 10]}>
+        <boxGeometry args={[2.5, 9, 2.5]} />
+        <meshStandardMaterial color="#7a6a50" roughness={0.9} />
+      </mesh>
+      <mesh position={[3, 26.5, 10]}>
+        <boxGeometry args={[2.5, 9, 2.5]} />
+        <meshStandardMaterial color="#7a6a50" roughness={0.9} />
+      </mesh>
+      {/* Gate lintel */}
+      <mesh position={[0, 32, 10]}>
+        <boxGeometry args={[8, 2.5, 3]} />
+        <meshStandardMaterial color="#6a5a40" roughness={0.9} />
+      </mesh>
+      {/* Gate arch opening (dark) */}
+      <mesh position={[0, 27.5, 10.1]}>
+        <boxGeometry args={[5, 7, 0.5]} />
+        <meshStandardMaterial color="#1a1208" />
+      </mesh>
+      {/* Gatehouse upper structure */}
+      <mesh position={[0, 35, 10]}>
+        <boxGeometry args={[10, 5, 5]} />
+        <meshStandardMaterial color="#8a7a60" roughness={0.9} />
+      </mesh>
+      {/* Gatehouse roof */}
+      <mesh position={[0, 39, 10]} rotation={[0, Math.PI / 4, 0]}>
+        <coneGeometry args={[7, 4, 4]} />
+        <meshStandardMaterial color="#5a2a1a" roughness={0.8} />
+      </mesh>
+      {/* Gate eave tips */}
+      <mesh position={[-5, 37.5, 10]} rotation={[0, 0, -0.4]}>
+        <cylinderGeometry args={[0.2, 0.3, 3, 5]} />
+        <meshStandardMaterial color="#5a2a1a" />
+      </mesh>
+      <mesh position={[5, 37.5, 10]} rotation={[0, 0, 0.4]}>
+        <cylinderGeometry args={[0.2, 0.3, 3, 5]} />
+        <meshStandardMaterial color="#5a2a1a" />
+      </mesh>
+
+      {/* ── KEEP (central hall) ── */}
+      {/* Foundation */}
+      <mesh position={[0, 23, -2]}>
+        <boxGeometry args={[14, 2, 10]} />
+        <meshStandardMaterial color="#9a8a70" roughness={0.9} />
+      </mesh>
+      {/* Main hall body */}
+      <mesh position={[0, 28, -2]}>
+        <boxGeometry args={[12, 8, 8]} />
+        <meshStandardMaterial color="#c09860" roughness={0.8} />
+      </mesh>
+      {/* Hall columns */}
+      {[-4, 0, 4].map((x, i) => (
+        <mesh key={i} position={[x, 26, 2]}>
+          <cylinderGeometry args={[0.5, 0.6, 8, 8]} />
+          <meshStandardMaterial color="#8a5a30" roughness={0.7} />
+        </mesh>
+      ))}
+      {/* Hall roof lower eave */}
+      <mesh position={[0, 33.5, -2]}>
+        <boxGeometry args={[14, 1.5, 10]} />
+        <meshStandardMaterial color="#5a2a1a" roughness={0.8} />
+      </mesh>
+      {/* Hall roof upper */}
+      <mesh position={[0, 36.5, -2]}>
+        <boxGeometry args={[11, 1.2, 7.5]} />
+        <meshStandardMaterial color="#6a3a22" roughness={0.8} />
+      </mesh>
+      {/* Hall ridge roof */}
+      <mesh position={[0, 38.5, -2]}>
+        <coneGeometry args={[6.5, 4.5, 4]} />
+        <meshStandardMaterial color="#4a1e10" roughness={0.8} />
+      </mesh>
+      {/* Ridge ornament */}
+      <mesh position={[0, 41.5, -2]}>
+        <sphereGeometry args={[0.8, 8, 8]} />
+        <meshStandardMaterial color="#d9b36b" emissive="#c09020" emissiveIntensity={0.3} metalness={0.4} />
+      </mesh>
+      {/* Windows */}
+      {[-3.5, 3.5].map((x, i) => (
+        <mesh key={i} position={[x, 28, 2.1]}>
+          <boxGeometry args={[2, 2.5, 0.3]} />
+          <meshStandardMaterial color="#5a8aaa" transparent opacity={0.7} />
+        </mesh>
+      ))}
+      {/* Hall door */}
+      <mesh position={[0, 26.5, 2.1]}>
+        <boxGeometry args={[2.8, 4.5, 0.3]} />
+        <meshStandardMaterial color="#2a1408" />
+      </mesh>
+
+      {/* ── WATCHTOWER (tallest, back-center) ── */}
+      <mesh position={[0, 23, -8]}>
+        <boxGeometry args={[4, 18, 4]} />
+        <meshStandardMaterial color="#7a6a50" roughness={0.9} />
+      </mesh>
+      {/* Watchtower platform */}
+      <mesh position={[0, 41.5, -8]}>
+        <boxGeometry args={[6, 1.2, 6]} />
+        <meshStandardMaterial color="#6a5a40" />
+      </mesh>
+      {/* Watchtower battlements */}
+      {[[-2,0],[ 2,0],[0,-2],[0, 2]].map(([ox,oz], i) => (
+        <mesh key={i} position={[ox, 43, -8 + oz]}>
+          <boxGeometry args={[1.5, 2, 1.5]} />
+          <meshStandardMaterial color="#6a5a40" />
+        </mesh>
+      ))}
+      {/* Watchtower roof */}
+      <mesh position={[0, 45, -8]}>
+        <coneGeometry args={[3.5, 5, 4]} />
+        <meshStandardMaterial color="#3a1a0a" />
+      </mesh>
+      {/* Watchtower beacon fire */}
+      <Campfire position={[0, 42, -8]} />
+
+      {/* ── COURTYARD DETAILS ── */}
+      {/* Stone floor */}
+      <mesh position={[0, 22.8, 4]} rotation={[-Math.PI/2, 0, 0]}>
+        <planeGeometry args={[18, 8]} />
+        <meshStandardMaterial color="#9a9080" roughness={1} />
+      </mesh>
+      {/* Well in courtyard */}
+      <mesh position={[5, 23.5, 5]}>
+        <cylinderGeometry args={[1.2, 1.4, 2, 10]} />
+        <meshStandardMaterial color="#888070" roughness={1} />
+      </mesh>
+      <mesh position={[5, 24.8, 5]}>
+        <cylinderGeometry args={[1.5, 1.5, 0.5, 10]} />
+        <meshStandardMaterial color="#7a7060" roughness={1} />
+      </mesh>
+      {/* Courtyard tree */}
+      <mesh position={[-5, 23, -1]}>
+        <cylinderGeometry args={[0.4, 0.5, 4, 6]} />
+        <meshStandardMaterial color="#6a4820" />
+      </mesh>
+      <mesh position={[-5, 27, -1]}>
+        <sphereGeometry args={[3, 8, 7]} />
+        <meshStandardMaterial color="#2a6838" flatShading />
+      </mesh>
+
+      {/* ── BANNERS ── */}
+      <FortressBanner position={[-9, 22, 9]} color="#cc1818" />
+      <FortressBanner position={[9, 22, 9]}  color="#cc1818" />
+      <FortressBanner position={[-9, 22, -9]} color="#1840a0" />
+      <FortressBanner position={[9, 22, -9]}  color="#1840a0" />
+      <FortressBanner position={[0, 23, 10]}  color="#cc1818" />
+
+      {/* ── PATH UP THE MOUNTAIN ── */}
+      {Array.from({ length: 8 }, (_, i) => {
+        const t = i / 7;
+        return (
+          <mesh key={i} position={[0, 2 + t * 20, 12 + t * (-22)]} rotation={[-Math.PI/2 + t * 0.4, 0, 0]}>
+            <planeGeometry args={[5, 5]} />
+            <meshStandardMaterial color="#c8a870" roughness={1} />
+          </mesh>
+        );
+      })}
+
+      {/* ── LANTERN POSTS FLANKING GATE ── */}
+      {[-6, 6].map((x, i) => (
+        <group key={i} position={[x, 23, 14]}>
+          <mesh position={[0, 4, 0]}>
+            <cylinderGeometry args={[0.2, 0.25, 8, 6]} />
+            <meshStandardMaterial color="#8a6030" />
+          </mesh>
+          <mesh position={[0, 8.5, 0]}>
+            <cylinderGeometry args={[0.6, 0.6, 2.5, 8]} />
+            <meshStandardMaterial color="#cc1818" emissive="#aa0808" emissiveIntensity={0.4} />
+          </mesh>
+          <pointLight position={[0, 8.5, 0]} color="#ff8020" intensity={1.5} distance={14} decay={2} />
+        </group>
+      ))}
+
+    </group>
+  );
+}
+
 // ── SUPER MOVE VFX ──────────────────────────────────────────────
 function DragonStrikeVfx({ heroRef, active }) {
   const ring1 = useRef(); const ring2 = useRef(); const beam = useRef();
@@ -1280,6 +1595,7 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
       <Campfire position={[22, -3.2, -8]} />
       <Campfire position={[-40, -3.2, -25]} />
       <Campfire position={[55, -3.2, 20]} />
+      <LiangshanFortress />
       <AmbientVillagers />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
       <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} attackFx={attackFx} />

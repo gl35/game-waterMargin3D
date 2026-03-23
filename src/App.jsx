@@ -134,6 +134,8 @@ export default function App() {
   const [lockedTarget, setLockedTarget] = useState(null);
   const [killFlash, setKillFlash] = useState(false);
   const [slowMo, setSlowMo] = useState(false);
+  const [levelUpFlash, setLevelUpFlash] = useState(false);
+  const prevLevel = useRef(1);
   const [shopOpen, setShopOpen] = useState(false);
   const [statBonuses, setStatBonuses] = useState({ maxHp: 0, damage: 0, speed: 0, range: 0 });
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
@@ -147,6 +149,16 @@ export default function App() {
 
   const openTavernScene = useCallback(() => setShowTavernScene(true), []);
   const closeTavernScene = useCallback(() => setShowTavernScene(false), []);
+
+  // Detect level-up
+  useEffect(() => {
+    if (playerLevel > prevLevel.current) {
+      prevLevel.current = playerLevel;
+      setLevelUpFlash(true);
+      setQuestNotice(`🌟 LEVEL UP! You are now Level ${playerLevel}! +HP +DMG +SPD`);
+      setTimeout(() => setLevelUpFlash(false), 1800);
+    }
+  }, [playerLevel]);
 
   // Trigger victory banquet when chapter completes
   useEffect(() => {
@@ -251,12 +263,16 @@ export default function App() {
       }
     }
 
+    if (questEvents.some((event) => event.type === 'quest_step_completed')) {
+      setCombatXp((xp) => xp + 15); // XP per quest step
+    }
     if (questEvents.some((event) => event.type === 'quest_completed')) {
       const completedQuest = getQuestLog(nextQuestProgress).find((quest) => quest.state === 'completed');
       if (completedQuest) {
         questLines.push(`Quest complete: ${completedQuest.title}`);
         questLines.push('Claim your reward from the quest panel.');
         setQuestNotice(`Quest complete: ${completedQuest.title}`);
+        setCombatXp((xp) => xp + 40); // XP for full quest completion
       }
     }
 
@@ -472,6 +488,12 @@ export default function App() {
 
     if (isCrit || nextStep === 2) { setScreenShake(true); setTimeout(() => setScreenShake(false), 180); }
 
+    // Combo XP bonus every 3rd hit
+    if (newCombo > 0 && newCombo % 3 === 0) {
+      const comboXp = newCombo * 2;
+      setCombatXp((xp) => xp + comboXp);
+    }
+
     if (res.killed) {
       setKillFlash(true); setSlowMo(true);
       setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 600);
@@ -479,10 +501,12 @@ export default function App() {
         const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
         return res.enemy.type === 'captain' ? recordMiniBossDefeat(r) : recordRaiderKill(r);
       });
-      setCombatXp((xp) => xp + res.enemy.xp);
+      // Kill XP + combo finish bonus
+      const killXp = res.enemy.xp + (newCombo >= 3 ? Math.floor(newCombo * 1.5) : 0);
+      setCombatXp((xp) => xp + killXp);
       setComboCount(0); setComboStep(0);
       setLockedTarget(null); setHighlightedEnemyId(null);
-      setQuestNotice(`☠️ ${res.enemy.label} defeated! +${res.enemy.goldDrop}g +${res.enemy.xp}xp`);
+      setQuestNotice(`☠️ ${res.enemy.label} defeated! +${res.enemy.goldDrop}g +${killXp}xp`);
     }
   }, [enemies, highlightedEnemyId, lockedTarget, heroStats, comboCount, comboStep, isDodging, stamina]);
 
@@ -917,10 +941,17 @@ export default function App() {
 
       <div className="hud-top-right">
         {/* Level + XP bar */}
-        <div className="prog-block">
-          <div className="prog-label">Lv {playerLevel} <span className="prog-xp">{Math.round(xpProgress * 100)}%</span></div>
-          <div className="prog-bar"><div className="prog-fill" style={{ width: `${Math.round(xpProgress * 100)}%` }} /></div>
-          <div className="prog-next">{xpForNext} xp to next</div>
+        <div className="prog-block" title={`${combatXp} total XP · ${xpForNext} XP to Level ${playerLevel + 1}`}>
+          <div className="prog-label">
+            Lv <span className="prog-lvnum">{playerLevel}</span>
+            <span className="prog-xp">{combatXp} / {combatXp + xpForNext} XP</span>
+          </div>
+          <div className="prog-bar">
+            <div className="prog-fill" style={{ width: `${Math.round(xpProgress * 100)}%` }} />
+          </div>
+          <div className="prog-next">
+            {xpForNext > 0 ? `${xpForNext} XP to Lv ${playerLevel + 1}` : '✨ MAX LEVEL'}
+          </div>
         </div>
         <div className="mini-pill"><span className="icon coin" /> {hud.gold}g</div>
         <div className="mini-pill"><span className="icon tribe" /> {hud.heroes}/108</div>
@@ -1049,6 +1080,17 @@ export default function App() {
 
       {/* Kill flash overlay */}
       {killFlash && <div className="kill-flash" />}
+
+      {/* Level-up flash */}
+      {levelUpFlash && (
+        <div className="levelup-flash">
+          <div className="levelup-text">LEVEL {playerLevel}</div>
+          <div className="levelup-sub">+HP · +Damage · +Speed</div>
+          {playerLevel === 2 && <div className="levelup-unlock">🐉 Dragon Strike unlocked!</div>}
+          {playerLevel === 4 && <div className="levelup-unlock">⚡ Storm Sweep unlocked!</div>}
+          {playerLevel === 6 && <div className="levelup-unlock">🌑 Shadow Blink unlocked!</div>}
+        </div>
+      )}
 
       <div className="hud-mobile-controls">
         <div

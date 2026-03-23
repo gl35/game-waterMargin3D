@@ -466,6 +466,66 @@ html, body, #root {
   border-color: #00ffcc !important;
 }
 
+/* ── LEVEL UP FLASH ── */
+.levelup-flash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 500;
+  animation: levelup-anim 1.8s ease forwards;
+  background: radial-gradient(ellipse at center, rgba(80,200,255,0.18) 0%, transparent 70%);
+}
+@keyframes levelup-anim {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.levelup-text {
+  font-family: serif;
+  font-size: clamp(48px, 10vw, 80px);
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 0 30px #44ddff, 0 0 60px #44ddff, 0 2px 8px #000;
+  letter-spacing: 0.12em;
+  animation: levelup-pop 0.3s cubic-bezier(0.17,0.67,0.35,1.4) forwards;
+}
+@keyframes levelup-pop {
+  from { transform: scale(0.4); }
+  to   { transform: scale(1); }
+}
+.levelup-sub {
+  font-size: clamp(14px, 3vw, 22px);
+  color: #88eeff;
+  text-shadow: 0 0 12px #44ddff, 0 1px 4px #000;
+  margin-top: 8px;
+  letter-spacing: 0.1em;
+  font-family: serif;
+}
+.levelup-unlock {
+  margin-top: 14px;
+  padding: 8px 20px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid #ffcc40;
+  border-radius: 8px;
+  font-size: clamp(13px, 2.5vw, 18px);
+  color: #ffee88;
+  text-shadow: 0 0 8px #ffaa20;
+  font-family: serif;
+  letter-spacing: 0.05em;
+}
+
+.prog-lvnum {
+  font-size: 15px;
+  font-weight: 900;
+  color: #ffe880;
+  margin: 0 4px;
+}
+
 /* ── COMBO COUNTER ── */
 .combo-counter {
   position: absolute;

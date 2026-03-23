@@ -1,5 +1,5 @@
-// XP needed to reach each level (cumulative)
-const XP_TABLE = [0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200, 4000];
+// XP needed to reach each level (cumulative) — tuned for ~10-15 min to Lv5
+const XP_TABLE = [0, 60, 150, 290, 480, 720, 1020, 1400, 1860, 2420, 3100];
 
 export function getLevel(xp) {
   let level = 1;

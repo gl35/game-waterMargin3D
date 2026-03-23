@@ -114,6 +114,9 @@ export default function App() {
   const [showVictoryBanquet, setShowVictoryBanquet] = useState(false);
   const [showOpening, setShowOpening] = useState(() => !sessionStorage.getItem('cine_seen'));
   const prevStage = useRef(null);
+
+  // Hide the HTML loading screen as soon as React mounts
+  useEffect(() => { window.__hideLoading?.(); }, []);
   const [mobileMove, setMobileMove] = useState({ forward: false, backward: false, left: false, right: false });
   const [slotCooldowns, setSlotCooldowns] = useState({});
   const [interactRadius, setInteractRadius] = useState(6);

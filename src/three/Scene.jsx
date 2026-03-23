@@ -1703,8 +1703,6 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
       onCreated={({ gl, scene }) => {
         gl.setClearColor('#7ab8e8', 1);
         scene.background = new THREE.Color('#7ab8e8');
-        // Hide the HTML loading screen
-        setTimeout(() => window.__hideLoading?.(), 800);
       }}
     >
       <Suspense fallback={null}>

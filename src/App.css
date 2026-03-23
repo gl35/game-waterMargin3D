@@ -136,6 +136,15 @@ html, body, #root {
   font-weight: 700;
 }
 
+.objective-hint {
+  margin-top: 5px;
+  font-size: 11px;
+  color: #ffe880;
+  opacity: 0.85;
+  line-height: 1.3;
+  text-shadow: 0 1px 3px #000;
+}
+
 .hud-objective {
   position: absolute;
   top: clamp(70px, 10vh, 120px);

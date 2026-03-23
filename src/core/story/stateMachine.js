@@ -97,17 +97,24 @@ function reevaluateEscortReadiness(progress) {
 
 export function recordRaiderKill(progress) {
   const next = clone(progress);
+
+  // Auto-advance to chapter 1 combat stages if still in early chapters
+  if (['chapter0_intro','chapter0_recruit','chapter0_ready','talk_villager'].includes(next.chapterState.stage)) {
+    next.chapterState.chapter = 1;
+    next.chapterState.stage = 'clear_raiders';
+    next.chapterState.objective = `Defeat all raiders (${next.chapterState.raidersDefeated}/${next.chapterState.raidersTarget}).`;
+  }
+
   next.chapterState.raidersDefeated += 1;
-  next.chapterState.objective = `Defeat named raiders (${next.chapterState.raidersDefeated}/${next.chapterState.raidersTarget}).`;
+  next.chapterState.objective = `Defeat raiders (${next.chapterState.raidersDefeated}/${next.chapterState.raidersTarget}).`;
 
   if (
-    next.chapterState.stage === 'clear_raiders'
-    && next.chapterState.raidersDefeated >= next.chapterState.raidersTarget
+    next.chapterState.raidersDefeated >= next.chapterState.raidersTarget
     && !next.chapterState.minibossSpawned
   ) {
     next.chapterState.minibossSpawned = true;
     next.chapterState.stage = 'defeat_miniboss';
-    next.chapterState.objective = 'Defeat Captain Zhao the Chain.';
+    next.chapterState.objective = 'A powerful captain has appeared — defeat him!';
   }
 
   return next;
@@ -116,8 +123,11 @@ export function recordRaiderKill(progress) {
 export function recordMiniBossDefeat(progress) {
   const next = clone(progress);
   next.chapterState.minibossDefeated = true;
-  next.chapterState.stage = 'return_songjiang';
-  next.chapterState.objective = 'Return to Song Jiang in Liangshan stronghold.';
+  // Auto-complete chapter — no need to return to Song Jiang
+  next.chapterState.stage = 'complete';
+  next.chapterState.completed = true;
+  next.chapterState.objective = 'Chapter 1 complete! Victory is yours.';
+  next.player.gold += 100;
   return next;
 }
 

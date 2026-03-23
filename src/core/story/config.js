@@ -81,12 +81,12 @@ export const NPCS = [
 ];
 
 export const INITIAL_CHAPTER_STATE = {
-  chapter: 0,
-  stage: 'chapter0_intro',
-  objective: 'You are a stressed student from modern time. Talk to Wu Yong in Liangshan.',
+  chapter: 1,
+  stage: 'clear_raiders',
+  objective: 'Defeat raiders to progress (0/5). Captain Zhao awaits.',
   completed: false,
   raidersDefeated: 0,
-  raidersTarget: 3,
+  raidersTarget: 5,
   minibossSpawned: false,
   minibossDefeated: false,
 };

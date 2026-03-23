@@ -160,11 +160,11 @@ export default function App() {
     }
   }, [playerLevel]);
 
-  // Trigger victory banquet when chapter completes
+  // Trigger victory banquet when chapter completes (any path)
   useEffect(() => {
     const stage = story.chapterState.stage;
-    if (prevStage.current !== 'return_songjiang' && stage === 'complete') {
-      setTimeout(() => setShowVictoryBanquet(true), 800);
+    if (prevStage.current !== 'complete' && stage === 'complete') {
+      setTimeout(() => setShowVictoryBanquet(true), 1200);
     }
     prevStage.current = stage;
   }, [story.chapterState.stage]);
@@ -912,6 +912,22 @@ export default function App() {
 
       <div className="hud-objective" aria-live="polite">
         {hud.objective}
+        {/* Quick action hint based on stage */}
+        {(() => {
+          const s = story.chapterState.stage;
+          const hints = {
+            chapter0_intro:   '💬 Find Wu Yong (yellow ring) and talk to him',
+            chapter0_recruit: '💬 Talk to Lin Chong + Tonkey (yellow rings)',
+            chapter0_ready:   '💬 Talk to Song Jiang to begin Chapter 1',
+            talk_villager:    '💬 Find Village Elder Liu and talk to him',
+            clear_raiders:    `⚔️ Kill enemies — ${story.chapterState.raidersDefeated}/${story.chapterState.raidersTarget} raiders down`,
+            defeat_miniboss:  '⚔️ Defeat the Captain (large red ring on ground)!',
+            return_songjiang: '💬 Return to Song Jiang — or just keep fighting!',
+            complete:         '✅ Chapter 1 complete!',
+          };
+          const hint = hints[s];
+          return hint ? <div className="objective-hint">{hint}</div> : null;
+        })()}
       </div>
 
       <div className="quest-panel" aria-live="polite">

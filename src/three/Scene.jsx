@@ -837,6 +837,347 @@ function CameraRig({ target, screenShake }) {
   return null;
 }
 
+// ── WORLD-ALIVE SYSTEMS ─────────────────────────────────────────
+
+// Day/night cycle — drives sky colour, fog, ambient + sun intensity
+function DayNightCycle() {
+  const { scene } = useThree();
+  const ambientRef  = useRef();
+  const sunRef      = useRef();
+  const fogRef      = useRef(new THREE.Fog(0xb8e4ff, 90, 430));
+
+  useEffect(() => { scene.fog = fogRef.current; }, [scene]);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    // 120-second full day cycle
+    const cycle = (t % 120) / 120;              // 0-1
+    const sunAngle = cycle * Math.PI * 2 - Math.PI / 2;
+    const sun = Math.sin(sunAngle);             // -1=midnight, 1=noon
+    const day = THREE.MathUtils.smoothstep(sun, -0.15, 0.35);  // 0=night, 1=day
+
+    // Sky/fog colour
+    const skyDay   = new THREE.Color('#7ab8e8');
+    const skyDusk  = new THREE.Color('#e08050');
+    const skyNight = new THREE.Color('#0a0e1a');
+    const isDusk   = Math.abs(sun) < 0.3;
+    const skyCol   = isDusk
+      ? skyDusk.lerp(day > 0.5 ? skyDay : skyNight, Math.abs(sun) / 0.3)
+      : (day > 0.5 ? skyDay : skyNight);
+    if (scene.background) scene.background.set(skyCol);
+    if (fogRef.current) {
+      fogRef.current.color.set(skyCol);
+      fogRef.current.far = 300 + day * 130;
+    }
+
+    if (ambientRef.current) ambientRef.current.intensity = 0.2 + day * 0.55;
+    if (sunRef.current) {
+      sunRef.current.intensity = 0.4 + day * 1.1;
+      // Sun arc
+      const r = 280;
+      sunRef.current.position.set(Math.cos(sunAngle) * r, Math.sin(sunAngle) * r, 60);
+      // Warm at sunrise/sunset, white at noon, blue at night
+      const c = isDusk ? new THREE.Color('#ffaa60') : day > 0.5 ? new THREE.Color('#fff8e8') : new THREE.Color('#4060a0');
+      sunRef.current.color.set(c);
+    }
+  });
+
+  return (
+    <>
+      <ambientLight ref={ambientRef} intensity={0.65} />
+      <directionalLight ref={sunRef} castShadow intensity={1.5} shadow-mapSize-width={1024} shadow-mapSize-height={1024} position={[40, 80, 20]} />
+    </>
+  );
+}
+
+// Animated clouds drifting across the sky
+function Clouds() {
+  const clouds = useMemo(() => Array.from({ length: 12 }, (_, i) => ({
+    id: i,
+    x: (Math.random() - 0.5) * 500,
+    y: 60 + Math.random() * 40,
+    z: -80 - Math.random() * 160,
+    sx: 1.2 + Math.random() * 1.4,
+    sy: 0.5 + Math.random() * 0.5,
+    sz: 1.0 + Math.random() * 0.8,
+    speed: 2 + Math.random() * 3,
+    rot: Math.random() * Math.PI,
+  })), []);
+
+  const refs = useRef(clouds.map(() => ({ current: null })));
+
+  useFrame((_, delta) => {
+    refs.current.forEach((r, i) => {
+      if (!r.current) return;
+      r.current.position.x += clouds[i].speed * delta;
+      if (r.current.position.x > 300) r.current.position.x = -300;
+    });
+  });
+
+  return (
+    <group>
+      {clouds.map((c, i) => (
+        <mesh
+          key={c.id}
+          ref={(el) => { refs.current[i] = { current: el }; }}
+          position={[c.x, c.y, c.z]}
+          rotation={[0, c.rot, 0]}
+          scale={[c.sx, c.sy, c.sz]}
+        >
+          <sphereGeometry args={[14, 7, 5]} />
+          <meshStandardMaterial color="#ffffff" transparent opacity={0.72} roughness={1} metalness={0} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// Birds flying in formation
+function Birds() {
+  const flock = useMemo(() => Array.from({ length: 8 }, (_, i) => ({
+    id: i,
+    offset: new THREE.Vector3((i - 4) * 6 + Math.random() * 3, Math.random() * 4, i * 3),
+    phase: Math.random() * Math.PI * 2,
+  })), []);
+
+  const groupRef = useRef();
+  const wingRefs = useRef(flock.map(() => ({ l: null, r: null })));
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (groupRef.current) {
+      groupRef.current.position.x = Math.sin(t * 0.08) * 180;
+      groupRef.current.position.z = -80 + Math.sin(t * 0.05) * 60;
+      groupRef.current.position.y = 45 + Math.sin(t * 0.12) * 8;
+      groupRef.current.rotation.y = Math.atan2(Math.cos(t * 0.08) * 180 * 0.08, 1);
+    }
+    wingRefs.current.forEach((w, i) => {
+      const flap = Math.sin(t * 4 + flock[i].phase) * 0.6;
+      if (w.l) w.l.rotation.z =  0.3 + flap;
+      if (w.r) w.r.rotation.z = -0.3 - flap;
+    });
+  });
+
+  return (
+    <group ref={groupRef} position={[0, 45, -80]}>
+      {flock.map((bird, i) => (
+        <group key={bird.id} position={[bird.offset.x, bird.offset.y, bird.offset.z]}>
+          {/* Body */}
+          <mesh>
+            <sphereGeometry args={[0.4, 6, 4]} />
+            <meshStandardMaterial color="#1a1010" />
+          </mesh>
+          {/* Left wing */}
+          <mesh ref={(el) => { wingRefs.current[i].l = el; }} position={[-0.8, 0, 0]}>
+            <boxGeometry args={[1.4, 0.1, 0.5]} />
+            <meshStandardMaterial color="#1a1010" />
+          </mesh>
+          {/* Right wing */}
+          <mesh ref={(el) => { wingRefs.current[i].r = el; }} position={[0.8, 0, 0]}>
+            <boxGeometry args={[1.4, 0.1, 0.5]} />
+            <meshStandardMaterial color="#1a1010" />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Campfire with flickering pointlight + animated flame cone
+function Campfire({ position }) {
+  const flameRef  = useRef();
+  const lightRef  = useRef();
+  const emberRefs = useRef(Array.from({ length: 6 }, () => null));
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (flameRef.current) {
+      flameRef.current.scale.y = 1 + Math.sin(t * 7 + position[0]) * 0.25;
+      flameRef.current.scale.x = 1 + Math.sin(t * 5 + 1) * 0.12;
+      flameRef.current.position.y = 1.1 + Math.sin(t * 9) * 0.06;
+    }
+    if (lightRef.current) {
+      lightRef.current.intensity = 2.5 + Math.sin(t * 6 + position[2]) * 1.2 + Math.sin(t * 13) * 0.4;
+    }
+    emberRefs.current.forEach((e, i) => {
+      if (!e) return;
+      const et = t * (0.8 + i * 0.15) + i * 1.1;
+      e.position.x = Math.sin(et * 2.2) * 0.4;
+      e.position.y = 1.5 + (et % 2) * 1.2;
+      e.position.z = Math.cos(et * 1.8) * 0.4;
+      e.material.opacity = Math.max(0, 1 - (et % 2) * 0.6);
+    });
+  });
+
+  return (
+    <group position={position}>
+      {/* Logs */}
+      <mesh rotation={[0, 0.6, Math.PI / 2]} position={[0, 0.1, 0]}>
+        <cylinderGeometry args={[0.18, 0.22, 1.6, 6]} />
+        <meshStandardMaterial color="#5a3010" roughness={1} />
+      </mesh>
+      <mesh rotation={[0, -0.6, Math.PI / 2]} position={[0, 0.1, 0]}>
+        <cylinderGeometry args={[0.18, 0.22, 1.6, 6]} />
+        <meshStandardMaterial color="#4a2808" roughness={1} />
+      </mesh>
+      {/* Stone ring */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <ringGeometry args={[0.6, 0.9, 10]} />
+        <meshStandardMaterial color="#606060" roughness={0.9} />
+      </mesh>
+      {/* Flame */}
+      <mesh ref={flameRef} position={[0, 1.1, 0]}>
+        <coneGeometry args={[0.35, 1.1, 8]} />
+        <meshStandardMaterial color="#ff6010" emissive="#ff4400" emissiveIntensity={1.4} transparent opacity={0.82} />
+      </mesh>
+      {/* Inner flame */}
+      <mesh position={[0, 1.0, 0]}>
+        <coneGeometry args={[0.18, 0.7, 6]} />
+        <meshStandardMaterial color="#ffdd40" emissive="#ffaa00" emissiveIntensity={2} transparent opacity={0.7} />
+      </mesh>
+      {/* Embers */}
+      {Array.from({ length: 6 }, (_, i) => (
+        <mesh key={i} ref={(el) => { emberRefs.current[i] = el; }} position={[0, 1.5, 0]}>
+          <sphereGeometry args={[0.06, 4, 4]} />
+          <meshStandardMaterial color="#ff8800" emissive="#ff4400" emissiveIntensity={2} transparent opacity={0.9} />
+        </mesh>
+      ))}
+      {/* Point light */}
+      <pointLight ref={lightRef} color="#ff6010" intensity={2.5} distance={22} decay={2} />
+    </group>
+  );
+}
+
+// Swaying grass patch
+function SwayingGrass() {
+  const blades = useMemo(() => Array.from({ length: 120 }, (_, i) => ({
+    id: i,
+    x: (Math.random() - 0.5) * 200,
+    z: (Math.random() - 0.5) * 200,
+    h: 0.6 + Math.random() * 0.6,
+    phase: Math.random() * Math.PI * 2,
+  })), []);
+
+  const refs = useRef(blades.map(() => null));
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    refs.current.forEach((r, i) => {
+      if (!r) return;
+      r.rotation.z = Math.sin(t * 1.2 + blades[i].phase) * 0.18;
+    });
+  });
+
+  return (
+    <group>
+      {blades.map((b, i) => (
+        <mesh
+          key={b.id}
+          ref={(el) => { refs.current[i] = el; }}
+          position={[b.x, -3.1, b.z]}
+        >
+          <boxGeometry args={[0.08, b.h, 0.08]} />
+          <meshStandardMaterial color="#5aaa40" roughness={1} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// Wandering ambient villagers (non-interactive)
+function AmbientVillagers() {
+  const villagers = useMemo(() => Array.from({ length: 5 }, (_, i) => ({
+    id: i,
+    x: -60 + i * 28,
+    z: 30 + (i % 2) * 20,
+    speed: 1.5 + Math.random() * 1.5,
+    phase: (i / 5) * Math.PI * 2,
+    radius: 10 + Math.random() * 8,
+    color: ['#4a3828', '#382820', '#503830', '#3a2818', '#483020'][i],
+  })), []);
+
+  const refs = useRef(villagers.map(() => null));
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    refs.current.forEach((r, i) => {
+      if (!r) return;
+      const v = villagers[i];
+      const angle = t * v.speed * 0.2 + v.phase;
+      r.position.x = v.x + Math.cos(angle) * v.radius;
+      r.position.z = v.z + Math.sin(angle) * v.radius;
+      r.rotation.y = angle + Math.PI / 2;
+    });
+  });
+
+  return (
+    <group>
+      {villagers.map((v, i) => (
+        <group key={v.id} ref={(el) => { refs.current[i] = el; }} position={[v.x, -2.5, v.z]}>
+          {/* Simple robed figure */}
+          <mesh position={[0, 0.8, 0]}>
+            <cylinderGeometry args={[0.35, 0.5, 1.8, 8]} />
+            <meshStandardMaterial color={v.color} />
+          </mesh>
+          <mesh position={[0, 1.9, 0]}>
+            <sphereGeometry args={[0.42, 8, 8]} />
+            <meshStandardMaterial color="#e8c890" />
+          </mesh>
+          <mesh position={[0, 2.22, 0]}>
+            <cylinderGeometry args={[0.55, 0.55, 0.1, 14]} />
+            <meshStandardMaterial color="#6a4820" />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Falling leaves particle system
+function FallingLeaves() {
+  const COUNT = 40;
+  const leaves = useMemo(() => Array.from({ length: COUNT }, (_, i) => ({
+    id: i,
+    x: (Math.random() - 0.5) * 200,
+    y: 5 + Math.random() * 25,
+    z: (Math.random() - 0.5) * 200,
+    vy: -(0.3 + Math.random() * 0.5),
+    vx: (Math.random() - 0.5) * 0.3,
+    phase: Math.random() * Math.PI * 2,
+    color: ['#c8a020', '#d06018', '#e87020', '#90b830', '#b84818'][Math.floor(Math.random() * 5)],
+  })), []);
+
+  const refs = useRef(leaves.map(() => null));
+
+  useFrame((_, delta) => {
+    refs.current.forEach((r, i) => {
+      if (!r) return;
+      const l = leaves[i];
+      l.phase += delta * 2;
+      r.position.y += l.vy * delta * 8;
+      r.position.x += l.vx * delta * 8 + Math.sin(l.phase) * delta * 0.8;
+      r.rotation.x += delta * 1.5;
+      r.rotation.z += delta * 1.2;
+      if (r.position.y < -4) {
+        r.position.y = 20 + Math.random() * 15;
+        r.position.x = (Math.random() - 0.5) * 200;
+        r.position.z = (Math.random() - 0.5) * 200;
+      }
+    });
+  });
+
+  return (
+    <group>
+      {leaves.map((l, i) => (
+        <mesh key={l.id} ref={(el) => { refs.current[i] = el; }} position={[l.x, l.y, l.z]}>
+          <planeGeometry args={[0.4, 0.3]} />
+          <meshStandardMaterial color={l.color} side={THREE.DoubleSide} transparent opacity={0.85} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 // ── SUPER MOVE VFX ──────────────────────────────────────────────
 function DragonStrikeVfx({ heroRef, active }) {
   const ring1 = useRef(); const ring2 = useRef(); const beam = useRef();
@@ -943,13 +1284,23 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
   const shadowActive = superFx?.type === 'shadow' && Date.now() - superFx.at < 1100;
   return (
     <>
-      <primitive attach="fog" object={new THREE.Fog(0xb8e4ff, mobile ? 70 : 90, mobile ? 320 : 430)} />
       <SkyDome />
-      <Lights mobile={mobile} />
+      <DayNightCycle />
+      <hemisphereLight args={[0xcff6ff, 0x89c09a, 0.5]} />
       <MountainBackdrop />
       <Terrain />
       <PathRibbon />
       <TreeField />
+      <SwayingGrass />
+      <Clouds />
+      <Birds />
+      <FallingLeaves />
+      {/* Campfires */}
+      <Campfire position={[-18, -3.2, 10]} />
+      <Campfire position={[22, -3.2, -8]} />
+      <Campfire position={[-40, -3.2, -25]} />
+      <Campfire position={[55, -3.2, 20]} />
+      <AmbientVillagers />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
       <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} attackFx={attackFx} />
       <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} />

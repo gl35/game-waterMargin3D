@@ -1949,18 +1949,58 @@ function Horse({ position, isMounted, heroRef }) {
 
   return (
     <group ref={groupRef} position={[position.x, getTerrainHeight(position.x, position.z), position.z]}>
-      {/* Rider (hero sits here when mounted) — shown only when mounted */}
+      {/* Rider — sits exactly on saddle at y=1.96 */}
       {isMounted && (
-        <group position={[0, 2.2, 0]}>
-          {/* Simple rider torso */}
-          <mesh castShadow position={[0, 0.6, 0]}><cylinderGeometry args={[0.38, 0.48, 1.2, 10]} /><meshStandardMaterial color="#f0ece0" roughness={0.8} /></mesh>
-          <mesh castShadow position={[0, 1.35, 0]}><sphereGeometry args={[0.42, 10, 10]} /><meshStandardMaterial color="#f2c9a0" /></mesh>
-          {/* Rider hat */}
-          <mesh position={[0, 1.72, -0.1]} rotation={[0.08,0,0]}><cylinderGeometry args={[0.85,0.85,0.14,20]} /><meshStandardMaterial color="#8b6240" /></mesh>
-          <mesh position={[0, 1.94, -0.1]} rotation={[0.08,0,0]}><coneGeometry args={[0.58,0.9,16]} /><meshStandardMaterial color="#9f7c55" /></mesh>
-          {/* Spear */}
-          <mesh castShadow position={[0.5, 0.5, -0.4]} rotation={[-0.3,0.1,0.1]}><cylinderGeometry args={[0.06,0.06,5,6]} /><meshStandardMaterial color="#c8c0a8" /></mesh>
-          <mesh position={[0.62, 2.6, -1.2]} rotation={[-0.3,0.1,0.1]}><coneGeometry args={[0.15,0.7,5]} /><meshStandardMaterial color="#f7d99a" metalness={0.5} /></mesh>
+        // Saddle top is at y=1.96 from group root. Rider hips start here.
+        <group position={[0, 1.96, -0.1]}>
+          {/* Legs straddling (spread apart, angled down like riding) */}
+          <mesh castShadow position={[-0.45, -0.3, 0]} rotation={[0, 0, 0.6]}>
+            <cylinderGeometry args={[0.16, 0.2, 0.9, 8]} />
+            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
+          </mesh>
+          <mesh castShadow position={[0.45, -0.3, 0]} rotation={[0, 0, -0.6]}>
+            <cylinderGeometry args={[0.16, 0.2, 0.9, 8]} />
+            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
+          </mesh>
+          {/* Boots */}
+          <mesh castShadow position={[-0.82, -0.65, 0.1]}><boxGeometry args={[0.28, 0.22, 0.55]} /><meshStandardMaterial color="#1a1820" /></mesh>
+          <mesh castShadow position={[0.82, -0.65, 0.1]}><boxGeometry args={[0.28, 0.22, 0.55]} /><meshStandardMaterial color="#1a1820" /></mesh>
+          {/* Torso */}
+          <mesh castShadow position={[0, 0.55, 0]}>
+            <cylinderGeometry args={[0.36, 0.44, 1.1, 10]} />
+            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
+          </mesh>
+          {/* Left arm — holding reins */}
+          <mesh castShadow position={[-0.58, 0.5, 0.45]} rotation={[0.6, 0, 0.25]}>
+            <cylinderGeometry args={[0.14, 0.18, 0.9, 8]} />
+            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
+          </mesh>
+          {/* Right arm — holding spear up */}
+          <mesh castShadow position={[0.6, 0.7, -0.3]} rotation={[-0.5, 0, -0.2]}>
+            <cylinderGeometry args={[0.14, 0.18, 0.9, 8]} />
+            <meshStandardMaterial color="#f0ece0" roughness={0.8} />
+          </mesh>
+          {/* Neck */}
+          <mesh castShadow position={[0, 1.22, 0]}><cylinderGeometry args={[0.2, 0.24, 0.38, 8]} /><meshStandardMaterial color="#f2c9a0" /></mesh>
+          {/* Head */}
+          <mesh castShadow position={[0, 1.56, 0]}><sphereGeometry args={[0.38, 12, 12]} /><meshStandardMaterial color="#f2c9a0" /></mesh>
+          {/* Eyes */}
+          <mesh position={[-0.16, 1.62, 0.32]}><sphereGeometry args={[0.07, 6, 6]} /><meshStandardMaterial color="#1a1020" /></mesh>
+          <mesh position={[0.16, 1.62, 0.32]}><sphereGeometry args={[0.07, 6, 6]} /><meshStandardMaterial color="#1a1020" /></mesh>
+          {/* Hat brim */}
+          <mesh position={[0, 1.88, -0.08]} rotation={[0.08,0,0]}><cylinderGeometry args={[0.82,0.82,0.13,22]} /><meshStandardMaterial color="#8b6240" /></mesh>
+          {/* Hat crown */}
+          <mesh position={[0, 2.1, -0.08]} rotation={[0.08,0,0]}><coneGeometry args={[0.55,0.85,16]} /><meshStandardMaterial color="#9f7c55" /></mesh>
+          {/* Spear — held high at right side */}
+          <mesh castShadow position={[0.65, 1.2, -0.5]} rotation={[-0.35,0.15,0.08]}>
+            <cylinderGeometry args={[0.055,0.055,5.5,6]} />
+            <meshStandardMaterial color="#c8c0a8" metalness={0.15} roughness={0.7} />
+          </mesh>
+          {/* Spear tip */}
+          <mesh position={[0.78, 3.6, -2.1]} rotation={[-0.35,0.15,0.08]}>
+            <coneGeometry args={[0.15,0.7,5]} />
+            <meshStandardMaterial color="#f7d99a" metalness={0.6} roughness={0.2} />
+          </mesh>
         </group>
       )}
       <group>

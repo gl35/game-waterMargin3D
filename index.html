@@ -4,10 +4,63 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-    <title>dream-of-water-margin</title>
+    <title>夢 Dream of Water Margin</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { background: #0a1520; overflow: hidden; }
+      #loading-screen {
+        position: fixed; inset: 0;
+        background: radial-gradient(ellipse at center, #1a2d3e 0%, #0a1018 100%);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        z-index: 9999; transition: opacity 0.6s ease;
+      }
+      #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+      #loading-title {
+        font-family: serif; font-size: clamp(22px, 5vw, 36px);
+        color: #d9b36b; text-shadow: 0 0 20px rgba(217,179,107,0.5);
+        margin-bottom: 8px; letter-spacing: 0.05em;
+      }
+      #loading-sub {
+        font-family: serif; font-size: clamp(12px, 2.5vw, 16px);
+        color: #8899aa; margin-bottom: 40px;
+      }
+      #loading-bar-wrap {
+        width: min(280px, 70vw); height: 6px;
+        background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;
+      }
+      #loading-bar {
+        height: 100%; width: 0%; border-radius: 3px;
+        background: linear-gradient(90deg, #d9b36b, #f0d090);
+        animation: load-progress 2.5s ease-out forwards;
+      }
+      @keyframes load-progress {
+        0%   { width: 0%; }
+        40%  { width: 55%; }
+        80%  { width: 82%; }
+        100% { width: 95%; }
+      }
+      #loading-hint {
+        margin-top: 20px; font-size: clamp(10px, 2vw, 13px);
+        color: #556677; font-family: sans-serif;
+      }
+    </style>
   </head>
   <body>
+    <div id="loading-screen">
+      <div id="loading-title">夢 Dream of Water Margin</div>
+      <div id="loading-sub">Forged by oath, steel, and storm</div>
+      <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+      <div id="loading-hint">Loading world...</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Hide loading screen once React has mounted
+      window.__hideLoading = function() {
+        const el = document.getElementById('loading-screen');
+        if (el) { el.classList.add('fade-out'); setTimeout(() => el.remove(), 700); }
+      };
+    </script>
   </body>
 </html>

@@ -844,7 +844,7 @@ function DayNightCycle() {
   const { scene } = useThree();
   const ambientRef = useRef();
   const sunRef = useRef();
-  const fog = useMemo(() => new THREE.Fog(0xb8e4ff, 90, 430), []);
+  const fog = useMemo(() => new THREE.Fog(0x7ab8e8, 180, 500), []);
   const skyDay   = useMemo(() => new THREE.Color('#7ab8e8'), []);
   const skyDusk  = useMemo(() => new THREE.Color('#e07840'), []);
   const skyNight = useMemo(() => new THREE.Color('#0a0e1a'), []);
@@ -863,7 +863,8 @@ function DayNightCycle() {
     if (isDusk) tmpCol.lerp(skyDusk, 1 - Math.abs(sun) / 0.28);
     if (scene.background instanceof THREE.Color) scene.background.copy(tmpCol);
     fog.color.copy(tmpCol);
-    fog.far = 300 + day * 130;
+    fog.near = 180;
+    fog.far = 420 + day * 80;
 
     if (ambientRef.current) ambientRef.current.intensity = 0.2 + day * 0.55;
     if (sunRef.current) {
@@ -1296,13 +1297,16 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
   const mobile = isMobile();
   return (
     <Canvas
+      fallback={<div style={{width:'100%',height:'100%',background:'#0a1520',display:'flex',alignItems:'center',justifyContent:'center',color:'#d9b36b',fontFamily:'serif',fontSize:'18px'}}>Loading...</div>}
       camera={{ position: [0, 18, 42], fov: 52, near: 0.1, far: 900 }}
       gl={{ antialias: !mobile, alpha: false, powerPreference: 'high-performance' }}
-      dpr={mobile ? [1, 1.25] : [1, 1.75]}
-      shadows={!mobile}
+      dpr={mobile ? [1, 1] : [1, 1.5]}
+      shadows={false}
       onCreated={({ gl, scene }) => {
-        gl.setClearColor('#7eb6e8', 1);
-        scene.background = new THREE.Color('#7eb6e8');
+        gl.setClearColor('#7ab8e8', 1);
+        scene.background = new THREE.Color('#7ab8e8');
+        // Hide the HTML loading screen
+        setTimeout(() => window.__hideLoading?.(), 800);
       }}
     >
       <Suspense fallback={null}>

@@ -23,6 +23,38 @@ const WORLD_BOUNDS = {
   maxZ: 220,
 };
 
+// Must match Terrain geometry formula exactly
+function getTerrainHeight(x, z) {
+  return (
+    Math.sin(x * 0.08) * 2.8 +
+    Math.cos(z * 0.05) * 1.8 +
+    Math.cos((x + z) * 0.03) * 1.0 +
+    Math.sin(x * 0.02 + z * 0.015) * 4.0
+  ) - 3.5; // terrain is positioned at y=-3.5
+}
+
+// Solid obstacle cylinders: [cx, cz, radius, height]
+const SOLID_OBSTACLES = [
+  // Liangshan mountain base at (-60, -80)
+  [-60, -80, 28, 40],
+];
+
+function resolveCollisions(x, z, radius = 1.2) {
+  let nx = x, nz = z;
+  for (const [cx, cz, cr] of SOLID_OBSTACLES) {
+    const dx = nx - cx;
+    const dz = nz - cz;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const minDist = cr + radius;
+    if (dist < minDist && dist > 0.001) {
+      const push = (minDist - dist) / dist;
+      nx += dx * push;
+      nz += dz * push;
+    }
+  }
+  return { x: nx, z: nz };
+}
+
 function isMobile() {
   return typeof window !== 'undefined'
     && (window.innerWidth < 900 || navigator.maxTouchPoints > 0);
@@ -244,7 +276,7 @@ function NpcField({ highlightedNpcId, onNpcTap }) {
         const glow = npc.id === highlightedNpcId;
         const style = NPC_STYLES[npc.id] || NPC_STYLES.villager;
         return (
-          <group key={npc.id} position={[x, -2.5, z]}>
+          <group key={npc.id} position={[x, getTerrainHeight(x, z), z]}>
             <HumanFigure
               bodyColor={style.body}
               robeColor={style.robe}
@@ -404,8 +436,9 @@ function EnemyField({ enemies = [], highlightedEnemyId, onEnemyTap, attackFx }) 
         const hitAge = attackFx?.enemyId === enemy.id ? Date.now() - attackFx.at : 9999;
         const hitFlash = hitAge < 220;
         const isWarlord = enemy.type === 'warlord';
+        const ey = getTerrainHeight(enemy.x, enemy.z);
         return (
-          <group key={enemy.id} position={[enemy.x, -2.4, enemy.z]} scale={isWarlord ? [1.6, 1.6, 1.6] : [1, 1, 1]}>
+          <group key={enemy.id} position={[enemy.x, ey, enemy.z]} scale={isWarlord ? [1.6, 1.6, 1.6] : [1, 1, 1]}>
             <EnemySoldier
               glow={glow}
               hitFlash={hitFlash}
@@ -567,6 +600,16 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
     group.current.position.x = THREE.MathUtils.clamp(group.current.position.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX);
     group.current.position.z = THREE.MathUtils.clamp(group.current.position.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ);
 
+    // ── Terrain following — snap Y to ground height ──
+    const groundY = getTerrainHeight(group.current.position.x, group.current.position.z);
+    const targetY = groundY + (isMounted ? 2.0 : 0.0);
+    group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, targetY, 0.22);
+
+    // ── Solid obstacle collision ──
+    const resolved = resolveCollisions(group.current.position.x, group.current.position.z);
+    group.current.position.x = resolved.x;
+    group.current.position.z = resolved.z;
+
     const t = state.clock.getElapsedTime();
 
     // ── Dodge roll ──
@@ -598,11 +641,12 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, i
       chargeGlowRef.current.scale.setScalar(1 + chargeLevel * 1.5);
     }
 
-    // ── Walk bob ──
-    if (isMoving) {
-      group.current.position.y = -0.6 + Math.abs(Math.sin(t * 9)) * 0.18;
+    // ── Walk bob (scale only — Y handled by terrain snap above) ──
+    if (isMoving && !isMounted) {
+      const bob = Math.abs(Math.sin(t * 9));
+      group.current.scale.y = 1.0 - bob * 0.04;
     } else {
-      group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, -0.6 + Math.sin(t * 1.4) * 0.04, 0.08);
+      group.current.scale.y = THREE.MathUtils.lerp(group.current.scale.y, 1.0, 0.12);
     }
 
     moveCallback.current?.({ x: group.current.position.x, y: group.current.position.y, z: group.current.position.z });
@@ -1831,10 +1875,9 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
       <Birds />
       <FallingLeaves />
       {/* Campfires */}
-      <Campfire position={[-18, -3.2, 10]} />
-      <Campfire position={[22, -3.2, -8]} />
-      <Campfire position={[-40, -3.2, -25]} />
-      <Campfire position={[55, -3.2, 20]} />
+      {[[-18,10],[22,-8],[-40,-25],[55,20]].map(([cx,cz],i) => (
+        <Campfire key={i} position={[cx, getTerrainHeight(cx,cz), cz]} />
+      ))}
       <GroundScatter />
       <LiangshanFortress />
       <AmbientVillagers />

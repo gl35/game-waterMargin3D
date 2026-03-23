@@ -403,7 +403,7 @@ function useMovementControls() {
   return stateRef;
 }
 
-function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx }) {
+function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx, isSprinting, screenShake }) {
   const group = heroRef || useRef();
   const controls = useMovementControls();
   const velocity = useRef(new THREE.Vector3());
@@ -468,7 +468,8 @@ function HeroAvatar({ heroRef, onMove, heroSkin, moveInput, attackFx, superFx })
     const isMoving = dir.lengthSq() > 0;
     if (isMoving) {
       dir.normalize();
-      velocity.current.lerp(dir.multiplyScalar(18), 0.2);
+      const spd = isSprinting ? 32 : 18;
+      velocity.current.lerp(dir.multiplyScalar(spd), isSprinting ? 0.35 : 0.2);
       group.current.rotation.y = Math.atan2(dir.x, -dir.z);
     } else {
       velocity.current.lerp(new THREE.Vector3(), 0.15);
@@ -814,9 +815,11 @@ function SkyDome() {
   );
 }
 
-function CameraRig({ target }) {
+function CameraRig({ target, screenShake }) {
   const { camera } = useThree();
   const offset = useMemo(() => new THREE.Vector3(0, 16, 34), []);
+  const shakeRef = useRef(0);
+  useEffect(() => { if (screenShake) shakeRef.current = 0.35; }, [screenShake]);
   useFrame((state, delta) => {
     if (!target.current) return;
     const desired = target.current.position.clone().add(offset);
@@ -824,6 +827,12 @@ function CameraRig({ target }) {
     const lookAt = target.current.position.clone();
     lookAt.y += 3;
     camera.lookAt(lookAt);
+    // Screenshake
+    if (shakeRef.current > 0) {
+      camera.position.x += (Math.random() - 0.5) * shakeRef.current;
+      camera.position.y += (Math.random() - 0.5) * shakeRef.current;
+      shakeRef.current = Math.max(0, shakeRef.current - delta * 4);
+    }
   });
   return null;
 }
@@ -926,7 +935,7 @@ function ShadowBlinkVfx({ heroRef, active }) {
   );
 }
 
-function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx }) {
+function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake }) {
   const heroRef = useRef();
   const mobile = isMobile();
   const dragonActive = superFx?.type === 'dragon' && Date.now() - superFx.at < 1200;
@@ -943,17 +952,17 @@ function SceneContent({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSk
       <TreeField />
       <NpcField highlightedNpcId={highlightedNpcId} onNpcTap={onNpcTap} />
       <EnemyField enemies={enemies} highlightedEnemyId={highlightedEnemyId} onEnemyTap={onEnemyTap} attackFx={attackFx} />
-      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} />
+      <HeroAvatar heroRef={heroRef} onMove={onHeroMove} heroSkin={heroSkin} moveInput={moveInput} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} />
       <DragonStrikeVfx heroRef={heroRef} active={dragonActive} />
       <StormSweepVfx  heroRef={heroRef} active={stormActive} />
       <ShadowBlinkVfx heroRef={heroRef} active={shadowActive} />
       <FloatingRune />
-      <CameraRig target={heroRef} />
+      <CameraRig target={heroRef} screenShake={screenShake} />
     </>
   );
 }
 
-export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx }) {
+export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, heroSkin, moveInput, onNpcTap, onEnemyTap, enemies, attackFx, superFx, isSprinting, screenShake }) {
   const mobile = isMobile();
   return (
     <Canvas
@@ -967,7 +976,7 @@ export function GameCanvas({ onHeroMove, highlightedNpcId, highlightedEnemyId, h
       }}
     >
       <Suspense fallback={null}>
-        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} />
+        <SceneContent onHeroMove={onHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={moveInput} onNpcTap={onNpcTap} onEnemyTap={onEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} />
       </Suspense>
     </Canvas>
   );

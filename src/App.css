@@ -315,6 +315,157 @@ html, body, #root {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* ── COMBO COUNTER ── */
+.combo-counter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  text-align: center;
+  animation: combo-pop 0.2s cubic-bezier(0.17,0.67,0.35,1.4) forwards;
+  z-index: 300;
+}
+.combo-num {
+  font-size: clamp(36px, 8vw, 64px);
+  font-weight: 900;
+  color: #ffe840;
+  text-shadow: 0 0 18px #ff8820, 0 2px 6px #000;
+  display: block;
+}
+.combo-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ff9920;
+  text-shadow: 0 1px 4px #000;
+  letter-spacing: 0.1em;
+}
+@keyframes combo-pop {
+  from { transform: translate(-50%,-50%) scale(0.5); opacity: 0; }
+  to   { transform: translate(-50%,-50%) scale(1);   opacity: 1; }
+}
+
+/* ── PROGRESSION HUD ── */
+.prog-block {
+  background: rgba(0,0,0,0.55);
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 130px;
+}
+.prog-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffe880;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.prog-xp { color: #88ddff; font-size: 11px; }
+.prog-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4488ff, #88ffcc);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.prog-next { font-size: 9px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+
+/* ── ENEMY HUD BAR ── */
+.enemy-hud-pill {
+  background: rgba(0,0,0,0.7);
+  border: 1px solid rgba(255,80,40,0.6);
+  border-radius: 8px;
+  padding: 5px 10px;
+  min-width: 130px;
+}
+.enemy-hud-name { font-size: 11px; color: #ff9988; font-weight: 700; margin-bottom: 3px; }
+.enemy-hud-bar { height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-bottom: 2px; }
+.enemy-hud-fill { height: 100%; border-radius: 3px; transition: width 0.2s ease, background 0.3s; }
+.enemy-hud-hp { font-size: 9px; color: rgba(255,255,255,0.5); }
+
+/* ── SHOP ── */
+.shop-btn {
+  background: rgba(200,160,40,0.2);
+  border: 1px solid rgba(220,180,60,0.6);
+  border-radius: 8px;
+  color: #ffe880;
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.shop-btn:hover { background: rgba(200,160,40,0.4); }
+
+.shop-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+}
+.shop-panel {
+  background: linear-gradient(160deg, #0d1a28, #1a2d3e);
+  border: 2px solid rgba(200,160,60,0.7);
+  border-radius: 18px;
+  padding: 22px 24px;
+  min-width: 280px;
+  max-width: 360px;
+  width: 90vw;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.8);
+}
+.shop-header {
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffe880;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.shop-gold { font-size: 14px; color: #ffd060; }
+.shop-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 11px;
+  color: #88ccff;
+}
+.shop-items { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.shop-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.shop-item:hover { background: rgba(255,215,60,0.12); border-color: rgba(255,215,60,0.5); }
+.shop-item.unaffordable { opacity: 0.4; cursor: not-allowed; }
+.shop-item-cost { color: #ffd060; font-weight: 700; font-size: 12px; }
+.shop-close {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.07);
+  color: #ccc;
+  font-size: 13px;
+  cursor: pointer;
+}
+.shop-close:hover { background: rgba(255,255,255,0.14); }
+
 /* ── SUPER MOVES BAR ── */
 .super-bar {
   position: absolute;
@@ -354,6 +505,11 @@ html, body, #root {
 }
 .super-btn.ready:active {
   transform: scale(0.95);
+}
+.super-btn.locked {
+  opacity: 0.35;
+  cursor: not-allowed;
+  filter: grayscale(0.8);
 }
 .super-btn.cooling {
   opacity: 0.55;

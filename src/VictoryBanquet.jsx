@@ -635,8 +635,15 @@ export default function VictoryBanquet({ onClose, gold, heroes, chapter = 1 }) {
   const [phase, setPhase] = useState('cinematic'); // cinematic → revealed
   const [captionIndex, setCaptionIndex] = useState(0);
   const isChapter2 = chapter === 2;
+  const isChapter3 = chapter === 3;
 
-  const CAPTIONS = isChapter2 ? [
+  const CAPTIONS = isChapter3 ? [
+    '⚔️  Chapter 3 Complete — Iron Gate Breached',
+    `🏆  Elite soldiers defeated. General Peng slain.`,
+    `🪙  Reward: +300 gold  •  Heroes: ${heroes}/108`,
+    '🏮  The Iron Gate falls — Liangshan\'s path lies open...',
+    '"The mountain calls. The 108 await. March on."',
+  ] : isChapter2 ? [
     '⚔️  Chapter 2 Complete — The Magistrate Falls',
     `🏆  Guards defeated. Warlord Gao slain.`,
     `🪙  Reward: +200 gold  •  Heroes: ${heroes}/108`,
@@ -650,11 +657,11 @@ export default function VictoryBanquet({ onClose, gold, heroes, chapter = 1 }) {
     '"108 heroes. One oath. One mountain. Tonight — we feast."',
   ];
 
-  const SceneComponent = isChapter2 ? MagistrateCourtScene : BanquetHall;
-  const titleChi = isChapter2 ? '第二章完成' : '第一章完成';
-  const titleEn = isChapter2 ? 'Chapter II — Complete' : 'Chapter I — Complete';
-  const titleSub = isChapter2 ? 'The Magistrate Falls' : 'Oath at Liangshan';
-  const canvasBg = isChapter2 ? '#050204' : '#1a0808';
+  const SceneComponent = isChapter2 || isChapter3 ? MagistrateCourtScene : BanquetHall;
+  const titleChi = isChapter3 ? '第三章完成' : isChapter2 ? '第二章完成' : '第一章完成';
+  const titleEn = isChapter3 ? 'Chapter III — Complete' : isChapter2 ? 'Chapter II — Complete' : 'Chapter I — Complete';
+  const titleSub = isChapter3 ? 'Iron Gate Breached' : isChapter2 ? 'The Magistrate Falls' : 'Oath at Liangshan';
+  const canvasBg = isChapter2 || isChapter3 ? '#050204' : '#1a0808';
 
   useEffect(() => {
     if (captionIndex < CAPTIONS.length - 1) {

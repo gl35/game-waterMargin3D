@@ -1368,7 +1368,16 @@ export default function App() {
           chapter={story.chapterState.chapter}
           gold={hud.gold}
           heroes={hud.heroes}
-          onClose={() => setShowVictoryBanquet(false)}
+          onClose={() => {
+            const ch = story.chapterState.chapter;
+            setShowVictoryBanquet(false);
+            if (ch === 2) {
+              setStory((prev) => advanceToChapter3(prev));
+              setEnemies(createChapter3Enemies());
+              setCombatXp((xp) => xp + 120);
+              setQuestNotice('📖 Chapter 3 begins — Iron Gate Pass!');
+            }
+          }}
         />
       )}
 

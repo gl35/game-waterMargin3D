@@ -3,7 +3,7 @@ import './App.css';
 import { GameCanvas } from './three/Scene';
 import { NPCS } from './core/story/config';
 import { tileToWorldPosition } from './core/story/coordinates';
-import { createStoryProgress, handleNpcDialog, recordMiniBossDefeat, recordRaiderKill, saveStoryProgress, advanceToChapter2 } from './core/story/stateMachine';
+import { createStoryProgress, handleNpcDialog, recordMiniBossDefeat, recordRaiderKill, saveStoryProgress, advanceToChapter2, advanceToChapter3 } from './core/story/stateMachine';
 import {
   advanceQuestByNpc,
   claimQuestReward,
@@ -15,7 +15,7 @@ import {
 import { HERO_SKINS } from './core/hero/skins';
 import VictoryBanquet from './VictoryBanquet';
 import OpeningCinematic from './OpeningCinematic';
-import { createEnemies, createChapter2Enemies, damageEnemy, knockbackEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
+import { createEnemies, createChapter2Enemies, createChapter3Enemies, damageEnemy, knockbackEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
 import { getLevel, getXpProgress, getXpForNext, getStats, SHOP_UPGRADES } from './core/hero/progression';
 
 const npcWorld = NPCS.map((npc) => ({ ...npc, world: tileToWorldPosition(npc) }));
@@ -26,6 +26,7 @@ const DIALOG_HINTS = {
   villager: '[Main Mission] Defeat the three named raiders near the roads.',
   songjiang_return: '[Main Mission] You returned victorious. Report and claim your reward.',
   tonkey: '[Press E to ask Tonkey to follow you.]',
+  wusong: '[Main Mission] Defeat ten of General Peng\'s elite soldiers guarding the Iron Gate Pass.',
 };
 
 const INTERACT_PROMPT = 'Press E to interact';
@@ -98,6 +99,7 @@ function composeDialogText(npc, story) {
   if (npc.id === 'villager' && stage === 'talk_villager') text += `\n\n${DIALOG_HINTS.villager}`;
   if (npc.id === 'songjiang' && stage === 'return_songjiang') text += `\n\n${DIALOG_HINTS.songjiang_return}`;
   if (npc.id === 'tonkey' && !story.tonkeyUnlocked) text += `\n${DIALOG_HINTS.tonkey}`;
+  if (npc.id === 'wusong' && stage === 'talk_wusong') text += `\n\n${DIALOG_HINTS.wusong}`;
 
   return text;
 }
@@ -549,7 +551,7 @@ export default function App() {
       setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 600);
       setStory((prev) => {
         const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
-        return (res.enemy.type === 'captain' || res.enemy.type === 'warlord') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
+        return (res.enemy.type === 'captain' || res.enemy.type === 'warlord' || res.enemy.type === 'general') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
       });
       // Kill XP + combo finish bonus
       const killXp = res.enemy.xp + (newCombo >= 3 ? Math.floor(newCombo * 1.5) : 0);
@@ -598,7 +600,7 @@ export default function App() {
       setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 700);
       setStory((prev) => {
         const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
-        return (res.enemy.type === 'captain' || res.enemy.type === 'warlord') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
+        return (res.enemy.type === 'captain' || res.enemy.type === 'warlord' || res.enemy.type === 'general') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
       });
       setCombatXp((xp) => xp + res.enemy.xp);
       setLockedTarget(null);
@@ -884,7 +886,11 @@ export default function App() {
       }));
       setQuestNotice('You were defeated. Respawned at camp.');
       heroPosition.current = { x: 0, y: 0, z: 12 };
-      setEnemies(createEnemies());
+      setEnemies((prev) => {
+        if (prev.some((e) => e.id.startsWith('ch3_'))) return createChapter3Enemies();
+        if (prev.some((e) => e.id.startsWith('ch2_'))) return createChapter2Enemies();
+        return createEnemies();
+      });
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [story.player.hp]);
@@ -977,11 +983,12 @@ export default function App() {
             chapter0_recruit: '💬 Talk to Lin Chong + Tonkey (yellow rings)',
             chapter0_ready:   '💬 Talk to Song Jiang to begin Chapter 1',
             talk_villager:    '💬 Find Village Elder Liu and talk to him',
-            clear_raiders:    `⚔️ Kill enemies — ${story.chapterState.raidersDefeated}/${story.chapterState.raidersTarget} ${ch === 2 ? 'guards' : 'raiders'} down`,
+            talk_wusong:      '💬 Find Wu Song at the Iron Gate Pass (south-east)',
+            clear_raiders:    `⚔️ Kill enemies — ${story.chapterState.raidersDefeated}/${story.chapterState.raidersTarget} ${ch === 3 ? 'elites' : ch === 2 ? 'guards' : 'raiders'} down`,
             clear_guards:     `⚔️ Kill guards — ${story.chapterState.raidersDefeated}/${story.chapterState.raidersTarget} down`,
-            defeat_miniboss:  ch === 2 ? '⚔️ Destroy Warlord Gao — he is massive and armored!' : '⚔️ Defeat the Captain (large red ring on ground)!',
+            defeat_miniboss:  ch === 3 ? '⚔️ General Peng — iron-clad and furious. Hit hard!' : ch === 2 ? '⚔️ Destroy Warlord Gao — he is massive and armored!' : '⚔️ Defeat the Captain (large red ring on ground)!',
             return_songjiang: '💬 Return to Song Jiang — or just keep fighting!',
-            complete:         ch === 2 ? '✅ Chapter 2 complete! The Magistrate falls.' : '✅ Chapter 1 complete!',
+            complete:         ch === 3 ? '✅ Chapter 3 complete! The Iron Gate is breached.' : ch === 2 ? '✅ Chapter 2 complete! The Magistrate falls.' : '✅ Chapter 1 complete!',
           };
           const hint = hints[s];
           return hint ? <div className="objective-hint">{hint}</div> : null;
@@ -1136,9 +1143,9 @@ export default function App() {
         return <div className="lockon-hud">🎯 {e.label} — {e.hp}/{e.maxHp} HP</div>;
       })()}
 
-      {/* Boss HP bar (captain) */}
+      {/* Boss HP bar (captain / warlord / general) */}
       {(() => {
-        const boss = enemies.find((e) => e.type === 'captain' && !e.dead);
+        const boss = enemies.find((e) => (e.type === 'captain' || e.type === 'warlord' || e.type === 'general') && !e.dead);
         if (!boss) return null;
         const pct = Math.round((boss.hp / boss.maxHp) * 100);
         return (
@@ -1163,6 +1170,11 @@ export default function App() {
               setEnemies(createChapter2Enemies());
               setCombatXp((xp) => xp + 80);
               setQuestNotice('📖 Chapter 2 begins — The Magistrate\'s Wrath!');
+            } else if (ch === 2) {
+              setStory((prev) => advanceToChapter3(prev));
+              setEnemies(createChapter3Enemies());
+              setCombatXp((xp) => xp + 120);
+              setQuestNotice('📖 Chapter 3 begins — Iron Gate Pass!');
             } else {
               setQuestNotice('🏆 More chapters coming soon!');
             }

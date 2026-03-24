@@ -7,9 +7,13 @@ export const ENEMY_DEFS = [
   { type: 'captain',  label: '队长 Captain',     hp: 120, maxHp: 120, damage: 20, xp: 60, gold: 40, aggroRange: 18, chaseSpeed: 5,  attackRange: 4.0, attackInterval: 1800 },
   { type: 'berserker',label: '狂战士 Berserker', hp: 70,  maxHp: 70,  damage: 14, xp: 35, gold: 22, aggroRange: 20, chaseSpeed: 9,  attackRange: 3.0, attackInterval: 800  },
   // Chapter 2
-  { type: 'guard',    label: '甲士 Guard',       hp: 90,  maxHp: 90,  damage: 18, xp: 40, gold: 25, aggroRange: 25, chaseSpeed: 7,  attackRange: 3.5, attackInterval: 1100 },
-  { type: 'archer',   label: '弓手 Archer',      hp: 45,  maxHp: 45,  damage: 12, xp: 28, gold: 18, aggroRange: 40, chaseSpeed: 6,  attackRange: 3.0, attackInterval: 1400 },
-  { type: 'warlord',  label: '⚔️ Warlord Gao',  hp: 280, maxHp: 280, damage: 35, xp: 150,gold: 100, aggroRange: 22, chaseSpeed: 4, attackRange: 5.0, attackInterval: 2000 },
+  { type: 'guard',    label: '甲士 Guard',            hp: 90,  maxHp: 90,  damage: 18, xp: 40,  gold: 25,  aggroRange: 25, chaseSpeed: 7, attackRange: 3.5, attackInterval: 1100 },
+  { type: 'archer',   label: '弓手 Archer',            hp: 45,  maxHp: 45,  damage: 12, xp: 28,  gold: 18,  aggroRange: 40, chaseSpeed: 6, attackRange: 3.0, attackInterval: 1400 },
+  { type: 'warlord',  label: '⚔️ Warlord Gao',        hp: 280, maxHp: 280, damage: 35, xp: 150, gold: 100, aggroRange: 22, chaseSpeed: 4, attackRange: 5.0, attackInterval: 2000 },
+  // Chapter 3
+  { type: 'elite',    label: '精兵 Elite Soldier',     hp: 110, maxHp: 110, damage: 22, xp: 50,  gold: 30,  aggroRange: 28, chaseSpeed: 8, attackRange: 3.8, attackInterval: 1000 },
+  { type: 'crossbow', label: '弩手 Crossbowman',       hp: 55,  maxHp: 55,  damage: 16, xp: 35,  gold: 22,  aggroRange: 50, chaseSpeed: 5, attackRange: 3.0, attackInterval: 1600 },
+  { type: 'general',  label: '⚔️ General Peng',        hp: 420, maxHp: 420, damage: 45, xp: 200, gold: 150, aggroRange: 25, chaseSpeed: 3, attackRange: 6.0, attackInterval: 2400 },
 ];
 
 const SPAWN_POINTS = [
@@ -38,6 +42,42 @@ const CH2_SPAWN_POINTS = [
   // Warlord boss
   { x: 65,  z: 35,  type: 'warlord' },
 ];
+
+const CH3_SPAWN_POINTS = [
+  { x: 28,  z: -30, type: 'elite'    },
+  { x: -20, z: -25, type: 'crossbow' },
+  { x: 42,  z: 12,  type: 'elite'    },
+  { x: -50, z: 20,  type: 'crossbow' },
+  { x: 58,  z: -50, type: 'elite'    },
+  { x: -62, z: -18, type: 'elite'    },
+  { x: 18,  z: -62, type: 'crossbow' },
+  { x: -38, z: 48,  type: 'elite'    },
+  { x: 52,  z: -25, type: 'elite'    },
+  { x: 30,  z: 55,  type: 'crossbow' },
+  // General boss
+  { x: 70,  z: 40,  type: 'general'  },
+];
+
+export function createChapter3Enemies() {
+  return CH3_SPAWN_POINTS.map((sp, idx) => {
+    const def = ENEMY_DEFS.find((d) => d.type === sp.type);
+    return {
+      id: `ch3_enemy_${idx}`,
+      type: sp.type,
+      label: def.label,
+      x: sp.x, z: sp.z,
+      patrolOriginX: sp.x, patrolOriginZ: sp.z,
+      hp: def.hp, maxHp: def.maxHp,
+      damage: def.damage, xp: def.xp,
+      goldDrop: def.gold,
+      aggroRange: def.aggroRange, chaseSpeed: def.chaseSpeed,
+      attackRange: def.attackRange, attackInterval: def.attackInterval,
+      lastAttackAt: 0, telegraphAt: null,
+      dead: false, respawnAt: null,
+      vx: 0, vz: 0,
+    };
+  });
+}
 
 export function createChapter2Enemies() {
   return CH2_SPAWN_POINTS.map((sp, idx) => {
@@ -157,8 +197,8 @@ export function stepEnemies(enemies, hero, nowSeconds, dt, now = Date.now()) {
       }
     } else {
       // Patrol circle
-      const radius = enemy.type === 'captain' ? 10 : enemy.type === 'berserker' ? 8 : enemy.type === 'raider' ? 7 : 5;
-      const speed  = enemy.type === 'captain' ? 0.35 : enemy.type === 'berserker' ? 0.9 : enemy.type === 'raider' ? 0.7 : 0.95;
+      const radius = enemy.type === 'captain' || enemy.type === 'general' ? 10 : enemy.type === 'berserker' || enemy.type === 'elite' ? 8 : enemy.type === 'raider' ? 7 : 5;
+      const speed  = enemy.type === 'captain' || enemy.type === 'general' ? 0.35 : enemy.type === 'berserker' || enemy.type === 'elite' ? 0.9 : enemy.type === 'raider' ? 0.7 : 0.95;
       const angle  = nowSeconds * speed + idx * 0.9;
       nx = enemy.patrolOriginX + Math.cos(angle) * radius;
       nz = enemy.patrolOriginZ + Math.sin(angle * 0.9) * radius;

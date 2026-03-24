@@ -78,6 +78,15 @@ export const NPCS = [
     dialog: "Name's Tonkey. You look like you just woke from a fever dream. Need backup? I'll run with you.",
     recruitable: false,
   },
+  {
+    id: 'wusong',
+    x: 38,
+    y: 36,
+    name: '武松',
+    role: 'Wu Song',
+    dialog: 'The Iron Gate Pass ahead is held by General Peng\'s armored regiment. Ten of his elite soldiers patrol these roads. Cut them down — I will hold the rear and keep your escape route clear.',
+    recruitable: true,
+  },
 ];
 
 export const INITIAL_CHAPTER_STATE = {
@@ -98,6 +107,17 @@ export const CHAPTER2_STATE = {
   completed: false,
   raidersDefeated: 0,
   raidersTarget: 7,
+  minibossSpawned: false,
+  minibossDefeated: false,
+};
+
+export const CHAPTER3_STATE = {
+  chapter: 3,
+  stage: 'talk_wusong',
+  objective: 'Find Wu Song at the Iron Gate Pass.',
+  completed: false,
+  raidersDefeated: 0,
+  raidersTarget: 10,
   minibossSpawned: false,
   minibossDefeated: false,
 };

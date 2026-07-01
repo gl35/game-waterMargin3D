@@ -10,6 +10,10 @@ export const ENEMY_DEFS = [
   { type: 'guard',    label: '甲士 Guard',       hp: 90,  maxHp: 90,  damage: 18, xp: 40, gold: 25, aggroRange: 25, chaseSpeed: 7,  attackRange: 3.5, attackInterval: 1100 },
   { type: 'archer',   label: '弓手 Archer',      hp: 45,  maxHp: 45,  damage: 12, xp: 28, gold: 18, aggroRange: 40, chaseSpeed: 6,  attackRange: 3.0, attackInterval: 1400 },
   { type: 'warlord',  label: '⚔️ Warlord Gao',  hp: 280, maxHp: 280, damage: 35, xp: 150,gold: 100, aggroRange: 22, chaseSpeed: 4, attackRange: 5.0, attackInterval: 2000 },
+  // Chapter 3 — the sorcerer's coven
+  { type: 'cultist',  label: '邪徒 Cultist',     hp: 60,  maxHp: 60,  damage: 12, xp: 30, gold: 20, aggroRange: 26, chaseSpeed: 8,  attackRange: 3.0, attackInterval: 1100 },
+  { type: 'shade',    label: '影 Shade',         hp: 40,  maxHp: 40,  damage: 16, xp: 36, gold: 25, aggroRange: 32, chaseSpeed: 12, attackRange: 2.5, attackInterval: 750  },
+  { type: 'sorcerer', label: '🌑 Sorcerer',      hp: 420, maxHp: 420, damage: 50, xp: 240,gold: 180, aggroRange: 28, chaseSpeed: 3, attackRange: 7.0, attackInterval: 2400 },
 ];
 
 const SPAWN_POINTS = [
@@ -38,6 +42,41 @@ const CH2_SPAWN_POINTS = [
   // Warlord boss
   { x: 65,  z: 35,  type: 'warlord' },
 ];
+
+const CH3_SPAWN_POINTS = [
+  { x:  10, z: -40, type: 'cultist'  },
+  { x: -30, z: -45, type: 'shade'    },
+  { x:  35, z: -25, type: 'cultist'  },
+  { x: -45, z: -10, type: 'shade'    },
+  { x:  50, z:  10, type: 'cultist'  },
+  { x: -15, z:  25, type: 'shade'    },
+  { x:  20, z:  35, type: 'cultist'  },
+  { x: -55, z:  40, type: 'shade'    },
+  { x:  60, z: -50, type: 'cultist'  },
+  // Sorcerer boss — far north, the player has to push toward him
+  { x:  -5, z: -90, type: 'sorcerer' },
+];
+
+export function createChapter3Enemies() {
+  return CH3_SPAWN_POINTS.map((sp, idx) => {
+    const def = ENEMY_DEFS.find((d) => d.type === sp.type);
+    return {
+      id: `ch3_enemy_${idx}`,
+      type: sp.type,
+      label: def.label,
+      x: sp.x, z: sp.z,
+      patrolOriginX: sp.x, patrolOriginZ: sp.z,
+      hp: def.hp, maxHp: def.maxHp,
+      damage: def.damage, xp: def.xp,
+      goldDrop: def.gold,
+      aggroRange: def.aggroRange, chaseSpeed: def.chaseSpeed,
+      attackRange: def.attackRange, attackInterval: def.attackInterval,
+      lastAttackAt: 0, telegraphAt: null,
+      dead: false, respawnAt: null,
+      vx: 0, vz: 0,
+    };
+  });
+}
 
 export function createChapter2Enemies() {
   return CH2_SPAWN_POINTS.map((sp, idx) => {

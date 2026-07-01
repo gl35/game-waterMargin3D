@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Scratch screenshots captured by the test/tour scripts (repo root only)
+/*.png
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

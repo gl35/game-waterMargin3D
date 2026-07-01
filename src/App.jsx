@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
-import { GameCanvas } from './three/Scene';
+import { GameCanvas } from './scene2d/Scene';
 import { NPCS } from './core/story/config';
 import { tileToWorldPosition } from './core/story/coordinates';
 import { createStoryProgress, handleNpcDialog, recordMiniBossDefeat, recordRaiderKill, saveStoryProgress, advanceToChapter2 } from './core/story/stateMachine';
@@ -15,16 +15,17 @@ import {
 import { HERO_SKINS } from './core/hero/skins';
 import VictoryBanquet from './VictoryBanquet';
 import OpeningCinematic from './OpeningCinematic';
-import { createEnemies, createChapter2Enemies, damageEnemy, knockbackEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
+import { createEnemies, createChapter2Enemies, createChapter3Enemies, damageEnemy, knockbackEnemy, getClosestLiveEnemy, respawnEnemies, stepEnemies } from './core/combat/enemies';
 import { getLevel, getXpProgress, getXpForNext, getStats, SHOP_UPGRADES } from './core/hero/progression';
+import { sfxHit, sfxCrit, sfxKill, sfxPickup, sfxDialogBlip, sfxBanner, sfxClick } from './audio/sfx';
 
 const npcWorld = NPCS.map((npc) => ({ ...npc, world: tileToWorldPosition(npc) }));
 
 const DIALOG_HINTS = {
-  wuyong: '[Chapter 0] You are a modern student lost in Song dynasty chaos. Recruit Lin Chong and Tonkey to survive.',
-  songjiang_ready: '[Chapter 0] Your escort is ready. Report in and walk the Liangshan path to find your road home.',
-  villager: '[Main Mission] Defeat the three named raiders near the roads.',
-  songjiang_return: '[Main Mission] You returned victorious. Report and claim your reward.',
+  wuyong: '[Act 1] A tear in fate dragged you here. Earn Liangshan\'s trust — Lin Chong waits, and the road home runs through both chapters.',
+  songjiang_ready: '[Act 1] Your party gathers. Walk the Liangshan path and shatter Captain Zhao to open the road south.',
+  villager: '[Main Mission] Hunt the raider patrols. Captain Zhao falls last.',
+  songjiang_return: '[Act 1 → Act 2] You returned with the captain\'s mask. Lin Chong rides for the magistrate next — claim your reward and prepare.',
   tonkey: '[Press E to ask Tonkey to follow you.]',
 };
 
@@ -89,6 +90,126 @@ const TAVERN_CREW = [
   },
 ];
 
+// ── Hit-stop: a brief simulation freeze gives heavy hits real weight.
+// Both ticks (App.jsx enemy step + Scene.jsx hero/camera) check Date.now()
+// against window.__hitStopUntil and skip simulation when it's in the future.
+function triggerHitStop(durationMs) {
+  if (typeof window === 'undefined') return;
+  const until = Date.now() + durationMs;
+  if ((window.__hitStopUntil || 0) < until) window.__hitStopUntil = until;
+}
+
+// Per-NPC recruitment hooks. Original short prose lines used in dialog.
+const TRIAL_OPENINGS = {
+  songjiang:  'Liangshan asks one thing — proof. Words bend; blade does not.',
+  linchong:   'Steel is honest. Show me yours against the magistrate\'s dogs.',
+  wuyong:     'A strategist needs a sword arm worth the maps I draw. Earn it.',
+  chaogai:    'I built this oath. Spill raider blood and it becomes yours too.',
+  huarong:    'An archer counts arrows by enemies down. Bring me a tally.',
+  likui:      'Don\'t talk! Crack skulls! Then we drink.',
+  lujunyi:    'Show me your stride before I share my road. The path begins with their fall.',
+  guansheng:  'A great blade honors a great cause — make the cause clear in red.',
+  huyanzhuo:  'My whips remember names. Earn yours among the magistrate\'s ranks.',
+  husanniang: 'I do not fight beside men who hesitate. Cut a few down, then come back.',
+  wusong:     'A jar of wine for every magistrate man you put down. Go earn the first.',
+  yanqing:    'A wandering player carries more than music. Show me the shape of your wandering.',
+  daizong:    'Pace yourself. Stride enough patrols flat and I\'ll carry word for you.',
+  qinming:    'Heat is honest. Light a few patrols up and I\'ll burn beside you.',
+  dongping:   'A spear is a question. Answer mine with a few of theirs falling.',
+  zhutong:    'I have seen bad men in good uniforms. Show me yours is clean. Three patrols.',
+  xuning:     'Bring the family spear payment in raider blood. Then we ride.',
+  liutang:    'I burn down the road, you keep up. Show me you can keep up — clear it for me.',
+  shixiu:     'No retreat. Drop a few of them. If you make it back, so will I.',
+};
+const TRIAL_JOIN_LINES = {
+  songjiang:  'Then walk with us. The road to Liangshan widens by your hand.',
+  linchong:   'You move like one who has nothing left to lose. Good. Stay close.',
+  wuyong:     'Your tally matches my maps. I will go where you lead.',
+  chaogai:    'Brother-of-the-oath. Liangshan is yours as much as mine.',
+  huarong:    'My quiver is yours. Tell me where to aim and stand back.',
+  likui:      'You hit hard! I like you! Where to next?',
+  lujunyi:    'A patient road, well walked. I follow.',
+  guansheng:  'Honor met. My blade is at your side.',
+  huyanzhuo:  'Two whips, one rider, beside one stranger. Lead on.',
+  husanniang: 'You do not hesitate. Good. The sabers ride with you.',
+  wusong:     'Wine first. Then magistrates. In that order, always.',
+  yanqing:    'You have a stride worth a song. I\'ll write you one in steel.',
+  daizong:    'Three hundred li, your direction. Lead on.',
+  qinming:    'Sparks together, then. Where do we burn next?',
+  dongping:   'Twin spears at your right shoulder. Try not to flinch.',
+  zhutong:    'Clean enough. The beard rides at your side.',
+  xuning:     'Family debt closing. Spear is yours to point.',
+  liutang:    'You kept up. I like that. Lead, red road runner.',
+  shixiu:     'Then we go forward together. No turning. Ever.',
+};
+function trialOpening(id) { return TRIAL_OPENINGS[id] || 'Prove yourself in battle. Return when you have.'; }
+function trialJoinLine(id) { return TRIAL_JOIN_LINES[id] || 'Well fought. I follow.'; }
+
+// ── Persistence: pack the "new" state (party + story flags) into localStorage.
+//    Existing saveStoryProgress / saveQuestProgress handle their own slices.
+const EXTRAS_KEY = 'dwm_extras_v1';
+function saveExtras(payload) {
+  try {
+    localStorage.setItem(EXTRAS_KEY, JSON.stringify({
+      version: 1,
+      recruited: Array.from(payload.recruited || []),
+      trials: payload.trials || {},
+      linchongBriefed: !!payload.linchongBriefed,
+      sorcererRevealed: !!payload.sorcererRevealed,
+      sorcererDown: !!payload.sorcererDown,
+      endingChoice: payload.endingChoice || null,
+      heroSkinIndex: payload.heroSkinIndex || 0,
+      statBonuses: payload.statBonuses || { maxHp: 0, damage: 0, speed: 0, range: 0 },
+      combatXp: payload.combatXp || 0,
+      horsePos: payload.horsePos || { x: -15, z: 20 },
+      // Save companion identities + their HP so they don't all snap back to full
+      companions: (payload.companions || []).map((c) => ({
+        id: c.id, hp: c.hp, maxHp: c.maxHp,
+      })),
+    }));
+  } catch {}
+}
+function loadExtras() {
+  try {
+    const raw = localStorage.getItem(EXTRAS_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (obj.version !== 1) return null;
+    return obj;
+  } catch { return null; }
+}
+
+// Per-hero combat traits — range, damage band, cooldown, optional special ability
+const HERO_TRAITS = {
+  songjiang:  { range: 5, dmg: [10, 14], cooldown: 1100, special: 'rally' },
+  wuyong:     { range: 6, dmg: [6, 10],  cooldown: 1000 },
+  linchong:   { range: 4, dmg: [12, 16], cooldown: 950 },
+  tonkey:     { range: 4, dmg: [10, 14], cooldown: 1000 },
+  villager:   { range: 3, dmg: [4, 6],   cooldown: 1400 },
+  chaogai:    { range: 5, dmg: [11, 15], cooldown: 1100 },
+  huarong:    { range: 9, dmg: [6, 10],  cooldown: 700 },               // archer
+  likui:      { range: 3, dmg: [16, 24], cooldown: 1500 },              // berserker
+  lujunyi:    { range: 5, dmg: [13, 17], cooldown: 1000 },
+  guansheng:  { range: 5, dmg: [14, 18], cooldown: 1100 },              // swordmaster
+  huyanzhuo:  { range: 5, dmg: [9, 13],  cooldown: 950, special: 'knockback' }, // cavalry
+  andaoquan:  { range: 8, dmg: [0, 0],   cooldown: 4500, special: 'heal' },   // healer
+  shiqian:    { range: 4, dmg: [7, 10],  cooldown: 800, special: 'gold' },    // thief
+  // Expanded roster combat profiles
+  husanniang: { range: 4, dmg: [11, 15], cooldown: 800 },               // dual sabers — fast
+  wusong:     { range: 3, dmg: [18, 26], cooldown: 1300 },              // bare-fist tiger killer
+  yanqing:    { range: 8, dmg: [7, 11],  cooldown: 750 },               // wandering archer
+  daizong:    { range: 5, dmg: [8, 12],  cooldown: 600, special: 'gold' }, // fast courier
+  qinming:    { range: 4, dmg: [15, 20], cooldown: 1200, special: 'knockback' }, // mace fire
+  dongping:   { range: 5, dmg: [12, 16], cooldown: 900 },               // twin spears
+  zhutong:    { range: 5, dmg: [11, 15], cooldown: 1000, special: 'rally' }, // constable rally
+  xuning:     { range: 5, dmg: [13, 17], cooldown: 950 },               // golden spear
+  liutang:    { range: 3, dmg: [14, 19], cooldown: 1000 },              // hot-blooded brawler
+  shixiu:     { range: 4, dmg: [12, 17], cooldown: 850 },               // desperate striker
+};
+function heroTrait(id) {
+  return HERO_TRAITS[id] || { range: 5, dmg: [8, 12], cooldown: 1200 };
+}
+
 function composeDialogText(npc, story) {
   let text = npc.dialog;
   const { stage } = story.chapterState;
@@ -103,13 +224,18 @@ function composeDialogText(npc, story) {
 }
 
 export default function App() {
+  // Load saved extras once at mount — referenced by many useState initializers below
+  const _savedExtras = useMemo(() => loadExtras(), []);
   const [story, setStory] = useState(() => createStoryProgress());
   const [questProgress, setQuestProgress] = useState(() => loadQuestProgress());
   const [questNotice, setQuestNotice] = useState(null);
   const [webglSupported, setWebglSupported] = useState(true);
   const [dialog, setDialog] = useState(null);
+  const [dialogReveal, setDialogReveal] = useState(0); // chars revealed by typewriter
+  // Chapter-title banner — flashes on screen when advancing to a new chapter
+  const [chapterBanner, setChapterBanner] = useState(null); // { title, subtitle } | null
   const [highlightedNpcId, setHighlightedNpcId] = useState(null);
-  const [heroSkinIndex, setHeroSkinIndex] = useState(0);
+  const [heroSkinIndex, setHeroSkinIndex] = useState(() => _savedExtras?.heroSkinIndex || 0);
   const [showTavernScene, setShowTavernScene] = useState(false);
   const [showVictoryBanquet, setShowVictoryBanquet] = useState(false);
   const [showOpening, setShowOpening] = useState(() => !sessionStorage.getItem('cine_seen'));
@@ -152,7 +278,7 @@ export default function App() {
   const [interactRadius, setInteractRadius] = useState(6);
   const [enemies, setEnemies] = useState(() => createEnemies());
   const [highlightedEnemyId, setHighlightedEnemyId] = useState(null);
-  const [combatXp, setCombatXp] = useState(0);
+  const [combatXp, setCombatXp] = useState(() => _savedExtras?.combatXp || 0);
   const [lastEnemyHitAt, setLastEnemyHitAt] = useState(0);
   const [attackFx, setAttackFx] = useState({ at: 0, enemyId: null, damage: 0 });
   const [superFx, setSuperFx] = useState({ at: 0, type: null });
@@ -174,8 +300,39 @@ export default function App() {
   const [shopOpen, setShopOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const HORSE_POS = useMemo(() => ({ x: -15, z: 20 }), []);
-  const [statBonuses, setStatBonuses] = useState({ maxHp: 0, damage: 0, speed: 0, range: 0 });
+  const [horsePos, setHorsePos] = useState(() => _savedExtras?.horsePos || { x: -15, z: 20 });
+  // ── Companion / recruitment system (init from saved extras if present) ──
+  const [recruited, setRecruited] = useState(() => new Set(_savedExtras?.recruited || []));
+  const [trials, setTrials] = useState(() => _savedExtras?.trials || {});
+  const [companions, setCompanions] = useState(() => {
+    // Re-spawn companions next to the hero based on the saved recruited list
+    const saved = _savedExtras;
+    if (!saved?.recruited?.length) return [];
+    const heroSpawn = { x: 0, z: 12 };
+    return saved.recruited.map((id, i) => {
+      const savedHp = (saved.companions || []).find((c) => c.id === id);
+      return {
+        id,
+        x: heroSpawn.x - 2 + i * 0.5,
+        z: heroSpawn.z + 3 + i * 0.4,
+        hp: savedHp?.hp ?? 100,
+        maxHp: savedHp?.maxHp ?? 100,
+        lastAttackAt: 0,
+      };
+    });
+  });
+  const totalKills = story.stats.raidersDefeated + (story.stats.minibossesDefeated || 0);
+  const companionAttackTimer = useRef(0);
+  // ── Item drops: pickups spawned on enemy death ──
+  // { id, x, z, type: 'heal' | 'gold' | 'energy' | 'scroll', spawnedAt }
+  const [items, setItems] = useState([]);
+  const itemSeqRef = useRef(0);
+  // Story gates between chapters — Lin Chong briefs the wife rescue before Ch.2
+  const [linchongBriefed, setLinchongBriefed] = useState(() => !!_savedExtras?.linchongBriefed);
+  const [sorcererRevealed, setSorcererRevealed] = useState(() => !!_savedExtras?.sorcererRevealed);
+  const [sorcererDown, setSorcererDown] = useState(() => !!_savedExtras?.sorcererDown);
+  const [endingChoice, setEndingChoice] = useState(() => _savedExtras?.endingChoice || null);
+  const [statBonuses, setStatBonuses] = useState(() => _savedExtras?.statBonuses || { maxHp: 0, damage: 0, speed: 0, range: 0 });
   const heroPosition = useRef({ x: 0, y: 0, z: 12 });
   const lastComboAt = useRef(0);
   const autoAttackTimer = useRef(0);
@@ -184,6 +341,17 @@ export default function App() {
   const lastStaminaUse = useRef(0);
 
   const heroSkin = HERO_SKINS[heroSkinIndex];
+
+  // ── Hidden NPCs: gated by story state ──
+  // Lin Chong's wife stays out of sight until Warlord Gao falls (or chapter advances past Ch2)
+  const hiddenNpcs = useMemo(() => {
+    const set = new Set();
+    const ch = story.chapterState.chapter;
+    const warlordDead = ch >= 3
+      || (ch >= 2 && enemies.some((e) => e.type === 'warlord' && e.dead));
+    if (!warlordDead) set.add('linchongwife');
+    return set;
+  }, [story.chapterState.chapter, enemies]);
 
   const openTavernScene = useCallback(() => setShowTavernScene(true), []);
   const closeTavernScene = useCallback(() => setShowTavernScene(false), []);
@@ -265,9 +433,56 @@ export default function App() {
     setStory(next);
   }, []);
 
+  // Chapter banner auto-fade after ~3.5 seconds
+  useEffect(() => {
+    if (!chapterBanner) return;
+    const id = window.setTimeout(() => setChapterBanner(null), 3500);
+    return () => window.clearTimeout(id);
+  }, [chapterBanner]);
+
+  // Auto-save extras to localStorage (throttled to ~2 Hz max)
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      saveExtras({
+        recruited, trials, linchongBriefed, sorcererRevealed, sorcererDown,
+        endingChoice, heroSkinIndex, statBonuses, combatXp, horsePos,
+        companions,
+      });
+    }, 500);
+    return () => window.clearTimeout(id);
+  }, [recruited, trials, linchongBriefed, sorcererRevealed, sorcererDown,
+      endingChoice, heroSkinIndex, statBonuses, combatXp, horsePos, companions]);
+
+  // Typewriter: reveal dialog text one chunk per tick (~45 chars/sec)
+  useEffect(() => {
+    if (!dialog?.text) return;
+    setDialogReveal(0);
+    const total = dialog.text.length;
+    let cancelled = false;
+    let blipCounter = 0;
+    const step = () => {
+      if (cancelled) return;
+      setDialogReveal((r) => {
+        if (r >= total) return r;
+        const next = Math.min(total, r + 2);
+        // Soft blip roughly every ~3rd tick (~14 blips/sec)
+        if ((blipCounter++ % 3) === 0 && next < total) sfxDialogBlip();
+        return next;
+      });
+    };
+    const id = window.setInterval(step, 22);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [dialog]);
+
   const dismissDialog = useCallback(() => {
+    // If the typewriter hasn't finished yet, complete the reveal first; else close.
+    if (dialog && dialogReveal < (dialog.text?.length || 0)) {
+      setDialogReveal(dialog.text.length);
+      return;
+    }
     setDialog(null);
-  }, []);
+    setDialogReveal(0);
+  }, [dialog, dialogReveal]);
 
   const interactWithNpc = useCallback((npcId) => {
     const npc = npcWorld.find((entry) => entry.id === npcId);
@@ -314,7 +529,70 @@ export default function App() {
       }
     }
 
-    const composed = composeDialogText(npc, storyProgress);
+    let composed = composeDialogText(npc, storyProgress);
+
+    // ── Recruitment trial layer ──
+    if (npc.recruitable && !recruited.has(npc.id)) {
+      const trial = trials[npc.id];
+      if (!trial) {
+        // First meeting — start a trial
+        const needed = npc.id === 'songjiang' || npc.id === 'chaogai' ? 1 : 3;
+        setTrials((prev) => ({ ...prev, [npc.id]: { startKills: totalKills, needed } }));
+        composed += `\n\n[Trial] ${trialOpening(npc.id)}\nDefeat ${needed} more enemies, then return to me.`;
+      } else {
+        const progress = Math.max(0, totalKills - trial.startKills);
+        if (progress >= trial.needed) {
+          // Recruit!
+          setRecruited((prev) => {
+            const next = new Set(prev);
+            next.add(npc.id);
+            return next;
+          });
+          setCompanions((prev) => [...prev, {
+            id: npc.id,
+            x: heroPosition.current.x - 2,
+            z: heroPosition.current.z + 2,
+            hp: 100, maxHp: 100,
+            lastAttackAt: 0,
+          }]);
+          // Bump heroes-recruited stat in story
+          setStory((prev) => ({
+            ...prev,
+            stats: { ...prev.stats, heroesRecruited: (prev.stats.heroesRecruited || 0) + 1 },
+          }));
+          setQuestNotice(`✨ ${npc.role} has joined your party!`);
+          composed += `\n\n[Recruited] ${trialJoinLine(npc.id)}`;
+        } else {
+          composed += `\n\n[Trial: ${progress}/${trial.needed} enemies defeated] Press on — return when more have fallen.`;
+        }
+      }
+    } else if (recruited.has(npc.id)) {
+      composed += `\n\n[Following you in battle.]`;
+    }
+
+    // ── Act 2 trigger: Lin Chong briefs the wife rescue after Captain Zhao falls ──
+    if (
+      npc.id === 'linchong' &&
+      story.chapterState.stage === 'complete' &&
+      story.chapterState.chapter === 1 &&
+      !linchongBriefed
+    ) {
+      setLinchongBriefed(true);
+      composed += '\n\n[Briefing] "Zhao\'s mask is yours — proof we can break their patrols. Now the wall. They took her behind the magistrate\'s gate. We ride before the lanterns dim. You, me, Liangshan steel."';
+      setQuestNotice('📜 Lin Chong briefed you. Chapter 2 is open — push the gate when ready.');
+    }
+    // ── Act 3 trigger: sorcerer reveal after Warlord Gao falls ──
+    if (
+      npc.id === 'wuyong' &&
+      story.chapterState.stage === 'complete' &&
+      story.chapterState.chapter === 2 &&
+      !sorcererRevealed
+    ) {
+      setSorcererRevealed(true);
+      composed += '\n\n[Revelation] "I read the warlord\'s seal as the smoke cleared. It is not magistrate ink. There is a third hand — a sorcerer who fed the warlord his cruelty. He holds the same thread that pulled you here. Find him, and you find the road home."';
+      setQuestNotice('🌑 A sorcerer pulls the strings. Chapter 3 begins.');
+    }
+
     setDialog({
       npc,
       text: questLines.length ? `${composed}\n\n${questLines.join('\n')}` : composed,
@@ -325,21 +603,29 @@ export default function App() {
   }, [questProgress, story, updateStory]);
 
   const attemptInteraction = useCallback(() => {
-    // Check if near horse first
-    const dx = heroPosition.current.x - HORSE_POS.x;
-    const dz = heroPosition.current.z - HORSE_POS.z;
+    // If already mounted, pressing E dismounts here — drop horse beside hero
+    if (isMounted) {
+      setIsMounted(false);
+      // Place horse a short step to the hero's side so it doesn't overlap the hero
+      setHorsePos({
+        x: heroPosition.current.x - 3,
+        z: heroPosition.current.z + 1,
+      });
+      setQuestNotice('🐴 Dismounted');
+      return;
+    }
+    // Otherwise, mount if near the horse
+    const dx = heroPosition.current.x - horsePos.x;
+    const dz = heroPosition.current.z - horsePos.z;
     const distToHorse = Math.hypot(dx, dz);
     if (distToHorse < 8) {
-      setIsMounted((m) => {
-        const next = !m;
-        setQuestNotice(next ? '🐴 Mounted! Speed +60%, sweep attacks' : '🐴 Dismounted');
-        return next;
-      });
+      setIsMounted(true);
+      setQuestNotice('🐴 Mounted! Speed +60%, sweep attacks');
       return;
     }
     if (!highlightedNpcId) return;
     interactWithNpc(highlightedNpcId);
-  }, [highlightedNpcId, interactWithNpc, HORSE_POS]);
+  }, [highlightedNpcId, interactWithNpc, horsePos, isMounted]);
 
   const cycleHeroSkin = useCallback(() => {
     setHeroSkinIndex((prev) => (prev + 1) % HERO_SKINS.length);
@@ -353,6 +639,22 @@ export default function App() {
     knobX: 0,
     knobY: 0,
   });
+
+  // ── Item drop spawning ──
+  // Roughly 1 in 2.5 kills produces a pickup. Item type weighted: heal > gold > energy > scroll.
+  const maybeSpawnDrop = useCallback((x, z) => {
+    if (Math.random() > 0.40) return;
+    const roll = Math.random();
+    const type = roll < 0.42 ? 'heal' : roll < 0.72 ? 'gold' : roll < 0.90 ? 'energy' : 'scroll';
+    itemSeqRef.current += 1;
+    setItems((prev) => [...prev, {
+      id: `item_${itemSeqRef.current}`,
+      x: x + (Math.random() - 0.5) * 2,
+      z: z + (Math.random() - 0.5) * 2,
+      type,
+      spawnedAt: Date.now(),
+    }]);
+  }, []);
 
   const handleClaimReward = useCallback((questId) => {
     const { questProgress: nextQuest, storyProgress: nextStory, reward } = claimQuestReward(questProgress, story, questId);
@@ -536,7 +838,13 @@ export default function App() {
     const label = isCrit ? `💥CRIT ${dmg}` : nextStep === 2 ? `⚡ ${dmg}` : newCombo >= 3 ? `🔥×${newCombo} ${dmg}` : `-${dmg}`;
     setDamagePopups((p) => [...p, { id: `${now}-${target.id}`, text: label, crit: isCrit || nextStep === 2 }]);
 
-    if (isCrit || nextStep === 2) { setScreenShake(true); setTimeout(() => setScreenShake(false), 180); }
+    if (isCrit || nextStep === 2) {
+      setScreenShake(true); setTimeout(() => setScreenShake(false), 180);
+      triggerHitStop(isCrit ? 70 : 45);
+      if (isCrit) sfxCrit(); else sfxHit();
+    } else {
+      sfxHit();
+    }
 
     // Combo XP bonus every 3rd hit
     if (newCombo > 0 && newCombo % 3 === 0) {
@@ -547,10 +855,14 @@ export default function App() {
     if (res.killed) {
       setKillFlash(true); setSlowMo(true);
       setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 600);
+      const isBoss = res.enemy.type === 'captain' || res.enemy.type === 'warlord' || res.enemy.type === 'sorcerer';
+      triggerHitStop(isBoss ? 160 : 100);
+      sfxKill();
       setStory((prev) => {
         const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
-        return (res.enemy.type === 'captain' || res.enemy.type === 'warlord') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
+        return isBoss ? recordMiniBossDefeat(r) : recordRaiderKill(r);
       });
+      maybeSpawnDrop(res.enemy.x, res.enemy.z);
       // Kill XP + combo finish bonus
       const killXp = res.enemy.xp + (newCombo >= 3 ? Math.floor(newCombo * 1.5) : 0);
       setCombatXp((xp) => xp + killXp);
@@ -592,19 +904,27 @@ export default function App() {
     setAttackFx({ at: now, enemyId: target.id, damage: dmg, heavy: true, chargeLevel: held });
     setDamagePopups((p) => [...p, { id: `${now}-heavy`, text: `⚡HEAVY ${dmg}`, crit: true }]);
     setScreenShake(true); setTimeout(() => setScreenShake(false), 300);
+    triggerHitStop(70 + Math.round(held * 50)); // longer freeze when fully charged
 
     if (res.killed) {
       setKillFlash(true); setSlowMo(true);
       setTimeout(() => { setKillFlash(false); setSlowMo(false); }, 700);
+      const isBoss = res.enemy.type === 'captain' || res.enemy.type === 'warlord' || res.enemy.type === 'sorcerer';
+      triggerHitStop(isBoss ? 180 : 110);
+      sfxKill();
       setStory((prev) => {
         const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + res.enemy.goldDrop } };
-        return (res.enemy.type === 'captain' || res.enemy.type === 'warlord') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
+        return isBoss ? recordMiniBossDefeat(r) : recordRaiderKill(r);
       });
+      maybeSpawnDrop(res.enemy.x, res.enemy.z);
       setCombatXp((xp) => xp + res.enemy.xp);
       setLockedTarget(null);
       setQuestNotice(`☠️ ${res.enemy.label} slain! +${res.enemy.goldDrop}g`);
+    } else {
+      // Heavy hit but enemy survived
+      sfxCrit();
     }
-  }, [isCharging, enemies, lockedTarget, heroStats, isDodging]);
+  }, [isCharging, enemies, lockedTarget, heroStats, isDodging, maybeSpawnDrop]);
 
   // ── DODGE ROLL ──
   const handleDodge = useCallback(() => {
@@ -653,10 +973,19 @@ export default function App() {
       if (killed) {
         setStory((prev) => recordRaiderKill(prev));
         setCombatXp((xp) => xp + (enemy?.xp || 30));
+        if (enemy) maybeSpawnDrop(enemy.x, enemy.z);
+        triggerHitStop(140);
+        sfxKill();
+      } else {
+        triggerHitStop(80);
+        sfxCrit();
       }
     }
 
     if (superId === 'storm') {
+      sfxCrit();
+      // Single freeze at kickoff — multi-hit shouldn't stutter
+      triggerHitStop(90);
       // AoE sweep all nearby
       let totalDmg = 0;
       let hitCount = 0;
@@ -672,6 +1001,7 @@ export default function App() {
         if (result.killed) {
           setStory((prev) => recordRaiderKill(prev));
           setCombatXp((xp) => xp + (result.enemy?.xp || 20));
+          if (result.enemy) maybeSpawnDrop(result.enemy.x, result.enemy.z);
         }
       });
       setEnemies(nextEnemies);
@@ -692,9 +1022,15 @@ export default function App() {
       if (killed) {
         setStory((prev) => recordRaiderKill(prev));
         setCombatXp((xp) => xp + (enemy?.xp || 40));
+        if (enemy) maybeSpawnDrop(enemy.x, enemy.z);
+        triggerHitStop(180); // shadow crit-blink lands hardest
+        sfxKill();
+      } else {
+        triggerHitStop(110);
+        sfxCrit();
       }
     }
-  }, [enemies, superCooldowns]);
+  }, [enemies, superCooldowns, maybeSpawnDrop]);
 
   const handleInteractPointer = useCallback((event) => {
     event.preventDefault();
@@ -785,6 +1121,12 @@ export default function App() {
       last = nowMs;
       const nowSec = nowMs * 0.001;
 
+      // Hit-stop: skip simulation while the freeze window is active
+      if (Date.now() < (window.__hitStopUntil || 0)) {
+        raf = window.requestAnimationFrame(tick);
+        return;
+      }
+
       setEnemies((prev) => {
         const moved = stepEnemies(prev, heroPosition.current, nowSec, dt, Date.now());
         return respawnEnemies(moved, Date.now());
@@ -802,11 +1144,183 @@ export default function App() {
         window.dispatchEvent(new CustomEvent('game:autoattack'));
       }
 
+      // ── Companion follow + HP regen / downed state ──
+      setCompanions((prev) => {
+        if (prev.length === 0) return prev;
+        const hero = heroPosition.current;
+        const now = Date.now();
+        return prev.map((c, i) => {
+          // Position target — fanned slot behind hero
+          const angle = (i / Math.max(1, prev.length)) * Math.PI * 1.4 - Math.PI * 0.7;
+          const radius = 4.5;
+          const targetX = hero.x + Math.sin(angle) * radius;
+          const targetZ = hero.z + radius * 0.7 + Math.cos(angle) * 1.5;
+          const dx = targetX - c.x, dz = targetZ - c.z;
+          const dist = Math.hypot(dx, dz);
+          let nx = c.x, nz = c.z;
+          if (dist > 60) { nx = targetX; nz = targetZ; }
+          else { nx += dx * Math.min(1, dt * 4); nz += dz * Math.min(1, dt * 4); }
+
+          // HP / downed state
+          let hp = c.hp;
+          let downedUntil = c.downedUntil || 0;
+          const maxHp = c.maxHp || 100;
+          if (downedUntil > 0 && now >= downedUntil) {
+            // Recover from downed at half HP
+            hp = Math.floor(maxHp * 0.5);
+            downedUntil = 0;
+          } else if (now < downedUntil) {
+            // Stay knocked out — no HP change
+          } else {
+            // Check proximity to any live enemy
+            let inDanger = false;
+            for (const e of enemies) {
+              if (e.dead) continue;
+              if (Math.hypot(e.x - nx, e.z - nz) < 4.2) { inDanger = true; break; }
+            }
+            if (inDanger) {
+              hp = Math.max(0, hp - 4.5 * dt);
+              if (hp <= 0) downedUntil = now + 5000;
+            } else if (hp < maxHp) {
+              hp = Math.min(maxHp, hp + 7 * dt);
+            }
+          }
+          return { ...c, x: nx, z: nz, hp, downedUntil };
+        });
+      });
+
+      // Companion combat: fire event every 150ms; per-companion cooldown gates actual attacks
+      companionAttackTimer.current -= dt * 1000;
+      if (companionAttackTimer.current <= 0) {
+        companionAttackTimer.current = 150;
+        if (companions.length > 0) {
+          window.dispatchEvent(new CustomEvent('game:companionattack'));
+        }
+      }
+
+      // ── Item pickup: hero walks over a drop → consume it ──
+      setItems((prev) => {
+        if (prev.length === 0) return prev;
+        const hero = heroPosition.current;
+        const now = Date.now();
+        const next = [];
+        for (const it of prev) {
+          const d = Math.hypot(it.x - hero.x, it.z - hero.z);
+          if (d < 2.6) {
+            // Consume — schedule effect in microtask so we don't nest setState
+            queueMicrotask(() => {
+              sfxPickup(it.type);
+              if (it.type === 'heal') {
+                setStory((s) => ({ ...s, player: { ...s.player, hp: Math.min(s.player.hpMax || 100, s.player.hp + 25) } }));
+                setQuestNotice('💊 Healing pellet +25 HP');
+              } else if (it.type === 'gold') {
+                setStory((s) => ({ ...s, player: { ...s.player, gold: s.player.gold + 25 } }));
+                setQuestNotice('🪙 Gold pouch +25');
+              } else if (it.type === 'energy') {
+                setStamina((st) => Math.min(100, st + 35));
+                setQuestNotice('⚡ Stamina draught +35');
+              } else if (it.type === 'scroll') {
+                setCombatXp((xp) => xp + 30);
+                setQuestNotice('📜 Training scroll +30 xp');
+              }
+            });
+            continue; // remove from list
+          }
+          // Despawn after 25 seconds
+          if (now - it.spawnedAt < 25000) next.push(it);
+        }
+        return next;
+      });
+
       raf = window.requestAnimationFrame(tick);
     };
     raf = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(raf);
   }, []);
+
+  // ── Sorcerer-down detection: opens the branching ending choice ──
+  useEffect(() => {
+    if (sorcererDown || endingChoice) return;
+    const sorcerer = enemies.find((e) => e.type === 'sorcerer');
+    if (sorcerer && sorcerer.dead) {
+      setSorcererDown(true);
+      setQuestNotice('🌑 The sorcerer falls — but his thread coils on. Make your choice.');
+    }
+  }, [enemies, sorcererDown, endingChoice]);
+
+  // ── Companion auto-attack: per-hero range/damage/cooldown + specials ──
+  // Specials:
+  //   heal     — restore HP to player when below 60%
+  //   knockback — attack also shoves enemy backward
+  //   gold     — kills give +50% extra gold
+  //   rally    — player kills give a small XP echo to all companions (handled here as +xp bonus)
+  useEffect(() => {
+    const handler = () => {
+      if (companions.length === 0) return;
+      let updated = enemies;
+      let anyHit = false;
+      let touchedCompanions = false;
+      const now = Date.now();
+      const newCompanions = companions.map((c) => ({ ...c }));
+
+      for (const c of newCompanions) {
+        // Skip downed companions — they can't attack while incapacitated
+        if (c.downedUntil && now < c.downedUntil) continue;
+        const trait = heroTrait(c.id);
+        // Per-companion cooldown
+        if (now - (c.lastAttackAt || 0) < trait.cooldown) continue;
+
+        // Healer: heal player instead of attacking
+        if (trait.special === 'heal') {
+          const hp = story.player.hp;
+          const maxHp = heroStats.maxHp;
+          if (hp < maxHp * 0.6) {
+            const heal = 10 + Math.floor(Math.random() * 8);
+            setStory((prev) => ({ ...prev, player: { ...prev.player, hp: Math.min(maxHp, prev.player.hp + heal) } }));
+            setQuestNotice(`✚ ${c.id === 'andaoquan' ? 'An Daoquan' : 'Healer'} mends you (+${heal} HP)`);
+            c.lastAttackAt = now;
+            touchedCompanions = true;
+          }
+          continue;
+        }
+
+        const target = getClosestLiveEnemy(updated, c.x, c.z, trait.range);
+        if (!target) continue;
+        const dmgMin = trait.dmg[0], dmgMax = trait.dmg[1];
+        const dmg = dmgMin + Math.floor(Math.random() * (dmgMax - dmgMin + 1));
+        // Knockback if the trait calls for it
+        if (trait.special === 'knockback') {
+          updated = knockbackEnemy(updated, target.id, c.x, c.z, 9);
+        }
+        const res = damageEnemy(updated, target.id, dmg, now);
+        updated = res.enemies;
+        anyHit = true;
+        c.lastAttackAt = now;
+        touchedCompanions = true;
+        setDamagePopups((p) => [...p, { id: `comp-${c.id}-${now}`, text: `-${dmg}`, crit: false }]);
+
+        if (res.killed) {
+          const goldMul = trait.special === 'gold' ? 1.5 : 0.5;
+          const xpMul = trait.special === 'rally' ? 0.75 : 0.5;
+          const baseGold = Math.floor((res.enemy.goldDrop || 0) * goldMul);
+          setStory((prev) => {
+            const r = { ...prev, player: { ...prev.player, gold: prev.player.gold + baseGold } };
+            return (res.enemy.type === 'captain' || res.enemy.type === 'warlord') ? recordMiniBossDefeat(r) : recordRaiderKill(r);
+          });
+          setCombatXp((xp) => xp + Math.floor((res.enemy.xp || 10) * xpMul));
+          maybeSpawnDrop(res.enemy.x, res.enemy.z);
+          // Lighter freeze for companion kills — half the player-kill duration
+          const isBoss = res.enemy.type === 'captain' || res.enemy.type === 'warlord' || res.enemy.type === 'sorcerer';
+          triggerHitStop(isBoss ? 80 : 55);
+          if (isBoss) sfxKill(); else sfxHit();
+        }
+      }
+      if (anyHit) setEnemies(updated);
+      if (touchedCompanions) setCompanions(newCompanions);
+    };
+    window.addEventListener('game:companionattack', handler);
+    return () => window.removeEventListener('game:companionattack', handler);
+  }, [companions, enemies, maybeSpawnDrop, story.player.hp, heroStats.maxHp]);
 
   // Auto-attack listener — disabled, player controls combat now
   // (kept for super move area hits)
@@ -933,7 +1447,7 @@ export default function App() {
       )}
       <div className="hud-frame">
         {webglSupported ? (
-          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} isMounted={isMounted} horsePos={HORSE_POS} chapter={story.chapterState.chapter} />
+          <GameCanvas onHeroMove={handleHeroMove} highlightedNpcId={highlightedNpcId} highlightedEnemyId={highlightedEnemyId} heroSkin={heroSkin} moveInput={mobileMove} onNpcTap={handleNpcTap} onEnemyTap={handleEnemyTap} enemies={enemies} attackFx={attackFx} superFx={superFx} isSprinting={isSprinting} screenShake={screenShake} isDodging={isDodging} isCharging={isCharging} chargeLevel={chargeLevel} lockedTarget={lockedTarget} killFlash={killFlash} slowMo={slowMo} isMounted={isMounted} horsePos={horsePos} chapter={story.chapterState.chapter} companions={companions} recruited={recruited} items={items} hiddenNpcs={hiddenNpcs} />
         ) : (
           <div className="webgl-fallback">
             <div className="webgl-fallback-title">3D engine failed to start</div>
@@ -1152,30 +1666,73 @@ export default function App() {
         );
       })()}
 
-      {/* Chapter advance button — shown after chapter complete */}
-      {story.chapterState.stage === 'complete' && !showVictoryBanquet && (
-        <button
-          className="chapter-advance-btn"
-          onClick={() => {
-            const ch = story.chapterState.chapter;
-            if (ch === 1) {
-              setStory((prev) => advanceToChapter2(prev));
-              setEnemies(createChapter2Enemies());
-              setCombatXp((xp) => xp + 80);
-              setQuestNotice('📖 Chapter 2 begins — The Magistrate\'s Wrath!');
-            } else {
-              setQuestNotice('🏆 More chapters coming soon!');
-            }
-          }}
-        >
-          <span className="chap-btn-icon">⚔️</span>
-          <span className="chap-btn-text">
-            Enter Chapter {story.chapterState.chapter + 1}
-            <small>You can keep roaming first</small>
-          </span>
-          <span className="chap-btn-arrow">→</span>
-        </button>
-      )}
+      {/* Chapter advance button — gated by story briefings */}
+      {story.chapterState.stage === 'complete' && !showVictoryBanquet && (() => {
+        const ch = story.chapterState.chapter;
+        // Gate Ch.2 entry behind Lin Chong's briefing; gate Ch.3 behind Wu Yong's reveal
+        const needsLinchong = ch === 1 && !linchongBriefed;
+        const needsSorcererReveal = ch === 2 && !sorcererRevealed;
+        if (needsLinchong || needsSorcererReveal) {
+          return (
+            <button className="chapter-advance-btn" style={{ opacity: 0.65, cursor: 'help' }}
+              onClick={() => setQuestNotice(needsLinchong
+                ? '📜 Find Lin Chong — he must brief the rescue before you press on'
+                : '🌑 Find Wu Yong — he has read something in the warlord\'s seal')}>
+              <span className="chap-btn-icon">📜</span>
+              <span className="chap-btn-text">
+                {needsLinchong ? 'Speak to Lin Chong' : 'Speak to Wu Yong'}
+                <small>{needsLinchong ? 'He has a plan for the wall' : 'He sees a third hand'}</small>
+              </span>
+              <span className="chap-btn-arrow">…</span>
+            </button>
+          );
+        }
+        return (
+          <button
+            className="chapter-advance-btn"
+            onClick={() => {
+              if (ch === 1) {
+                setStory((prev) => advanceToChapter2(prev));
+                setEnemies(createChapter2Enemies());
+                setCombatXp((xp) => xp + 80);
+                setQuestNotice('📖 Chapter 2 begins — The Magistrate\'s Wrath!');
+                setChapterBanner({ title: '第二章 — The Magistrate\'s Wrath', subtitle: 'Storm the wall. Bring her home.' });
+                sfxBanner();
+              } else if (ch === 2) {
+                // Enter Chapter 3 — sorcerer's hunt
+                setStory((prev) => ({
+                  ...prev,
+                  chapterState: {
+                    chapter: 3,
+                    stage: 'hunt_sorcerer',
+                    objective: 'Track the sorcerer — defeat him to seal the thread, or hear him out.',
+                    completed: false,
+                    raidersDefeated: 0,
+                    raidersTarget: 3,
+                    minibossSpawned: false,
+                    minibossDefeated: false,
+                  },
+                }));
+                // Spawn sorcerer-themed encounter: a few cult guards plus the sorcerer himself
+                setEnemies(createChapter3Enemies ? createChapter3Enemies() : createChapter2Enemies());
+                setCombatXp((xp) => xp + 120);
+                setQuestNotice('🌑 Chapter 3 begins — Sorcerer\'s Thread!');
+                setChapterBanner({ title: '第三章 — The Sorcerer\'s Thread', subtitle: 'Cut the binding — or take it.' });
+                sfxBanner();
+              } else {
+                setQuestNotice('🏆 Final chapter — the choice is yours.');
+              }
+            }}
+          >
+            <span className="chap-btn-icon">⚔️</span>
+            <span className="chap-btn-text">
+              Enter Chapter {story.chapterState.chapter + 1}
+              <small>{ch === 1 ? 'Storm the magistrate\'s wall' : ch === 2 ? 'Hunt the sorcerer behind it all' : 'You can keep roaming first'}</small>
+            </span>
+            <span className="chap-btn-arrow">→</span>
+          </button>
+        );
+      })()}
 
       {/* Kill flash overlay */}
       {killFlash && <div className="kill-flash" />}
@@ -1188,6 +1745,41 @@ export default function App() {
           {playerLevel === 2 && <div className="levelup-unlock">🐉 Dragon Strike unlocked!</div>}
           {playerLevel === 4 && <div className="levelup-unlock">⚡ Storm Sweep unlocked!</div>}
           {playerLevel === 6 && <div className="levelup-unlock">🌑 Shadow Blink unlocked!</div>}
+        </div>
+      )}
+
+      {/* Chapter-title banner — flashes briefly when advancing to a new chapter */}
+      {chapterBanner && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+          pointerEvents: 'none', zIndex: 500,
+          animation: 'chapter-banner-fade 3.5s ease-in-out forwards',
+        }}>
+          <div style={{
+            padding: '36px 56px',
+            background: 'linear-gradient(180deg, rgba(20,16,12,0.86), rgba(20,16,12,0.66))',
+            border: '2px solid #b89048',
+            borderRadius: 4,
+            color: '#f4ecd8',
+            fontFamily: 'serif',
+            textAlign: 'center',
+            boxShadow: '0 12px 60px rgba(0,0,0,0.55)',
+          }}>
+            <div style={{ fontSize: 36, letterSpacing: 4, color: '#ffd060', textShadow: '0 2px 8px #000' }}>
+              {chapterBanner.title}
+            </div>
+            {chapterBanner.subtitle && (
+              <div style={{ marginTop: 14, fontSize: 16, color: '#e0d4b0', letterSpacing: 1.5, opacity: 0.9 }}>
+                {chapterBanner.subtitle}
+              </div>
+            )}
+          </div>
+          <style>{`@keyframes chapter-banner-fade {
+            0%   { opacity: 0; transform: scale(0.92); }
+            12%  { opacity: 1; transform: scale(1); }
+            82%  { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(1.04); }
+          }`}</style>
         </div>
       )}
 
@@ -1290,8 +1882,17 @@ export default function App() {
       {dialog && (
         <div className="dialog-overlay">
           <div className="dialog-name">{dialog.npc.name} ({dialog.npc.role})</div>
-          <div className="dialog-text">{dialog.text}</div>
-          <div className="dialog-prompt">Press E / Space to continue</div>
+          <div className="dialog-text">
+            {dialog.text.slice(0, dialogReveal)}
+            {dialogReveal < dialog.text.length && (
+              <span style={{ opacity: 0.6, animation: 'none' }}>▌</span>
+            )}
+          </div>
+          <div className="dialog-prompt">
+            {dialogReveal < dialog.text.length
+              ? 'Press E / Space to reveal'
+              : 'Press E / Space to continue'}
+          </div>
         </div>
       )}
 
@@ -1358,6 +1959,84 @@ export default function App() {
           heroes={hud.heroes}
           onClose={() => setShowVictoryBanquet(false)}
         />
+      )}
+
+      {/* ── Ending choice modal: shown when sorcerer falls, before a choice is made ── */}
+      {sorcererDown && !endingChoice && (
+        <div className="ending-choice-overlay" style={{
+          position: 'fixed', inset: 0, background: 'radial-gradient(ellipse at center, rgba(20,10,30,0.92), rgba(0,0,0,0.96))',
+          display: 'grid', placeItems: 'center', zIndex: 1000, padding: '4vh',
+        }}>
+          <div style={{
+            maxWidth: 720, color: '#f4ecd8', fontFamily: 'serif',
+            textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 18,
+          }}>
+            <div style={{ fontSize: 48, color: '#ff80c0' }}>🌑</div>
+            <h2 style={{ margin: 0, color: '#ffd060', fontSize: 28, letterSpacing: 2 }}>The Sorcerer's Thread</h2>
+            <p style={{ margin: 0, lineHeight: 1.6, color: '#e8dcb8' }}>
+              The sorcerer collapses, but his thread still pulses in the air — the same thread that pulled you from your world. Wu Yong&apos;s voice cuts the wind: &ldquo;The choice is yours, stranger.&rdquo;
+            </p>
+            <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button
+                onClick={() => setEndingChoice('defeat')}
+                style={{
+                  flex: '1 1 220px', minWidth: 220, padding: '16px 18px',
+                  background: 'linear-gradient(135deg, #2a4868, #1a2a48)', color: '#f4ecd8',
+                  border: '2px solid #6688cc', borderRadius: 8, fontSize: 14, fontFamily: 'serif',
+                  cursor: 'pointer', textAlign: 'left', lineHeight: 1.4,
+                }}>
+                <div style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 6 }}>⚔️ Sever the thread</div>
+                <div style={{ opacity: 0.85 }}>Cut the sorcerer&apos;s binding. The road home is lost — but Liangshan stands free.</div>
+              </button>
+              <button
+                onClick={() => setEndingChoice('ally')}
+                style={{
+                  flex: '1 1 220px', minWidth: 220, padding: '16px 18px',
+                  background: 'linear-gradient(135deg, #4a1858, #281030)', color: '#f4ecd8',
+                  border: '2px solid #c060ff', borderRadius: 8, fontSize: 14, fontFamily: 'serif',
+                  cursor: 'pointer', textAlign: 'left', lineHeight: 1.4,
+                }}>
+                <div style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 6 }}>🌑 Take the thread</div>
+                <div style={{ opacity: 0.85 }}>Claim his power. You will return home — but a shadow walks at your heel.</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Ending overlay: result of the choice ── */}
+      {endingChoice && (
+        <div className="ending-result-overlay" style={{
+          position: 'fixed', inset: 0,
+          background: endingChoice === 'defeat'
+            ? 'radial-gradient(ellipse at center, rgba(30,40,60,0.95), rgba(0,0,0,0.98))'
+            : 'radial-gradient(ellipse at center, rgba(60,20,80,0.95), rgba(0,0,0,0.98))',
+          display: 'grid', placeItems: 'center', zIndex: 1001, padding: '5vh',
+        }}>
+          <div style={{
+            maxWidth: 680, color: '#f4ecd8', fontFamily: 'serif',
+            textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 22,
+          }}>
+            <div style={{ fontSize: 56 }}>{endingChoice === 'defeat' ? '⚔️' : '🌑'}</div>
+            <h2 style={{ margin: 0, color: endingChoice === 'defeat' ? '#88c0ff' : '#ff80c0', fontSize: 32, letterSpacing: 2 }}>
+              {endingChoice === 'defeat' ? 'Ending I — The Severed Road' : 'Ending II — The Coiled Thread'}
+            </h2>
+            <p style={{ margin: 0, lineHeight: 1.7, color: '#e8dcb8', fontSize: 16 }}>
+              {endingChoice === 'defeat'
+                ? 'You drive your spear through the binding. The thread snaps with a sound like winter ice. The modern world, your exam, the room with the desk lamp — gone. You will not see them again. But the magistrate&apos;s shadow lifts from the valleys. Lin Chong holds his wife by the gate. Wu Yong nods. Song Jiang raises a cup. The road you walk is the only road now, and it is yours.'
+                : 'You close your hand around the sorcerer&apos;s thread. It is warm. It is hungry. You feel a tug — the desk, the lamp, the half-finished page — and you know you can walk back through. But the thread will follow. The shadow at your heel will sit at your desk, breathing where you breathe. Liangshan watches you turn away. Wu Yong does not speak. The cup in Song Jiang&apos;s hand does not rise.'}
+            </p>
+            <button
+              onClick={handleFullRestart}
+              style={{
+                alignSelf: 'center', marginTop: 8, padding: '12px 32px',
+                background: '#3a2818', color: '#ffd060', border: '2px solid #b89048',
+                borderRadius: 6, fontSize: 16, fontFamily: 'serif', cursor: 'pointer',
+              }}>
+              🔄 Begin again
+            </button>
+          </div>
+        </div>
       )}
 
       {showTavernScene && (

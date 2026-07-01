@@ -70,6 +70,10 @@ export default function KnightsApp() {
   const [showHowTo, setShowHowTo] = useState(true);
   const [endStats, setEndStats] = useState(null);
   const [hudTick, setHudTick] = useState(0);
+  const [isTouch] = useState(() =>
+    typeof window !== 'undefined' &&
+    ((window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+     (navigator.maxTouchPoints || 0) > 0));
 
   const gameRef = useRef(null);
   const canvasRef = useRef(null);
@@ -77,7 +81,7 @@ export default function KnightsApp() {
   const inputRef = useRef({
     left: false, right: false, up: false, down: false,
     attackEdge: false, jumpEdge: false, magicEdge: false,
-    dashEdge: false,
+    dashEdge: false, attackHeld: false,      // attackHeld: touch hold-to-attack
   });
 
   function nextStageId(id) {
@@ -566,7 +570,8 @@ export default function KnightsApp() {
     h.comboTimer -= dt;
     if (h.comboTimer <= 0) h.comboStep = 0;
 
-    // Edge-trigger inputs
+    // Edge-trigger inputs (holding the touch attack button auto-chains)
+    if (inp.attackHeld) inp.attackEdge = true;
     if (inp.attackEdge) { inp.attackEdge = false; tryAttack(g); }
     if (inp.jumpEdge)   { inp.jumpEdge   = false; tryJump(g);   }
     if (inp.magicEdge)  { inp.magicEdge  = false; tryMagic(g);  }
@@ -1013,6 +1018,8 @@ export default function KnightsApp() {
         />
       )}
 
+      {screen === 'stage' && isTouch && <TouchControls inputRef={inputRef} />}
+
       {screen === 'reward' && endStats && (
         <div className="knights-overlay knights-reward">
           <h2>Round Cleared</h2>
@@ -1095,6 +1102,83 @@ function StoryScreen({ stageId, heroDef, onBegin, onBack }) {
       <div className="knights-row" style={{ gap: 16, marginTop: 22 }}>
         <button className="knights-btn" onClick={onBack}>Back</button>
         <button className="knights-btn primary" onClick={onBegin}>March Out ▶</button>
+      </div>
+    </div>
+  );
+}
+
+// ── On-screen touch controls (phones / tablets) ──
+// A fixed movement joystick (left) + action buttons (right) that write into
+// the SAME inputRef the keyboard uses, so the game loop needs no changes.
+function TouchControls({ inputRef }) {
+  const joyRef = useRef(null);
+  const joySt = useRef({ id: null, cx: 0, cy: 0, r: 50 });
+  const [thumb, setThumb] = useState({ x: 0, y: 0 });
+
+  const clearDirs = () => {
+    const inp = inputRef.current;
+    inp.left = inp.right = inp.up = inp.down = false;
+  };
+  const applyDir = (dx, dy) => {
+    const inp = inputRef.current;
+    const r = joySt.current.r;
+    if (Math.hypot(dx, dy) < r * 0.28) { clearDirs(); return; }  // dead zone
+    const nx = dx / r, ny = dy / r, dead = 0.34;
+    inp.left = nx < -dead; inp.right = nx > dead;
+    inp.up = ny < -dead;   inp.down = ny > dead;
+  };
+  const joyDown = (e) => {
+    e.preventDefault();
+    const rect = joyRef.current.getBoundingClientRect();
+    joySt.current = {
+      id: e.pointerId,
+      cx: rect.left + rect.width / 2,
+      cy: rect.top + rect.height / 2,
+      r: rect.width / 2 - 6,
+    };
+    try { joyRef.current.setPointerCapture(e.pointerId); } catch { /* ok */ }
+    joyMove(e);
+  };
+  const joyMove = (e) => {
+    if (joySt.current.id !== e.pointerId) return;
+    let dx = e.clientX - joySt.current.cx;
+    let dy = e.clientY - joySt.current.cy;
+    const r = joySt.current.r, mag = Math.hypot(dx, dy);
+    if (mag > r) { dx = (dx / mag) * r; dy = (dy / mag) * r; }
+    setThumb({ x: dx, y: dy });
+    applyDir(dx, dy);
+  };
+  const joyUp = (e) => {
+    if (joySt.current.id !== e.pointerId) return;
+    joySt.current.id = null;
+    setThumb({ x: 0, y: 0 });
+    clearDirs();
+  };
+
+  const press = (field) => (e) => { e.preventDefault(); inputRef.current[field] = true; };
+  // Attack: tap = one hit, hold = auto-chain. Capture the pointer so a finger
+  // that slides off the button still delivers pointerup (no stuck auto-attack).
+  const atkDown = (e) => {
+    e.preventDefault();
+    try { e.target.setPointerCapture(e.pointerId); } catch { /* ok */ }
+    inputRef.current.attackHeld = true;
+    inputRef.current.attackEdge = true;
+  };
+  const atkUp = (e) => { e.preventDefault(); inputRef.current.attackHeld = false; };
+
+  return (
+    <div className="kn-touch">
+      <div className="kn-joy" ref={joyRef}
+        onPointerDown={joyDown} onPointerMove={joyMove}
+        onPointerUp={joyUp} onPointerCancel={joyUp}>
+        <div className="kn-joy-thumb" style={{ transform: `translate(${thumb.x}px, ${thumb.y}px)` }} />
+      </div>
+      <div className="kn-btns">
+        <button className="kn-tbtn sp"  onPointerDown={press('magicEdge')}>絕</button>
+        <button className="kn-tbtn dsh" onPointerDown={press('dashEdge')}>閃</button>
+        <button className="kn-tbtn jmp" onPointerDown={press('jumpEdge')}>跳</button>
+        <button className="kn-tbtn atk" onPointerDown={atkDown}
+          onPointerUp={atkUp} onPointerCancel={atkUp}>攻</button>
       </div>
     </div>
   );

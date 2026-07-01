@@ -18,7 +18,10 @@ body, html, #root {
 
 .knights-root { width: 100vw; height: 100vh; position: relative; overflow: hidden; user-select: none; }
 
-.knights-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; z-index: 0; }
+.knights-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; z-index: 0; touch-action: none; }
+
+/* Stop iOS rubber-band / pull-to-refresh while playing */
+html, body { overscroll-behavior: none; }
 
 .knights-overlay {
   position: fixed; inset: 0;
@@ -350,4 +353,61 @@ body, html, #root {
   .knights-bars { min-width: 200px; }
   .knights-skill-card { width: 60px; font-size: 10px; }
   .knights-skill-card.sp { width: 80px; }
+}
+
+/* ── On-screen touch controls ── */
+.kn-touch {
+  position: fixed; inset: 0; z-index: 6;
+  pointer-events: none;                 /* only the controls capture touches */
+  -webkit-tap-highlight-color: transparent;
+}
+.kn-touch > * { pointer-events: auto; }
+
+.kn-joy {
+  position: absolute;
+  left: calc(24px + env(safe-area-inset-left));
+  bottom: calc(26px + env(safe-area-inset-bottom));
+  width: 138px; height: 138px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,214,118,0.12), rgba(0,0,0,0.30));
+  border: 2px solid rgba(255,214,118,0.35);
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.kn-joy-thumb {
+  width: 60px; height: 60px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffe2a4, #d8893a 75%);
+  border: 2px solid rgba(0,0,0,0.45);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+  pointer-events: none;
+}
+
+.kn-btns {
+  position: absolute;
+  right: calc(22px + env(safe-area-inset-right));
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  display: grid; grid-template-columns: repeat(2, 68px); grid-auto-rows: 68px; gap: 12px;
+  touch-action: none;
+}
+.kn-tbtn {
+  width: 68px; height: 68px; border-radius: 50%;
+  font-family: inherit; font-size: 26px; font-weight: bold; color: #fff;
+  border: 2px solid rgba(255,255,255,0.5);
+  background: rgba(40,20,14,0.7);
+  display: flex; align-items: center; justify-content: center;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.85);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: transform 0.05s, filter 0.05s;
+}
+.kn-tbtn:active { transform: scale(0.9); filter: brightness(1.35); }
+.kn-tbtn.atk { background: linear-gradient(180deg, #e0524a, #8a1818); border-color: #ffd676; }
+.kn-tbtn.jmp { background: linear-gradient(180deg, #3a8ad0, #1a4a80); }
+.kn-tbtn.dsh { background: linear-gradient(180deg, #5aa06a, #2a6038); }
+.kn-tbtn.sp  { background: linear-gradient(180deg, #c89a3a, #7a5010); border-color: #ffd676; }
+
+/* On touch devices the bottom skill rail overlaps the buttons — drop it, and
+   pad the top HUD clear of the notch. */
+@media (pointer: coarse) {
+  .knights-hud-bottom { display: none; }
+  .knights-hud-tl { left: calc(10px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); }
+  .knights-hud-tr { right: calc(10px + env(safe-area-inset-right)); top: calc(8px + env(safe-area-inset-top)); }
 }

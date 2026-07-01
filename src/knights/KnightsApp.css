@@ -114,12 +114,17 @@ html, body { overscroll-behavior: none; }
 .knights-hero-card.sel  { border-color: var(--kn-gold); box-shadow: 0 0 16px rgba(255,178,74,0.4); }
 
 .knights-hero-portrait {
-  width: 64px; height: 80px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
+  width: 92px; height: 116px; flex-shrink: 0;
+  position: relative; overflow: hidden;
   border-radius: 4px;
-  font-size: 22px; font-weight: bold;
-  color: #fff;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+}
+.kn-sprite-thumb { display: block; width: 100%; height: 100%; }
+.kn-portrait-name {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  font-size: 12px; font-weight: bold; color: #fff; text-align: center;
+  padding: 3px 0 2px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.8), transparent);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
 }
 .knights-hero-meta { flex: 1; }
 .knights-hero-name { font-size: 16px; font-weight: bold; color: var(--kn-accent); margin-bottom: 6px; }
@@ -181,10 +186,7 @@ html, body { overscroll-behavior: none; }
 
 .knights-hp-row { display: flex; gap: 10px; align-items: center; }
 .knights-hero-chip {
-  width: 64px; height: 64px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: bold; color: #fff;
-  text-shadow: 0 2px 6px rgba(0,0,0,0.85);
+  width: 64px; height: 64px; overflow: hidden;
   border-radius: 50%;
   border: 3px solid rgba(255,214,118,0.7);
   flex-shrink: 0;

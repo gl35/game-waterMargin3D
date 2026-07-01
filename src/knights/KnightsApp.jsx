@@ -10,6 +10,7 @@ import { ENEMIES, makeEnemy } from './enemies.js';
 import { STORY, getStory, PROLOGUE_LINES, FINALE_LINES } from './story.js';
 import { createRenderer, Z_MIN, Z_MAX } from './renderer.js';
 import { preloadKnightsSprites } from './preload.js';
+import { getSprite } from '../scene2d/sprites.js';
 import {
   sfxHit, sfxCrit, sfxKill, sfxClick, sfxBanner,
   sfxFootstep, sfxPickup, isMuted, setMuted,
@@ -942,7 +943,10 @@ export default function KnightsApp() {
               <button key={hd.id}
                 className={`knights-hero-card ${chosenHeroId === hd.id ? 'sel' : ''}`}
                 onClick={() => { sfxClick(); setChosenHeroId(hd.id); }}>
-                <div className="knights-hero-portrait" style={{ background: hd.portrait }}>{hd.name}</div>
+                <div className="knights-hero-portrait" style={{ background: hd.portrait }}>
+                  <SpriteThumb name={hd.sprite} w={96} h={120} />
+                  <span className="kn-portrait-name">{hd.name}</span>
+                </div>
                 <div className="knights-hero-meta">
                   <div className="knights-hero-name">{hd.title}</div>
                   <p className="knights-hero-blurb">{hd.blurb}</p>
@@ -1080,6 +1084,40 @@ export default function KnightsApp() {
   );
 }
 
+// Renders a processed (background-removed) sprite into a canvas for menus/HUD.
+function SpriteThumb({ name, fit = 'bottom', w = 96, h = 120 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    let raf = 0, tries = 0, done = false;
+    const paint = () => {
+      const cv = ref.current;
+      if (!cv || done) return;
+      const sp = getSprite(name);
+      if (sp && sp.width) {
+        const ctx = cv.getContext('2d');
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        ctx.imageSmoothingQuality = 'high';
+        if (fit === 'head') {                       // fill circle, anchored to the head
+          const scale = Math.max(cv.width / sp.width, cv.height / sp.height) * 1.15;
+          const dw = sp.width * scale, dh = sp.height * scale;
+          ctx.drawImage(sp, (cv.width - dw) / 2, -dh * 0.02, dw, dh);
+        } else {                                    // fit whole, feet at bottom
+          const pad = 4;
+          const scale = Math.min((cv.width - pad * 2) / sp.width, (cv.height - pad) / sp.height);
+          const dw = sp.width * scale, dh = sp.height * scale;
+          ctx.drawImage(sp, (cv.width - dw) / 2, cv.height - dh, dw, dh);
+        }
+        done = true;
+      } else if (tries++ < 150) {
+        raf = requestAnimationFrame(paint);
+      }
+    };
+    paint();
+    return () => cancelAnimationFrame(raf);
+  }, [name, fit]);
+  return <canvas ref={ref} width={w} height={h} className="kn-sprite-thumb" />;
+}
+
 function StoryScreen({ stageId, heroDef, onBegin, onBack }) {
   const s = getStory(stageId);
   const lines = s.prologue ? [...PROLOGUE_LINES, ...s.intro] : s.intro;
@@ -1191,7 +1229,7 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
       <div className="knights-hud knights-hud-tl">
         <div className="knights-hp-row">
           <div className="knights-hero-chip" style={{ background: heroDef.portrait }}>
-            {heroDef.name}
+            <SpriteThumb name={heroDef.sprite} fit="head" w={64} h={64} />
           </div>
           <div className="knights-bars">
             <div className="knights-bar hp">

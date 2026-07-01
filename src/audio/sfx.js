@@ -23,6 +23,20 @@ function ctx() {
 
 export function setMuted(m) { _muted = !!m; }
 export function isMuted()    { return _muted; }
+
+// iOS/Safari keeps the AudioContext suspended until a sound is started from
+// inside a user gesture. Call this from the first touch/click to unlock it —
+// resume + play one silent buffer synchronously within the gesture.
+export function unlockAudio() {
+  const c = ctx();
+  if (!c) return;
+  if (c.state === 'suspended') c.resume().catch(() => {});
+  try {
+    const b = c.createBuffer(1, 1, 22050);
+    const s = c.createBufferSource();
+    s.buffer = b; s.connect(c.destination); s.start(0);
+  } catch { /* ok */ }
+}
 export function setMasterVolume(v) {
   if (!_master) ctx();
   if (_master) _master.gain.value = Math.max(0, Math.min(1, v));

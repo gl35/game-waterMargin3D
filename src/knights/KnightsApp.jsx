@@ -13,7 +13,7 @@ import { preloadKnightsSprites } from './preload.js';
 import { getSprite } from '../scene2d/sprites.js';
 import {
   sfxHit, sfxCrit, sfxKill, sfxClick, sfxBanner,
-  sfxFootstep, sfxPickup, isMuted, setMuted,
+  sfxFootstep, sfxPickup, isMuted, setMuted, unlockAudio,
 } from '../audio/sfx.js';
 
 const SAVE_KEY = 'knights_save_v1';
@@ -193,7 +193,10 @@ export default function KnightsApp() {
   }
 
   function spawnWaveEnemies(g, wave) {
-    const lockX = wave.atX + window.innerWidth * 0.35;
+    // Arena width is in WORLD units, not screen fraction — otherwise a narrow
+    // phone gets a tiny arena and the hero is pinned near screen-center the
+    // instant a wave spawns.
+    const lockX = wave.atX + Math.max(600, window.innerWidth * 0.35);
     g.waveLockX = lockX;
     g.waveActive = true;
     if (wave.boss) {
@@ -875,6 +878,21 @@ export default function KnightsApp() {
 
   // Sprite preload — only the Knights subset
   useEffect(() => { preloadKnightsSprites(); }, []);
+
+  // Unlock Web Audio on the first user interaction (required by iOS Safari).
+  useEffect(() => {
+    const unlock = () => {
+      unlockAudio();
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchend', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('touchend', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchend', unlock);
+    };
+  }, []);
 
   // Keyboard
   useEffect(() => {

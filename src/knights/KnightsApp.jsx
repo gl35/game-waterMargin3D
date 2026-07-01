@@ -695,7 +695,6 @@ export default function KnightsApp() {
         // the danger zone during the wind-up to make the blow whiff.
         e.windup -= dt;
         if (e.windup <= 0) {
-          e.atkAnim = 0.2;                       // strike + recovery follow-through
           const sdx = h.x - e.x, sdz = h.z - e.z;
           const sdist = Math.hypot(sdx, sdz);
           if (e.projectileSpeed && sdist > 100) {
@@ -714,6 +713,7 @@ export default function KnightsApp() {
       } else if (e.atkCdLeft <= 0 && dist < e.atkRange && Math.abs(dz) < 36) {
         e.atkCdLeft = e.atkCooldown * (0.85 + Math.random() * 0.3);
         e.windup = e.windupMax;                // begin the telegraph wind-up
+        e.atkAnim = 0.4;                        // sprite lunge/draw animation
       }
     }
     compact(g.enemies, e => !(e.dead && g.time - e.deadT > 0.7));

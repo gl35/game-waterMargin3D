@@ -618,6 +618,11 @@ function imageToCanvas(img) {
 // interior figure pixels (robes, armor, skin) are physically unreachable.
 // The old killCheckerPattern / autoStripBackground / softenEdgeHalos remain
 // available as opt-in escape hatches via the manifest.
+// Resolve a manifest path ('/sprites/x.png') against the app base URL so it
+// works when hosted under a sub-path (e.g. GitHub Pages /game-waterMargin3D/).
+const BASE = (import.meta.env && import.meta.env.BASE_URL) || '/';
+const assetUrl = (p) => BASE + String(p).replace(/^\//, '');
+
 function loadSingleSprite(name, entry) {
   if (LOADING.has(name) || REGISTRY.has(name) || FAILED.has(name)) return;
   LOADING.add(name);
@@ -635,7 +640,7 @@ function loadSingleSprite(name, entry) {
     if (entry.autoTrim !== false)    canvas = trimAlpha(canvas);
     REGISTRY.set(name, canvas);
   };
-  img.src = entry.path;
+  img.src = assetUrl(entry.path);
 }
 
 // ── Sheet loader: load → color-key → slice → trim each region ──
@@ -670,7 +675,7 @@ function loadSheet(sheetName) {
       REGISTRY.set(regionName, sub);
     }
   };
-  img.src = sheet.path;
+  img.src = assetUrl(sheet.path);
 }
 
 // ── Public API ──

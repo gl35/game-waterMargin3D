@@ -1,7 +1,19 @@
-// ── Sprite preload ──
-// Heroes and enemies are now drawn as procedural articulated fighters
-// (see fighter.js) over procedural backdrops, so no PNG sprites need to be
-// fetched for combat. Kept as a no-op hook in case art is reintroduced.
+// ── Curated sprite preload for the Knights shell ──
+// Only the character art the side-scroller actually draws. The full 70+ NPC
+// sheet is NOT preloaded, so we don't jam the main thread with image-decode +
+// pixel-scan filters on first paint.
+import { getSprite } from '../scene2d/sprites.js';
+
+const REQUIRED = [
+  // Heroes
+  'npc/songjiang', 'npc/linchong', 'npc/wusong',
+  'npc/huarong', 'npc/husanniang', 'npc/likui',
+  // Enemies
+  'enemy/raider', 'enemy/scout', 'enemy/archer',
+  'enemy/berserker', 'enemy/guard',
+  'enemy/captain', 'enemy/warlord',
+];
+
 export function preloadKnightsSprites() {
-  /* nothing to preload — fighters are drawn procedurally */
+  for (const name of REQUIRED) getSprite(name);
 }

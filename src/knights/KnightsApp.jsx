@@ -104,6 +104,23 @@ export default function KnightsApp() {
     g.vfx.push({ kind: 'pop', x, z, color: color || '#ffe080', dur: 0.3, t: 0, world: true, yOff: -50 });
   }
 
+  // In-world speech bubble. target: 'hero' | 'ritual' | {kind:'enemy', id}
+  // | {x, z} fixed point. Negative t delays the bubble's appearance.
+  function pushSpeech(g, target, name, text, opts = {}) {
+    const s = {
+      target, name, text,
+      t: -(opts.delay || 0),
+      dur: opts.dur || Math.min(4.2, 1.6 + text.length * 0.045),
+      color: opts.color || '#ffd676',
+      lastX: null, lastZ: null,
+    };
+    if (target && typeof target === 'object' && target.x !== undefined) {
+      s.lastX = target.x; s.lastZ = target.z;
+      s.target = null;                       // fixed point — resolved via lastX/Z
+    }
+    g.speech.push(s);
+  }
+
   // ── Game-feel: screen shake + particle bursts ──
   function addShake(g, amt) { g.shake = Math.min(1, (g.shake || 0) + amt); }
 
@@ -178,15 +195,16 @@ export default function KnightsApp() {
       lastFootstepT: 0,
       particles: [], shake: 0, emberT: 0, zoom: 1,
       comboCount: 0, comboT: 0, comboPop: 0,
+      // mission & dialog state
+      cages: [], actors: [], speech: [],
+      gate: null, ritual: null,
+      objective: stage.objective || null, objCur: 0,
       _drawList: [],
     };
     gameRef.current = g;
     window.__KN = g; // debug/test hook
     pushBanner(g, stage.name, 1.6);
-    if (heroDef.opening) g.vfx.push({
-      kind: 'banner', text: heroDef.opening, size: 22, dur: 2.6, t: -1.4,   // appears after the stage title
-      x: window.innerWidth / 2, y: window.innerHeight * 0.40, world: false,
-    });
+    if (heroDef.opening) pushSpeech(g, 'hero', heroDef.name, heroDef.opening, { delay: 1.2 });
     sfxBanner();
     setScreen('stage');
     setShowHowTo(false);
@@ -199,31 +217,140 @@ export default function KnightsApp() {
     const lockX = wave.atX + Math.max(600, window.innerWidth * 0.35);
     g.waveLockX = lockX;
     g.waveActive = true;
+    if (g.ritual && !g.ritual.active) g.ritual = null;   // clear a finished rite
+
+    let lastEnemy = null;
     if (wave.boss) {
       const e = makeEnemy(wave.boss, 1 + Math.floor((g.stage.chapter || 1) * 0.5));
       e.x = lockX + window.innerWidth * 0.45;
       e.z = (Z_MIN + Z_MAX) / 2;
       e.facing = -1;
       g.enemies.push(e);
+      lastEnemy = e;
       pushBanner(g, wave.intro || 'A boss arrives.', 2.0);
-      return;
+      // Boss confrontation — an exchange of speech bubbles
+      if (wave.dialog) {
+        wave.dialog.forEach((ln, di) => {
+          const isBoss = ln.who === 'boss';
+          pushSpeech(g, isBoss ? { kind: 'enemy', id: e.id } : 'hero',
+            isBoss ? e.name : g.heroDef.name, ln.text,
+            { delay: 0.8 + di * 2.5, dur: 2.4, color: isBoss ? '#ff9c7a' : '#ffd676' });
+        });
+      }
+    } else {
+      let i = 0;
+      for (const [type, count] of wave.spawns) {
+        for (let n = 0; n < count; n++) {
+          const e = makeEnemy(type, g.stage.chapter || 1);
+          // A gate blocks the right edge — its defenders all come from the left.
+          const side = wave.gate ? -0.6 : ((i + n) % 2 === 0 ? 1 : -0.6);
+          // Far-side spawns enter just past the lock edge (not half a screen
+          // beyond it) so they reach the arena in a beat, not ten seconds.
+          e.x = side > 0
+            ? lockX + window.innerWidth * (0.08 + Math.random() * 0.12)
+            : lockX - window.innerWidth * 0.25 - Math.random() * 80;
+          e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
+          e.facing = side > 0 ? -1 : 1;
+          g.enemies.push(e);
+          lastEnemy = e;
+          i++;
+        }
+      }
     }
+
+    // ── Mission objects carried by this wave ──
+    if (wave.cage) {
+      g.cages.push({
+        x: wave.atX + 300, z: 34, hp: 60, hpMax: 60,
+        broken: false, hitT: 0, waveIdx: g.waveIdx,
+        occupant: wave.cage.occupant, name: wave.cage.name,
+      });
+    }
+    if (wave.gate) {
+      g.gate = {
+        x: lockX, hp: wave.gate.hp, hpMax: wave.gate.hp, name: wave.gate.name,
+        broken: false, hitT: 0, waveIdx: g.waveIdx,
+      };
+    }
+    if (wave.defend) {
+      const d = wave.defend;
+      g.ritual = {
+        x: wave.atX + 330, z: 104, t: 0, dur: d.dur,
+        hp: d.hp, hpMax: d.hp, name: d.name, sprite: d.sprite,
+        bursts: d.bursts || [], burstIdx: 0, active: true, done: false, sparkT: 0,
+      };
+      pushSpeech(g, 'ritual', d.name, 'Hold them back — the Five Thunders answer slowly.', { delay: 1.2, color: '#c9a0ff' });
+    }
+
+    // Wave bark — a shouted line from the fresh enemies or the hero
+    if (wave.bark) {
+      if (wave.bark.who === 'enemy' && lastEnemy) {
+        pushSpeech(g, { kind: 'enemy', id: lastEnemy.id }, lastEnemy.name, wave.bark.text,
+          { delay: 0.6, color: '#ff9c7a' });
+      } else {
+        pushSpeech(g, 'hero', g.heroDef.name, wave.bark.text, { delay: 0.6 });
+      }
+    }
+  }
+
+  // Timed reinforcement bursts during the defend-the-rite mission. They
+  // close in on the caster from BOTH flanks.
+  function spawnBurst(g, spawns) {
     let i = 0;
-    for (const [type, count] of wave.spawns) {
+    for (const [type, count] of spawns) {
       for (let n = 0; n < count; n++) {
         const e = makeEnemy(type, g.stage.chapter || 1);
-        const side = (i + n) % 2 === 0 ? 1 : -0.6;
-        // Far-side spawns enter just past the lock edge (not half a screen
-        // beyond it) so they reach the arena in a beat, not ten seconds.
-        e.x = side > 0
-          ? lockX + window.innerWidth * (0.08 + Math.random() * 0.12)
-          : lockX - window.innerWidth * 0.25 - Math.random() * 80;
+        const fromRight = (i + n) % 2 === 0;
+        e.x = fromRight
+          ? g.waveLockX + 40 + Math.random() * 80
+          : g.camX - 60 - Math.random() * 80;
         e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
-        e.facing = side > 0 ? -1 : 1;
+        e.facing = fromRight ? -1 : 1;
         g.enemies.push(e);
         i++;
       }
     }
+  }
+
+  function damageRitual(g, amount) {
+    const r = g.ritual;
+    if (!r || !r.active) return;
+    r.hp -= amount;
+    spawnSpark(g, r.x, r.z, 5, '#ff8484');
+    addShake(g, 0.10);
+    sfxHit();
+  }
+
+  function breakCage(g, c) {
+    c.broken = true;
+    g.objCur++;
+    spawnDebris(g, c.x, c.z, 12, '#5d3d20');
+    spawnDust(g, c.x, c.z, 5);
+    addShake(g, 0.18);
+    sfxKill();
+    pushBanner(g, `${c.name} freed!`, 1.6, 30);
+    // the captive leaps out and scampers off toward the safe (left) edge
+    g.actors.push({
+      sprite: c.occupant, x: c.x, z: c.z + 30,
+      vx: -170, y: 0, vy: 330, t: 0, dur: 3.4, alpha: 1,
+    });
+    pushSpeech(g, { x: c.x, z: c.z }, c.name,
+      c.name === 'Shi Xiu' ? 'Brother! The Zhus will regret this day.' : 'Bless you, hero! I run for the marsh!',
+      { delay: 0.15, dur: 2.2, color: '#9cffb5' });
+  }
+
+  function breakGate(g) {
+    const gt = g.gate;
+    gt.broken = true;
+    g.objCur++;
+    addShake(g, 0.65);
+    g.zoom = Math.max(g.zoom || 1, 1.07);
+    spawnDebris(g, gt.x - 20, 50, 16, '#5a3d22');
+    spawnDebris(g, gt.x - 20, 150, 14, '#3a2a18');
+    spawnDust(g, gt.x - 30, 100, 8);
+    sfxKill();
+    pushBanner(g, 'The gate is breached!', 2.0);
+    sfxBanner();
   }
 
   function dropItem(g, x, z, key) {
@@ -409,6 +536,40 @@ export default function KnightsApp() {
       addShake(g, 0.1);
       const dropKey = rollDrop('barrel');
       if (dropKey) dropItem(g, b.x, b.z, dropKey);
+    }
+
+    // Smash prisoner cages open
+    for (let i = 0; i < g.cages.length; i++) {
+      const c = g.cages[i];
+      if (c.broken) continue;
+      const dx = c.x - h.x;
+      if (Math.sign(dx) !== dir && Math.abs(dx) > 14) continue;
+      if (Math.abs(dx) > move.xRange + 24) continue;
+      if (Math.abs(c.z - z) > Math.max(move.zRange, 48)) continue;
+      const dmg = Math.round(activeAtk * 0.8);
+      c.hp -= dmg;
+      c.hitT = 0.25;
+      pushDamage(g, c.x, c.z, dmg);
+      spawnSpark(g, c.x, c.z, 4, '#e8c890');
+      sfxHit();
+      if (c.hp <= 0) breakCage(g, c);
+    }
+
+    // Batter the manor gate
+    if (g.gate && !g.gate.broken) {
+      const gt = g.gate;
+      const dxg = gt.x - h.x;
+      if (dir > 0 && dxg > 0 && dxg < move.xRange + 60) {
+        const dmg = Math.round(activeAtk);
+        gt.hp -= dmg;
+        gt.hitT = 0.25;
+        pushDamage(g, gt.x - 30, h.z, dmg);
+        spawnSpark(g, gt.x - 20, h.z, 5, '#e8c890');
+        spawnDebris(g, gt.x - 16, h.z, 2, '#5a3d22');
+        addShake(g, 0.08);
+        sfxHit();
+        if (gt.hp <= 0) breakGate(g);
+      }
     }
   }
 
@@ -649,8 +810,11 @@ export default function KnightsApp() {
         continue;
       }
 
-      const dx = h.x - e.x;
-      const dz = h.z - e.z;
+      // During the defend mission the attackers single-mindedly hunt the
+      // ritual caster — the hero must intercept them.
+      const tgt = (g.ritual && g.ritual.active) ? g.ritual : h;
+      const dx = tgt.x - e.x;
+      const dz = tgt.z - e.z;
       const dist = Math.hypot(dx, dz);
       e.facing = Math.sign(dx) || e.facing;
 
@@ -699,7 +863,8 @@ export default function KnightsApp() {
         // the danger zone during the wind-up to make the blow whiff.
         e.windup -= dt;
         if (e.windup <= 0) {
-          const sdx = h.x - e.x, sdz = h.z - e.z;
+          const rtgt = (g.ritual && g.ritual.active) ? g.ritual : h;
+          const sdx = rtgt.x - e.x, sdz = rtgt.z - e.z;
           const sdist = Math.hypot(sdx, sdz);
           if (e.projectileSpeed && sdist > 100) {
             g.projectiles.push({
@@ -710,9 +875,10 @@ export default function KnightsApp() {
               dmg: e.atk, enemy: true, life: 1.5, color: '#a44',
             });
           } else if (sdist < e.atkRange + 34 && Math.abs(sdz) < 46) {
-            damageHero(g, e.atk);
+            if (rtgt === h) damageHero(g, e.atk);
+            else damageRitual(g, e.atk);
           }
-          // else: the hero dodged — the blow finds empty air.
+          // else: the target dodged — the blow finds empty air.
         }
       } else if (e.atkCdLeft <= 0 && dist < e.atkRange && Math.abs(dz) < 36) {
         e.atkCdLeft = e.atkCooldown * (0.85 + Math.random() * 0.3);
@@ -732,6 +898,10 @@ export default function KnightsApp() {
         if (Math.abs(p.x - h.x) < 28 && Math.abs(p.z - h.z) < 30 && h.y > -40) {
           damageHero(g, p.dmg);
           p.life = 0;
+        } else if (g.ritual && g.ritual.active &&
+                   Math.abs(p.x - g.ritual.x) < 30 && Math.abs(p.z - g.ritual.z) < 32) {
+          damageRitual(g, p.dmg);
+          p.life = 0;
         }
       } else {
         for (let j = 0; j < g.enemies.length; j++) {
@@ -741,6 +911,25 @@ export default function KnightsApp() {
           if (Math.abs(p.z - e.z) > 28) continue;
           damageEnemy(g, e, p.dmg, { stun: p.stun, knockback: p.knockback || 12, hitstop: 35 });
           if (!p.pierces) { p.life = 0; break; }
+        }
+        // Arrows also chip cages and the gate
+        if (p.life > 0) {
+          for (let j = 0; j < g.cages.length; j++) {
+            const c = g.cages[j];
+            if (c.broken) continue;
+            if (Math.abs(p.x - c.x) < 40 && Math.abs(p.z - c.z) < 42) {
+              c.hp -= p.dmg; c.hitT = 0.25;
+              pushDamage(g, c.x, c.z, Math.round(p.dmg));
+              if (c.hp <= 0) breakCage(g, c);
+              p.life = 0; break;
+            }
+          }
+        }
+        if (p.life > 0 && g.gate && !g.gate.broken && p.vx > 0 && p.x >= g.gate.x - 20) {
+          g.gate.hp -= p.dmg; g.gate.hitT = 0.25;
+          pushDamage(g, g.gate.x - 30, p.z, Math.round(p.dmg));
+          if (g.gate.hp <= 0) breakGate(g);
+          p.life = 0;
         }
       }
     }
@@ -761,6 +950,71 @@ export default function KnightsApp() {
     // VFX
     for (let i = 0; i < g.vfx.length; i++) g.vfx[i].t += dt;
     compact(g.vfx, fx => fx.t < fx.dur);
+
+    // Speech bubbles (negative t = still delayed)
+    for (let i = 0; i < g.speech.length; i++) g.speech[i].t += dt;
+    compact(g.speech, s => s.t < s.dur);
+
+    // Mission objects: cage/gate hit-shake timers
+    for (let i = 0; i < g.cages.length; i++) {
+      if (g.cages[i].hitT > 0) g.cages[i].hitT -= dt;
+    }
+    if (g.gate && g.gate.hitT > 0) g.gate.hitT -= dt;
+
+    // Freed captives: leap from the cage, then scamper off trailing dust
+    for (let i = 0; i < g.actors.length; i++) {
+      const a = g.actors[i];
+      a.t += dt;
+      if (a.vy !== 0 || a.y > 0) {           // the escape hop
+        a.y += a.vy * dt;
+        a.vy -= GRAVITY * 0.8 * dt;
+        if (a.y <= 0) { a.y = 0; a.vy = 0; spawnDust(g, a.x, a.z, 3); }
+      } else {
+        a.x += a.vx * dt;
+        if (Math.random() < dt * 6) spawnDust(g, a.x - Math.sign(a.vx) * 8, a.z, 1);
+      }
+      if (a.t > a.dur - 0.6) a.alpha = Math.max(0, (a.dur - a.t) / 0.6);
+    }
+    compact(g.actors, a => a.t < a.dur);
+
+    // The Five-Thunder rite: timer, reinforcement bursts, triumph or failure
+    if (g.ritual && g.ritual.active) {
+      const r = g.ritual;
+      r.t += dt;
+      while (r.burstIdx < r.bursts.length && r.t >= r.bursts[r.burstIdx].at) {
+        spawnBurst(g, r.bursts[r.burstIdx].spawns);
+        r.burstIdx++;
+      }
+      r.sparkT -= dt;
+      if (r.sparkT <= 0 && g.particles.length < 300) {
+        r.sparkT = 0.2;
+        spawnSpark(g, r.x + (Math.random() * 2 - 1) * 34, r.z, 1, '#c9a0ff');
+      }
+      if (r.hp <= 0) {
+        r.active = false;
+        g.stageFailed = true;
+        pushBanner(g, 'Gongsun Sheng has fallen', 2.2);
+        addShake(g, 0.5);
+      } else if (r.t >= r.dur) {
+        // 五雷天心正法 — thunder annihilates every foe on the field
+        r.active = false;
+        r.done = true;
+        g.objCur++;
+        g.vfx.push({ kind: 'flash', dur: 0.5, t: 0, world: false, x: 0, y: 0 });
+        let k = 0;
+        for (let i = 0; i < g.enemies.length; i++) {
+          const e = g.enemies[i];
+          if (e.dead) continue;
+          g.vfx.push({ kind: 'bolt', x: e.x, z: e.z, dur: 0.45, t: -(k * 0.09), world: true, yOff: 0, seed: (e.id * 97) | 0 });
+          damageEnemy(g, e, 9999, { crit: false, hitstop: 40 });
+          k++;
+        }
+        addShake(g, 0.8);
+        pushBanner(g, 'The Five Thunders answer!', 2.2);
+        sfxBanner();
+        pushSpeech(g, 'ritual', r.name, 'The mist obeys Heaven again. Gao Lian is mortal now — go.', { delay: 1.0, color: '#c9a0ff' });
+      }
+    }
 
     // Particles (sparks, dust, debris, embers)
     for (let i = 0; i < g.particles.length; i++) {
@@ -791,11 +1045,21 @@ export default function KnightsApp() {
     if (g.comboT > 0) { g.comboT -= dt; if (g.comboT <= 0) g.comboCount = 0; }
     if (g.comboPop > 0) g.comboPop -= dt;
 
-    // Wave completion
+    // Wave completion — enemies down AND this wave's mission objective done
     if (g.waveActive) {
       let alive = 0;
       for (let i = 0; i < g.enemies.length; i++) if (!g.enemies[i].dead) alive++;
-      if (alive === 0) {
+      const wv = g.stage.waves[g.waveIdx];
+      let objDone = true;
+      if (wv) {
+        if (wv.cage) {
+          const c = g.cages.find(cg => cg.waveIdx === g.waveIdx);
+          if (c && !c.broken) objDone = false;
+        }
+        if (wv.gate && g.gate && !g.gate.broken) objDone = false;
+        if (wv.defend && g.ritual && g.ritual.active) objDone = false;
+      }
+      if (alive === 0 && objDone) {
         g.waveActive = false;
         g.waveIdx++;
         h.hp = Math.min(h.hpMax, h.hp + h.hpMax * 0.08);
@@ -813,7 +1077,7 @@ export default function KnightsApp() {
     if (screen !== 'stage') return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    rendererRef.current = createRenderer(canvas);
+    rendererRef.current = createRenderer(canvas, gameRef.current && gameRef.current.stage.theme);
     rendererRef.current.resize(window.innerWidth, window.innerHeight);
 
     const onResize = () => {
@@ -1005,6 +1269,7 @@ export default function KnightsApp() {
                   <div className="knights-stage-chap">ROUND {s.chapter}</div>
                   <div className="knights-stage-name">{s.name}</div>
                   <div className="knights-stage-waves">{s.waves.length} waves</div>
+                  {s.mission && <div className="knights-stage-mission">⚑ {s.mission}</div>}
                   {locked && <div className="knights-stage-lock">LOCKED</div>}
                 </button>
               );
@@ -1259,6 +1524,13 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
               <span className="knights-xp">XP {h.xp}</span>
               <span className="knights-combo">Combo {h.comboStep > 0 ? h.comboStep : '–'}</span>
             </div>
+            {g.objective && (
+              <div className="knights-objective">
+                ⚑ {g.objective.text}
+                <b> {Math.min(g.objCur, g.objective.max)}/{g.objective.max}</b>
+                {g.objCur >= g.objective.max && <span className="kn-obj-done"> ✓</span>}
+              </div>
+            )}
           </div>
         </div>
       </div>

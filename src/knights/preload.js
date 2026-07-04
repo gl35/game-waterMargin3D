@@ -12,6 +12,8 @@ const REQUIRED = [
   'enemy/raider', 'enemy/scout', 'enemy/archer',
   'enemy/berserker', 'enemy/guard',
   'enemy/captain', 'enemy/warlord',
+  // Mission actors: caged villagers, Shi Xiu, Gongsun Sheng's stand-in
+  'npc/baisheng', 'npc/shixiu', 'npc/wuyong',
 ];
 
 export function preloadKnightsSprites() {

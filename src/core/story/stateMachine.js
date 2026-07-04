@@ -1,4 +1,4 @@
-import { INITIAL_CHAPTER_STATE, CHAPTER2_STATE } from './config';
+import { INITIAL_CHAPTER_STATE, CHAPTER2_STATE, CHAPTER3_STATE } from './config';
 
 export const STORY_SAVE_KEY = 'dowm.story-progress.v1';
 
@@ -63,6 +63,12 @@ export function handleNpcDialog(progress, npcId) {
     events.push('chapter1_complete');
   }
 
+  if (next.chapterState.stage === 'talk_wusong' && npcId === 'wusong') {
+    next.chapterState.stage = 'clear_raiders';
+    next.chapterState.objective = `Defeat elite soldiers (0/${next.chapterState.raidersTarget}).`;
+    events.push('wusong_briefed');
+  }
+
   return { progress: next, events };
 }
 
@@ -107,7 +113,7 @@ export function recordRaiderKill(progress) {
   }
 
   next.chapterState.raidersDefeated += 1;
-  const label = ch === 2 ? 'guards' : 'raiders';
+  const label = ch === 3 ? 'elite soldiers' : ch === 2 ? 'guards' : 'raiders';
   next.chapterState.objective = `Defeat ${label} (${next.chapterState.raidersDefeated}/${next.chapterState.raidersTarget}).`;
 
   if (
@@ -116,9 +122,11 @@ export function recordRaiderKill(progress) {
   ) {
     next.chapterState.minibossSpawned = true;
     next.chapterState.stage = 'defeat_miniboss';
-    next.chapterState.objective = ch === 2
-      ? '⚔️ Warlord Gao emerges — defeat him!'
-      : '⚔️ A powerful captain has appeared — defeat him!';
+    next.chapterState.objective = ch === 3
+      ? '⚔️ General Peng appears — he guards the Iron Gate!'
+      : ch === 2
+        ? '⚔️ Warlord Gao emerges — defeat him!'
+        : '⚔️ A powerful captain has appeared — defeat him!';
   }
 
   return next;
@@ -130,16 +138,24 @@ export function recordMiniBossDefeat(progress) {
   next.chapterState.stage = 'complete';
   next.chapterState.completed = true;
   const ch = next.chapterState.chapter;
-  next.chapterState.objective = ch === 2
-    ? 'Chapter 2 complete! The Magistrate falls.'
-    : 'Chapter 1 complete! Victory is yours.';
-  next.player.gold += ch === 2 ? 200 : 100;
+  next.chapterState.objective = ch === 3
+    ? 'Chapter 3 complete! The Iron Gate is breached.'
+    : ch === 2
+      ? 'Chapter 2 complete! The Magistrate falls.'
+      : 'Chapter 1 complete! Victory is yours.';
+  next.player.gold += ch === 3 ? 300 : ch === 2 ? 200 : 100;
   return next;
 }
 
 export function advanceToChapter2(progress) {
   const next = clone(progress);
   next.chapterState = clone(CHAPTER2_STATE);
+  return next;
+}
+
+export function advanceToChapter3(progress) {
+  const next = clone(progress);
+  next.chapterState = clone(CHAPTER3_STATE);
   return next;
 }
 

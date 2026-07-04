@@ -7,13 +7,13 @@ export const ENEMY_DEFS = [
   { type: 'captain',  label: '队长 Captain',     hp: 120, maxHp: 120, damage: 20, xp: 60, gold: 40, aggroRange: 18, chaseSpeed: 5,  attackRange: 4.0, attackInterval: 1800 },
   { type: 'berserker',label: '狂战士 Berserker', hp: 70,  maxHp: 70,  damage: 14, xp: 35, gold: 22, aggroRange: 20, chaseSpeed: 9,  attackRange: 3.0, attackInterval: 800  },
   // Chapter 2
-  { type: 'guard',    label: '甲士 Guard',       hp: 90,  maxHp: 90,  damage: 18, xp: 40, gold: 25, aggroRange: 25, chaseSpeed: 7,  attackRange: 3.5, attackInterval: 1100 },
-  { type: 'archer',   label: '弓手 Archer',      hp: 45,  maxHp: 45,  damage: 12, xp: 28, gold: 18, aggroRange: 40, chaseSpeed: 6,  attackRange: 3.0, attackInterval: 1400 },
-  { type: 'warlord',  label: '⚔️ Warlord Gao',  hp: 280, maxHp: 280, damage: 35, xp: 150,gold: 100, aggroRange: 22, chaseSpeed: 4, attackRange: 5.0, attackInterval: 2000 },
-  // Chapter 3 — the sorcerer's coven
-  { type: 'cultist',  label: '邪徒 Cultist',     hp: 60,  maxHp: 60,  damage: 12, xp: 30, gold: 20, aggroRange: 26, chaseSpeed: 8,  attackRange: 3.0, attackInterval: 1100 },
-  { type: 'shade',    label: '影 Shade',         hp: 40,  maxHp: 40,  damage: 16, xp: 36, gold: 25, aggroRange: 32, chaseSpeed: 12, attackRange: 2.5, attackInterval: 750  },
-  { type: 'sorcerer', label: '🌑 Sorcerer',      hp: 420, maxHp: 420, damage: 50, xp: 240,gold: 180, aggroRange: 28, chaseSpeed: 3, attackRange: 7.0, attackInterval: 2400 },
+  { type: 'guard',    label: '甲士 Guard',            hp: 90,  maxHp: 90,  damage: 18, xp: 40,  gold: 25,  aggroRange: 25, chaseSpeed: 7, attackRange: 3.5, attackInterval: 1100 },
+  { type: 'archer',   label: '弓手 Archer',            hp: 45,  maxHp: 45,  damage: 12, xp: 28,  gold: 18,  aggroRange: 40, chaseSpeed: 6, attackRange: 3.0, attackInterval: 1400 },
+  { type: 'warlord',  label: '⚔️ Warlord Gao',        hp: 280, maxHp: 280, damage: 35, xp: 150, gold: 100, aggroRange: 22, chaseSpeed: 4, attackRange: 5.0, attackInterval: 2000 },
+  // Chapter 3
+  { type: 'elite',    label: '精兵 Elite Soldier',     hp: 110, maxHp: 110, damage: 22, xp: 50,  gold: 30,  aggroRange: 28, chaseSpeed: 8, attackRange: 3.8, attackInterval: 1000 },
+  { type: 'crossbow', label: '弩手 Crossbowman',       hp: 55,  maxHp: 55,  damage: 16, xp: 35,  gold: 22,  aggroRange: 50, chaseSpeed: 5, attackRange: 3.0, attackInterval: 1600 },
+  { type: 'general',  label: '⚔️ General Peng',        hp: 420, maxHp: 420, damage: 45, xp: 200, gold: 150, aggroRange: 25, chaseSpeed: 3, attackRange: 6.0, attackInterval: 2400 },
 ];
 
 const SPAWN_POINTS = [
@@ -44,17 +44,18 @@ const CH2_SPAWN_POINTS = [
 ];
 
 const CH3_SPAWN_POINTS = [
-  { x:  10, z: -40, type: 'cultist'  },
-  { x: -30, z: -45, type: 'shade'    },
-  { x:  35, z: -25, type: 'cultist'  },
-  { x: -45, z: -10, type: 'shade'    },
-  { x:  50, z:  10, type: 'cultist'  },
-  { x: -15, z:  25, type: 'shade'    },
-  { x:  20, z:  35, type: 'cultist'  },
-  { x: -55, z:  40, type: 'shade'    },
-  { x:  60, z: -50, type: 'cultist'  },
-  // Sorcerer boss — far north, the player has to push toward him
-  { x:  -5, z: -90, type: 'sorcerer' },
+  { x: 28,  z: -30, type: 'elite'    },
+  { x: -20, z: -25, type: 'crossbow' },
+  { x: 42,  z: 12,  type: 'elite'    },
+  { x: -50, z: 20,  type: 'crossbow' },
+  { x: 58,  z: -50, type: 'elite'    },
+  { x: -62, z: -18, type: 'elite'    },
+  { x: 18,  z: -62, type: 'crossbow' },
+  { x: -38, z: 48,  type: 'elite'    },
+  { x: 52,  z: -25, type: 'elite'    },
+  { x: 30,  z: 55,  type: 'crossbow' },
+  // General boss
+  { x: 70,  z: 40,  type: 'general'  },
 ];
 
 export function createChapter3Enemies() {
@@ -196,8 +197,8 @@ export function stepEnemies(enemies, hero, nowSeconds, dt, now = Date.now()) {
       }
     } else {
       // Patrol circle
-      const radius = enemy.type === 'captain' ? 10 : enemy.type === 'berserker' ? 8 : enemy.type === 'raider' ? 7 : 5;
-      const speed  = enemy.type === 'captain' ? 0.35 : enemy.type === 'berserker' ? 0.9 : enemy.type === 'raider' ? 0.7 : 0.95;
+      const radius = enemy.type === 'captain' || enemy.type === 'general' ? 10 : enemy.type === 'berserker' || enemy.type === 'elite' ? 8 : enemy.type === 'raider' ? 7 : 5;
+      const speed  = enemy.type === 'captain' || enemy.type === 'general' ? 0.35 : enemy.type === 'berserker' || enemy.type === 'elite' ? 0.9 : enemy.type === 'raider' ? 0.7 : 0.95;
       const angle  = nowSeconds * speed + idx * 0.9;
       nx = enemy.patrolOriginX + Math.cos(angle) * radius;
       nz = enemy.patrolOriginZ + Math.sin(angle * 0.9) * radius;

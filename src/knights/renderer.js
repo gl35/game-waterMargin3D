@@ -11,6 +11,7 @@
 // silhouette pre-rendered once, no per-frame allocations or
 // createRadialGradient. DPR capped at 1.5.
 import { drawSprite } from '../scene2d/sprites.js';
+import { ELEMENTS } from './elements.js';
 
 export const Z_MIN = 0;
 export const Z_MAX = 200;
@@ -499,6 +500,21 @@ export function createRenderer(canvas, themeName = 'dusk') {
       ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
       ctx.fillStyle = e.boss ? '#c44' : '#d77';
       ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.hpMax), 4);
+      // 五行 element badge beside the bar
+      const meta = e.el && ELEMENTS[e.el];
+      if (meta) {
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.beginPath(); ctx.arc(bx - 10, by + 2, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = meta.color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = meta.color;
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(meta.zh, bx - 10, by + 3);
+        ctx.textBaseline = 'alphabetic';
+      }
     }
   }
 
@@ -643,8 +659,21 @@ export function createRenderer(canvas, themeName = 'dusk') {
       }
       case 'damageNumber': {
         const ddy = fx.t * 60;
-        ctx.fillStyle = fx.crit ? '#fff076' : fx.heal ? '#a0ff90' : '#ffd0d0';
-        ctx.font = `bold ${fx.crit ? 28 : 20}px system-ui`;
+        if (fx.text) {                       // spirit-capture / status float
+          ctx.fillStyle = fx.effColor || '#e8d8ff';
+          ctx.font = 'bold 15px system-ui';
+          ctx.textAlign = 'center';
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = 'rgba(0,0,0,0.78)';
+          ctx.strokeText(fx.text, sx, fy - 30 - ddy);
+          ctx.fillText(fx.text, sx, fy - 30 - ddy);
+          break;
+        }
+        // element effectiveness tints the number: green = overcoming (相剋),
+        // grey = resisted
+        ctx.fillStyle = fx.crit ? '#fff076' : fx.heal ? '#a0ff90'
+          : fx.eff === 'strong' ? '#b8ffb0' : fx.eff === 'weak' ? '#bfbfbf' : '#ffd0d0';
+        ctx.font = `bold ${fx.crit ? 28 : fx.eff === 'strong' ? 23 : 20}px system-ui`;
         ctx.textAlign = 'center';
         ctx.lineWidth = 4;
         ctx.strokeStyle = 'rgba(0,0,0,0.78)';

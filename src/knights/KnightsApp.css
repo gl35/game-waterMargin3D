@@ -236,6 +236,32 @@ html, body { overscroll-behavior: none; }
 .kn-camp-tier { color: var(--kn-gold); font-size: 11px; letter-spacing: 2px; margin-left: 6px; }
 .kn-camp-desc { font-size: 12px; color: #b0a080; }
 .kn-camp-cost { color: #ffd95a; font-weight: bold; font-size: 14px; white-space: nowrap; }
+
+/* ── 炼妖壶 Refining Pot ── */
+.kn-pot-hint { font-size: 12px; color: #b0a080; max-width: 640px; text-align: center; margin: 0 0 10px; }
+.kn-pot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  max-width: 1100px; width: 100%;
+}
+.kn-pot-row {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(22, 12, 8, 0.85);
+  border: 1px solid #5a2a1c; border-left: 3px solid;
+  border-radius: 5px; padding: 8px 12px;
+}
+.kn-pot-el { font-size: 20px; font-weight: bold; }
+.kn-pot-count { flex: 1; font-size: 13px; color: #d6c7a0; }
+.kn-pot-charm { font-size: 12px; letter-spacing: 2px; }
+
+.kn-portrait-el {
+  position: absolute; top: 4px; right: 4px;
+  background: rgba(0,0,0,0.72);
+  font-size: 12px; font-weight: bold;
+  padding: 2px 5px; border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.25);
+}
 .knights-bars { display: flex; flex-direction: column; gap: 4px; min-width: 280px; }
 .knights-bar {
   position: relative;

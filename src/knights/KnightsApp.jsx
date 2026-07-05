@@ -8,7 +8,11 @@ import { ITEMS, rollDrop } from './items.js';
 import { STAGES, getStage } from './stages.js';
 import { ENEMIES, makeEnemy } from './enemies.js';
 import { STORY, getStory, PROLOGUE_LINES, FINALE_LINES } from './story.js';
-import { levelFromXp, statsFor, fortuneMult, UPGRADES, MAX_LEVEL } from './progression.js';
+import { levelFromXp, statsFor, fortuneMult, UPGRADES } from './progression.js';
+import {
+  ELEMENTS, ELEMENT_KEYS, elementMult, charmDealt, charmTaken,
+  SPIRITS_PER_FUSE, SPIRIT_CHANCE, CHARM_MAX_TIER,
+} from './elements.js';
 import { createRenderer, Z_MIN, Z_MAX } from './renderer.js';
 import { preloadKnightsSprites } from './preload.js';
 import { getSprite } from '../scene2d/sprites.js';
@@ -26,6 +30,8 @@ function loadSave() {
   s = s || { unlocked: ['mountain_pass'], coins: 0, hero: 'songjiang' };
   if (!s.heroXp) s.heroXp = {};
   if (!s.upgrades) s.upgrades = { atk: 0, hp: 0, fortune: 0 };
+  if (!s.pot) s.pot = {};          // 炼妖壶 spirits, keyed by element
+  if (!s.charms) s.charms = {};    // fused charm tiers, keyed by element
   return s;
 }
 function persistSave(s) {
@@ -46,7 +52,7 @@ function compact(arr, alive) {
 function makeHero(heroDef, level = 1, upgrades = null) {
   const s = statsFor(heroDef, level, upgrades);
   return {
-    id: heroDef.id, color: heroDef.color, sprite: heroDef.sprite,
+    id: heroDef.id, color: heroDef.color, sprite: heroDef.sprite, el: heroDef.el,
     x: 100, z: (Z_MIN + Z_MAX) / 2,
     vx: 0, vz: 0,
     y: 0, vy: 0,                   // airborne offset & vertical velocity
@@ -104,8 +110,8 @@ export default function KnightsApp() {
       world: false,
     });
   }
-  function pushDamage(g, x, z, value, crit = false, heal = false) {
-    g.vfx.push({ kind: 'damageNumber', x, z, value, crit, heal, dur: 0.9, t: 0, world: true, yOff: -100 });
+  function pushDamage(g, x, z, value, crit = false, heal = false, eff = null) {
+    g.vfx.push({ kind: 'damageNumber', x, z, value, crit, heal, eff, dur: 0.9, t: 0, world: true, yOff: -100 });
   }
   function pushPop(g, x, z, color) {
     g.vfx.push({ kind: 'pop', x, z, color: color || '#ffe080', dur: 0.3, t: 0, world: true, yOff: -50 });
@@ -227,6 +233,8 @@ export default function KnightsApp() {
       persistedXp,
       heroLevel: lv.level, startLevel: lv.level, xpInto: lv.into, xpNeed: lv.need,
       fortune: fortuneMult(save.upgrades),
+      charms: { ...(save.charms || {}) },
+      potGained: {},                 // spirits refined this run
       _ended: false,
       _drawList: [],
     };
@@ -490,7 +498,9 @@ export default function KnightsApp() {
   function damageEnemy(g, e, amount, opts) {
     if (e.dead) return 0;
     const isCrit = opts && opts.crit !== undefined ? opts.crit : Math.random() < 0.08;
-    const dmg = Math.round(amount * (isCrit ? 1.8 : 1));
+    // 五行相剋 — the five-phase cycle bends every hit, plus fused charms
+    const em = elementMult(g.hero.el, e.el);
+    const dmg = Math.round(amount * em * charmDealt(g.charms, e.el) * (isCrit ? 1.8 : 1));
     e.hp -= dmg;
     e.hitFlash = 0.35;
     e.stun = Math.max(e.stun || 0, (opts && opts.stun) || 0.10);
@@ -501,7 +511,7 @@ export default function KnightsApp() {
       e.vy = 380;
       e.launched = 0.8;
     }
-    pushDamage(g, e.x, e.z, dmg, isCrit);
+    pushDamage(g, e.x, e.z, dmg, isCrit, false, em > 1 ? 'strong' : em < 1 ? 'weak' : null);
     pushPop(g, e.x, e.z, isCrit ? '#fff076' : '#fff');
     spawnSpark(g, e.x, e.z, isCrit ? 14 : 8, isCrit ? '#fff1a0' : '#ffd9a0');
     addShake(g, isCrit ? 0.26 : 0.12);
@@ -532,6 +542,21 @@ export default function KnightsApp() {
       g.score += earned * 2;
       g.kills++;
       checkLevelUp(g);
+      // 炼妖壶 — a slain foe's spirit may enter the Refining Pot
+      // (special-kills always refine)
+      if (!e.boss && e.el) {
+        const viaMagic = opts && opts.source === 'magic';
+        if (viaMagic || Math.random() < SPIRIT_CHANCE) {
+          g.potGained[e.el] = (g.potGained[e.el] || 0) + 1;
+          const meta = ELEMENTS[e.el];
+          g.vfx.push({
+            kind: 'damageNumber', x: e.x, z: e.z, text: `壺 +1 ${meta.zh}靈`,
+            effColor: meta.color, dur: 1.2, t: 0, world: true, yOff: -130,
+          });
+          spawnSpark(g, e.x, e.z, 5, meta.color);
+          sfxPickup('scroll');
+        }
+      }
       sfxKill();
       const dropKey = rollDrop(e.drop);
       if (dropKey) dropItem(g, e.x, e.z, dropKey);
@@ -539,9 +564,10 @@ export default function KnightsApp() {
     return dmg;
   }
 
-  function damageHero(g, amount) {
+  function damageHero(g, amount, atkEl = null) {
     const h = g.hero;
     if (h.invuln > 0) return 0;
+    amount = Math.round(amount * elementMult(atkEl, h.el) * charmTaken(g.charms, atkEl));
     h.hp -= amount;
     h.hitFlash = 0.4;
     h.invuln = 0.55;
@@ -751,7 +777,7 @@ export default function KnightsApp() {
             if (Math.abs(e.x - h.x) > m.range) continue;
             if (Math.abs(e.z - h.z) > (m.zRange || 200)) continue;
           }
-          damageEnemy(g, e, perHit, { knockback: m.knockback || 30, stun: 0.15, hitstop: m.hitstop || 40 });
+          damageEnemy(g, e, perHit, { knockback: m.knockback || 30, stun: 0.15, hitstop: m.hitstop || 40, source: 'magic' });
         }
       }, k * 80);
     }
@@ -971,10 +997,10 @@ export default function KnightsApp() {
               x: e.x, z: e.z, yOff: -60,
               vx: Math.sign(sdx) * e.projectileSpeed, vz: 0,
               angle: Math.sign(sdx) < 0 ? Math.PI : 0,
-              dmg: e.atk, enemy: true, life: 1.5, color: '#a44',
+              dmg: e.atk, enemy: true, life: 1.5, color: '#a44', el: e.el,
             });
           } else if (sdist < e.atkRange + 34 && Math.abs(sdz) < 46) {
-            if (rtgt === h) damageHero(g, e.atk);
+            if (rtgt === h) damageHero(g, e.atk, e.el);
             else damageRitual(g, e.atk);
           }
           // else: the target dodged — the blow finds empty air.
@@ -995,7 +1021,7 @@ export default function KnightsApp() {
       p.life -= dt;
       if (p.enemy) {
         if (Math.abs(p.x - h.x) < 28 && Math.abs(p.z - h.z) < 30 && h.y > -40) {
-          damageHero(g, p.dmg);
+          damageHero(g, p.dmg, p.el);
           p.life = 0;
         } else if (g.ritual && g.ritual.active &&
                    Math.abs(p.x - g.ritual.x) < 30 && Math.abs(p.z - g.ritual.z) < 32) {
@@ -1216,10 +1242,11 @@ export default function KnightsApp() {
 
         if (g.stageFailed && !g._ended) {
           g._ended = true;
-          // RPG loop: a defeat still trains you — keep run XP and coins.
-          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades } };
+          // RPG loop: a defeat still trains you — keep run XP, coins, spirits.
+          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot } };
           s.heroXp[chosenHeroId] = (s.heroXp[chosenHeroId] || 0) + g.hero.xp;
           s.coins = (s.coins || 0) + g.hero.coins;
+          for (const k of Object.keys(g.potGained)) s.pot[k] = (s.pot[k] || 0) + g.potGained[k];
           s.hero = chosenHeroId;
           persistSave(s); setSave(s);
           setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
@@ -1229,7 +1256,8 @@ export default function KnightsApp() {
         } else if (g.stageComplete && !g._ended) {
           g._ended = true;
           const next = nextStageId(g.stageId);
-          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades } };
+          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot } };
+          for (const k of Object.keys(g.potGained)) s.pot[k] = (s.pot[k] || 0) + g.potGained[k];
           // kill XP/coins were fortune-boosted as they dropped; only the
           // stage-clear bonus still needs the multiplier
           const totalCoins = Math.round((g.stage.rewards?.coin || 0) * g.fortune) + g.hero.coins;
@@ -1354,6 +1382,7 @@ export default function KnightsApp() {
                 <div className="knights-hero-portrait" style={{ background: hd.portrait }}>
                   <SpriteThumb name={hd.sprite} w={96} h={120} />
                   <span className="kn-portrait-lv">LV {levelFromXp((save.heroXp || {})[hd.id] || 0).level}</span>
+                  <span className="kn-portrait-el" style={{ color: ELEMENTS[hd.el].color }}>{ELEMENTS[hd.el].zh}</span>
                   <span className="kn-portrait-name">{hd.name}</span>
                 </div>
                 <div className="knights-hero-meta">
@@ -1426,6 +1455,36 @@ export default function KnightsApp() {
                   </div>
                   <div className="kn-camp-cost">{maxed ? 'MAX' : `◯ ${cost}`}</div>
                 </button>
+              );
+            })}
+          </div>
+
+          <h3 style={{ marginTop: 16 }}>炼妖壶 · The Refining Pot</h3>
+          <p className="kn-pot-hint">Slain foes may leave a spirit (special-kills always do). Fuse {SPIRITS_PER_FUSE} spirits of an element into a charm: +6% damage dealt / −6% taken against that element per tier.</p>
+          <div className="kn-pot-grid">
+            {ELEMENT_KEYS.map(k => {
+              const meta = ELEMENTS[k];
+              const count = (save.pot || {})[k] || 0;
+              const tier = (save.charms || {})[k] || 0;
+              const canFuse = count >= SPIRITS_PER_FUSE && tier < CHARM_MAX_TIER;
+              return (
+                <div key={k} className="kn-pot-row" style={{ borderLeftColor: meta.color }}>
+                  <span className="kn-pot-el" style={{ color: meta.color }}>{meta.zh}</span>
+                  <span className="kn-pot-count">{count} spirit{count === 1 ? '' : 's'}</span>
+                  <span className="kn-pot-charm" style={{ color: meta.color }}>
+                    {'◆'.repeat(tier)}{'◇'.repeat(CHARM_MAX_TIER - tier)}
+                  </span>
+                  <button className="knights-btn small" disabled={!canFuse}
+                    onClick={() => {
+                      sfxClick();
+                      const s = { ...save, pot: { ...save.pot }, charms: { ...save.charms } };
+                      s.pot[k] = count - SPIRITS_PER_FUSE;
+                      s.charms[k] = tier + 1;
+                      persistSave(s); setSave(s);
+                    }}>
+                    {tier >= CHARM_MAX_TIER ? 'MAX' : `Fuse ${SPIRITS_PER_FUSE}`}
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -1687,6 +1746,9 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
             <div className="knights-stats">
               <span className="knights-coin">◯ {h.coins}</span>
               <span className="knights-xp">XP {h.xp}</span>
+              <span style={{ color: ELEMENTS[h.el] ? ELEMENTS[h.el].color : '#fff', fontWeight: 'bold' }}>
+                {ELEMENTS[h.el] ? ELEMENTS[h.el].zh : ''}
+              </span>
               <span className="knights-combo">Combo {h.comboStep > 0 ? h.comboStep : '–'}</span>
             </div>
             {g.objective && (

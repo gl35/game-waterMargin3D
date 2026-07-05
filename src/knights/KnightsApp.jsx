@@ -8,6 +8,7 @@ import { ITEMS, rollDrop } from './items.js';
 import { STAGES, getStage } from './stages.js';
 import { ENEMIES, makeEnemy } from './enemies.js';
 import { STORY, getStory, PROLOGUE_LINES, FINALE_LINES } from './story.js';
+import { levelFromXp, statsFor, fortuneMult, UPGRADES, MAX_LEVEL } from './progression.js';
 import { createRenderer, Z_MIN, Z_MAX } from './renderer.js';
 import { preloadKnightsSprites } from './preload.js';
 import { getSprite } from '../scene2d/sprites.js';
@@ -18,8 +19,14 @@ import {
 
 const SAVE_KEY = 'knights_save_v1';
 function loadSave() {
-  try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }
-  catch { return null; }
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }
+  catch { s = null; }
+  // Normalize older saves to the RPG schema.
+  s = s || { unlocked: ['mountain_pass'], coins: 0, hero: 'songjiang' };
+  if (!s.heroXp) s.heroXp = {};
+  if (!s.upgrades) s.upgrades = { atk: 0, hp: 0, fortune: 0 };
+  return s;
 }
 function persistSave(s) {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); }
@@ -36,8 +43,8 @@ function compact(arr, alive) {
   arr.length = w;
 }
 
-function makeHero(heroDef) {
-  const s = heroDef.stats;
+function makeHero(heroDef, level = 1, upgrades = null) {
+  const s = statsFor(heroDef, level, upgrades);
   return {
     id: heroDef.id, color: heroDef.color, sprite: heroDef.sprite,
     x: 100, z: (Z_MIN + Z_MAX) / 2,
@@ -67,7 +74,7 @@ export default function KnightsApp() {
   const [stageId, setStageId] = useState('mountain_pass');
   const [chosenHeroId, setChosenHeroId] = useState('songjiang');
   const [muted, setMutedState] = useState(false);
-  const [save, setSave] = useState(() => loadSave() || { unlocked: ['mountain_pass'], coins: 0, hero: 'songjiang' });
+  const [save, setSave] = useState(() => loadSave());
   const [showHowTo, setShowHowTo] = useState(true);
   const [endStats, setEndStats] = useState(null);
   const [hudTick, setHudTick] = useState(0);
@@ -192,7 +199,9 @@ export default function KnightsApp() {
     const stage = getStage(id);
     const heroDef = getHero(heroId);
     const moves = getMoves(heroDef.moveId);
-    const hero = makeHero(heroDef);
+    const persistedXp = (save.heroXp && save.heroXp[heroId]) || 0;
+    const lv = levelFromXp(persistedXp);
+    const hero = makeHero(heroDef, lv.level, save.upgrades);
     const barrels = (stage.barrels || []).map((bx, i) => ({
       id: 'b' + i, x: bx, z: Z_MIN + 30 + (i % 3) * 60, broken: false,
     }));
@@ -214,6 +223,11 @@ export default function KnightsApp() {
       cages: [], actors: [], speech: [],
       gate: null, ritual: null,
       objective: stage.objective || null, objCur: 0,
+      // RPG progression (persisted XP + this run's gains)
+      persistedXp,
+      heroLevel: lv.level, startLevel: lv.level, xpInto: lv.into, xpNeed: lv.need,
+      fortune: fortuneMult(save.upgrades),
+      _ended: false,
       _drawList: [],
     };
     gameRef.current = g;
@@ -364,6 +378,28 @@ export default function KnightsApp() {
     }
   }
 
+  // Mid-battle level-up: XP earned this run + persisted XP crosses a
+  // threshold → stats grow on the spot, with a burst and a partial heal.
+  function checkLevelUp(g) {
+    const lv = levelFromXp(g.persistedXp + g.hero.xp);
+    g.xpInto = lv.into; g.xpNeed = lv.need;
+    if (lv.level <= g.heroLevel) return;
+    g.heroLevel = lv.level;
+    const h = g.hero;
+    const ns = statsFor(g.heroDef, lv.level, save.upgrades);
+    const hpGain = ns.hpMax - h.hpMax;
+    h.hpMax = ns.hpMax;
+    h.atk = ns.atk;
+    h.hp = Math.min(h.hpMax, h.hp + hpGain + Math.round(h.hpMax * 0.20));
+    pushBanner(g, `LEVEL UP — LV ${lv.level}`, 2.0);
+    pushDamage(g, h.x, h.z, hpGain + Math.round(h.hpMax * 0.20), false, true);
+    g.vfx.push({ kind: 'aoe', x: h.x, z: h.z, yOff: -40, range: 130, color: '#ffd676', dur: 0.7, t: 0, world: true });
+    spawnSpark(g, h.x, h.z, 22, '#ffe6a0');
+    addShake(g, 0.2);
+    g.zoom = Math.max(g.zoom || 1, 1.05);
+    sfxBanner();
+  }
+
   function damageRitual(g, amount) {
     const r = g.ritual;
     if (!r || !r.active) return;
@@ -490,11 +526,12 @@ export default function KnightsApp() {
       addShake(g, e.boss ? 0.5 : 0.2);
       g.zoom = Math.max(g.zoom || 1, e.boss ? 1.08 : 1.05);   // kill zoom-punch
       spawnSpark(g, e.x, e.z, e.boss ? 28 : 10, '#ffd0a0');
-      const earned = e.xp || 6;
+      const earned = Math.round((e.xp || 6) * g.fortune);
       g.hero.xp += earned;
       g.hero.coins += Math.round(earned * 0.5);
       g.score += earned * 2;
       g.kills++;
+      checkLevelUp(g);
       sfxKill();
       const dropKey = rollDrop(e.drop);
       if (dropKey) dropItem(g, e.x, e.z, dropKey);
@@ -1177,21 +1214,35 @@ export default function KnightsApp() {
         }
         rendererRef.current.render(g);
 
-        if (g.stageFailed) {
-          setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
-            coins: g.hero.coins, xp: g.hero.xp, score: g.score, cleared: false });
-          setScreen('gameover');
-        } else if (g.stageComplete) {
-          const next = nextStageId(g.stageId);
-          const s = { ...save };
-          const totalCoins = (g.stage.rewards?.coin || 0) + g.hero.coins;
-          const totalXp = (g.stage.rewards?.xp || 0) + g.hero.xp;
-          s.coins = (s.coins || 0) + totalCoins;
-          if (next && !s.unlocked.includes(next)) s.unlocked = [...s.unlocked, next];
+        if (g.stageFailed && !g._ended) {
+          g._ended = true;
+          // RPG loop: a defeat still trains you — keep run XP and coins.
+          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades } };
+          s.heroXp[chosenHeroId] = (s.heroXp[chosenHeroId] || 0) + g.hero.xp;
+          s.coins = (s.coins || 0) + g.hero.coins;
           s.hero = chosenHeroId;
           persistSave(s); setSave(s);
           setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
-            coins: totalCoins, xp: totalXp, score: g.score, cleared: true, nextId: next });
+            coins: g.hero.coins, xp: g.hero.xp, score: g.score, cleared: false,
+            level: g.heroLevel, levelsGained: g.heroLevel - g.startLevel });
+          setScreen('gameover');
+        } else if (g.stageComplete && !g._ended) {
+          g._ended = true;
+          const next = nextStageId(g.stageId);
+          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades } };
+          // kill XP/coins were fortune-boosted as they dropped; only the
+          // stage-clear bonus still needs the multiplier
+          const totalCoins = Math.round((g.stage.rewards?.coin || 0) * g.fortune) + g.hero.coins;
+          const totalXp = Math.round((g.stage.rewards?.xp || 0) * g.fortune) + g.hero.xp;
+          s.coins = (s.coins || 0) + totalCoins;
+          s.heroXp[chosenHeroId] = (s.heroXp[chosenHeroId] || 0) + totalXp;
+          if (next && !s.unlocked.includes(next)) s.unlocked = [...s.unlocked, next];
+          s.hero = chosenHeroId;
+          persistSave(s); setSave(s);
+          const lvAfter = levelFromXp(s.heroXp[chosenHeroId]).level;
+          setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
+            coins: totalCoins, xp: totalXp, score: g.score, cleared: true, nextId: next,
+            level: lvAfter, levelsGained: lvAfter - g.startLevel });
           setScreen('reward');
         }
       }
@@ -1302,6 +1353,7 @@ export default function KnightsApp() {
                 onClick={() => { sfxClick(); setChosenHeroId(hd.id); }}>
                 <div className="knights-hero-portrait" style={{ background: hd.portrait }}>
                   <SpriteThumb name={hd.sprite} w={96} h={120} />
+                  <span className="kn-portrait-lv">LV {levelFromXp((save.heroXp || {})[hd.id] || 0).level}</span>
                   <span className="kn-portrait-name">{hd.name}</span>
                 </div>
                 <div className="knights-hero-meta">
@@ -1346,6 +1398,33 @@ export default function KnightsApp() {
                   <div className="knights-stage-waves">{s.waves.length} waves</div>
                   {s.mission && <div className="knights-stage-mission">⚑ {s.mission}</div>}
                   {locked && <div className="knights-stage-lock">LOCKED</div>}
+                </button>
+              );
+            })}
+          </div>
+
+          <h3 style={{ marginTop: 16 }}>The Camp <span className="kn-camp-coins">◯ {save.coins || 0}</span></h3>
+          <div className="kn-camp-grid">
+            {UPGRADES.map(u => {
+              const tier = (save.upgrades || {})[u.id] || 0;
+              const maxed = tier >= u.tiers;
+              const cost = maxed ? 0 : u.costs[tier];
+              const afford = (save.coins || 0) >= cost;
+              return (
+                <button key={u.id} className={`kn-camp-card ${maxed ? 'maxed' : ''}`}
+                  disabled={maxed || !afford}
+                  onClick={() => {
+                    sfxClick();
+                    const s = { ...save, upgrades: { ...save.upgrades, [u.id]: tier + 1 } };
+                    s.coins = (s.coins || 0) - cost;
+                    persistSave(s); setSave(s);
+                  }}>
+                  <div className="kn-camp-icon">{u.icon}</div>
+                  <div className="kn-camp-meta">
+                    <div className="kn-camp-name">{u.name} <span className="kn-camp-tier">{'●'.repeat(tier)}{'○'.repeat(u.tiers - tier)}</span></div>
+                    <div className="kn-camp-desc">{u.desc}</div>
+                  </div>
+                  <div className="kn-camp-cost">{maxed ? 'MAX' : `◯ ${cost}`}</div>
                 </button>
               );
             })}
@@ -1406,8 +1485,11 @@ export default function KnightsApp() {
           <div className="knights-reward-stats">
             <div>Kills: <b>{endStats.kills}</b></div>
             <div>Coins: <b>{endStats.coins}</b></div>
-            <div>XP: <b>{endStats.xp}</b></div>
+            <div>XP: <b>+{endStats.xp}</b></div>
             <div>Score: <b>{endStats.score}</b></div>
+            <div>Level: <b>LV {endStats.level}</b>
+              {endStats.levelsGained > 0 && <span className="kn-lv-up"> ▲ {endStats.levelsGained} level{endStats.levelsGained > 1 ? 's' : ''} gained!</span>}
+            </div>
           </div>
           <div className="knights-row" style={{ gap: 16, marginTop: 20 }}>
             <button className="knights-btn" onClick={() => { sfxClick(); setScreen('select'); }}>Lobby</button>
@@ -1429,6 +1511,8 @@ export default function KnightsApp() {
           <div className="knights-reward-stats">
             <div>Kills before falling: <b>{endStats.kills}</b></div>
             <div>Score: <b>{endStats.score}</b></div>
+            <div>XP kept: <b>+{endStats.xp}</b> <span className="kn-lv-up">a defeat still trains you</span></div>
+            <div>Level: <b>LV {endStats.level}</b></div>
           </div>
           <div className="knights-row" style={{ gap: 16, marginTop: 20 }}>
             <button className="knights-btn" onClick={() => { sfxClick(); setScreen('select'); }}>Lobby</button>
@@ -1586,13 +1670,19 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
     <>
       <div className="knights-hud knights-hud-tl">
         <div className="knights-hp-row">
-          <div className="knights-hero-chip" style={{ background: heroDef.portrait }}>
-            <SpriteThumb name={heroDef.sprite} fit="head" w={64} h={64} />
+          <div className="knights-chip-wrap">
+            <div className="knights-hero-chip" style={{ background: heroDef.portrait }}>
+              <SpriteThumb name={heroDef.sprite} fit="head" w={64} h={64} />
+            </div>
+            <div className="knights-lv-badge">LV {g.heroLevel}</div>
           </div>
           <div className="knights-bars">
             <div className="knights-bar hp">
               <div className="knights-bar-fill" style={{ width: `${100 * h.hp / h.hpMax}%` }} />
               <div className="knights-bar-text">{Math.max(0, Math.round(h.hp))} / {h.hpMax}</div>
+            </div>
+            <div className="knights-bar xp">
+              <div className="knights-bar-fill" style={{ width: `${g.xpNeed > 0 ? Math.min(100, 100 * g.xpInto / g.xpNeed) : 100}%` }} />
             </div>
             <div className="knights-stats">
               <span className="knights-coin">◯ {h.coins}</span>

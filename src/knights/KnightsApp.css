@@ -255,6 +255,26 @@ html, body { overscroll-behavior: none; }
 .kn-pot-count { flex: 1; font-size: 13px; color: #d6c7a0; }
 .kn-pot-charm { font-size: 12px; letter-spacing: 2px; }
 
+/* ── 仙术 skill track (select screen) + locked HUD card ── */
+.kn-hero-stats {
+  margin-top: 10px; text-align: center; font-size: 14px; color: #d6c7a0;
+}
+.kn-hero-stats b { color: var(--kn-gold); }
+.kn-skill-track {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px;
+}
+.kn-skill-chip {
+  font-size: 12px; color: #8a7a60;
+  background: rgba(22, 12, 8, 0.7);
+  border: 1px solid #4a2a1c; border-radius: 12px;
+  padding: 3px 10px;
+}
+.kn-skill-chip.got { color: #ffe2a4; border-color: rgba(255,214,118,0.5); }
+.kn-skill-chip .kn-skill-lv { font-weight: bold; margin-right: 4px; color: #6a5a45; }
+.kn-skill-chip.got .kn-skill-lv { color: #8adf7a; }
+.kn-skill-zh { font-weight: bold; }
+.knights-skill-card.kn-locked { opacity: 0.45; filter: grayscale(0.6); }
+
 .kn-portrait-el {
   position: absolute; top: 4px; right: 4px;
   background: rgba(0,0,0,0.72);

@@ -8,7 +8,7 @@ import { ITEMS, rollDrop } from './items.js';
 import { STAGES, getStage } from './stages.js';
 import { ENEMIES, makeEnemy } from './enemies.js';
 import { STORY, getStory, PROLOGUE_LINES, FINALE_LINES } from './story.js';
-import { levelFromXp, statsFor, fortuneMult, UPGRADES } from './progression.js';
+import { levelFromXp, statsFor, fortuneMult, UPGRADES, SKILLS, skillsFor } from './progression.js';
 import {
   ELEMENTS, ELEMENT_KEYS, elementMult, charmDealt, charmTaken,
   SPIRITS_PER_FUSE, SPIRIT_CHANCE, CHARM_MAX_TIER,
@@ -235,6 +235,8 @@ export default function KnightsApp() {
       fortune: fortuneMult(save.upgrades),
       charms: { ...(save.charms || {}) },
       potGained: {},                 // spirits refined this run
+      skills: skillsFor(lv.level),   // 仙术 arts unlocked at this level
+      critChance: lv.level >= 14 ? 0.15 : 0.08,
       _ended: false,
       _drawList: [],
     };
@@ -392,9 +394,21 @@ export default function KnightsApp() {
     const lv = levelFromXp(g.persistedXp + g.hero.xp);
     g.xpInto = lv.into; g.xpNeed = lv.need;
     if (lv.level <= g.heroLevel) return;
+    const prevLevel = g.heroLevel;
     g.heroLevel = lv.level;
     const h = g.hero;
     const ns = statsFor(g.heroDef, lv.level, save.upgrades);
+    // Announce every art unlocked by this level-up
+    for (const sk of SKILLS) {
+      if (sk.lv > prevLevel && sk.lv <= lv.level) {
+        g.vfx.push({
+          kind: 'banner', text: `新技 ${sk.zh} — ${sk.name} unlocked!`, size: 26,
+          dur: 2.4, t: -0.9, x: window.innerWidth / 2, y: window.innerHeight * 0.42, world: false,
+        });
+      }
+    }
+    g.skills = skillsFor(lv.level);
+    g.critChance = lv.level >= 14 ? 0.15 : 0.08;
     const hpGain = ns.hpMax - h.hpMax;
     h.hpMax = ns.hpMax;
     h.atk = ns.atk;
@@ -497,7 +511,7 @@ export default function KnightsApp() {
 
   function damageEnemy(g, e, amount, opts) {
     if (e.dead) return 0;
-    const isCrit = opts && opts.crit !== undefined ? opts.crit : Math.random() < 0.08;
+    const isCrit = opts && opts.crit !== undefined ? opts.crit : Math.random() < (g.critChance || 0.08);
     // 五行相剋 — the five-phase cycle bends every hit, plus fused charms
     const em = elementMult(g.hero.el, e.el);
     const dmg = Math.round(amount * em * charmDealt(g.charms, e.el) * (isCrit ? 1.8 : 1));
@@ -703,13 +717,18 @@ export default function KnightsApp() {
     if (h.attacking > 0) return;
     const kit = g.heroKit;
     let move;
-    if (h.y < -4) {                       // airborne → jump attack
+    if (h.y < -4) {                       // airborne → jump attack (LV5 art)
+      if (!g.skills.jumpAttack) return;
       move = kit.jumpAttack;
-    } else if (h.dashing > 0) {
+    } else if (h.dashing > 0 && g.skills.dashAttack) {   // LV3 art
       move = kit.dashAttack;
+    } else if (h.dashing > 0) {
+      return;                             // untrained: no strike mid-dash
     } else {
-      move = kit.combo[h.comboStep];
-      h.comboStep = (h.comboStep + 1) % kit.combo.length;
+      // 4th combo finisher unlocks at LV7 (第四式)
+      const comboLen = g.skills.combo4 ? kit.combo.length : Math.min(3, kit.combo.length);
+      move = kit.combo[h.comboStep % comboLen];
+      h.comboStep = (h.comboStep + 1) % comboLen;
       h.comboTimer = COMBO_WINDOW;
     }
     h.attacking = move.dur;
@@ -736,7 +755,9 @@ export default function KnightsApp() {
     const h = g.hero;
     if (h.attacking > 0) return;
     const m = g.heroKit.magic;
-    const cost = Math.round(h.hpMax * (m.cost || 0.10));
+    // 仙術精通 (LV10): specials hit harder and cost less HP
+    const empowered = g.skills.empower;
+    const cost = Math.round(h.hpMax * Math.max(0.04, (m.cost || 0.10) - (empowered ? 0.02 : 0)));
     if (h.hp <= cost + 1) return;          // refuse if would suicide
     h.hp -= cost;
     h.attacking = 0.45;
@@ -759,7 +780,7 @@ export default function KnightsApp() {
       color: m.color, dur: 0.9, t: 0, world: true,
       seed: g.time * 100 | 0,
     });
-    let activeAtk = h.atk * m.dmgMult;
+    let activeAtk = h.atk * m.dmgMult * (empowered ? 1.3 : 1);
     for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) activeAtk *= 1 + h.buffs[i].atk;
     const perHit = activeAtk / (m.hits || 1);
     for (let k = 0; k < (m.hits || 1); k++) {
@@ -1411,6 +1432,29 @@ export default function KnightsApp() {
                 <div className="knights-move-desc">{moves.magic.description}</div>
               </div>
             </div>
+            {(() => {
+              const lvNow = levelFromXp((save.heroXp || {})[chosenHeroId] || 0).level;
+              const st = statsFor(heroDef, lvNow, save.upgrades);
+              return (
+                <>
+                  <div className="kn-hero-stats">
+                    LV {lvNow} · HP <b>{st.hpMax}</b> · ATK <b>{st.atk}</b> ·
+                    <span style={{ color: ELEMENTS[heroDef.el].color }}> {ELEMENTS[heroDef.el].zh} {ELEMENTS[heroDef.el].name}</span>
+                  </div>
+                  <div className="kn-skill-track">
+                    {SKILLS.map(sk => {
+                      const got = lvNow >= sk.lv;
+                      return (
+                        <div key={sk.id} className={`kn-skill-chip ${got ? 'got' : ''}`} title={sk.desc}>
+                          <span className="kn-skill-lv">{got ? '✓' : `LV${sk.lv}`}</span>
+                          <span className="kn-skill-zh">{sk.zh}</span> {sk.name}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           <h3 style={{ marginTop: 16 }}>Choose Your Stage</h3>
@@ -1776,13 +1820,18 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
           <div className="knights-skill-name">{moves.magic.name}</div>
           <div className="knights-skill-cost">−{Math.round(moves.magic.cost * 100)}% HP</div>
         </div>
-        {moves.combo.map((m, i) => (
-          <div key={i} className="knights-skill-card" style={{ borderColor: i === (h.comboStep || 0) % moves.combo.length ? '#ffd676' : '' }}>
-            <div className="knights-skill-num">{i + 1}</div>
-            <div className="knights-skill-name">{m.name}</div>
-            <div className="knights-skill-cost">×{m.dmgMult.toFixed(1)}</div>
-          </div>
-        ))}
+        {moves.combo.map((m, i) => {
+          const locked = i === 3 && !(g.skills && g.skills.combo4);
+          const comboLen = g.skills && g.skills.combo4 ? moves.combo.length : 3;
+          return (
+            <div key={i} className={`knights-skill-card ${locked ? 'kn-locked' : ''}`}
+              style={{ borderColor: !locked && i === (h.comboStep || 0) % comboLen ? '#ffd676' : '' }}>
+              <div className="knights-skill-num">{locked ? '🔒' : i + 1}</div>
+              <div className="knights-skill-name">{locked ? 'LV 7' : m.name}</div>
+              <div className="knights-skill-cost">{locked ? '第四式' : `×${m.dmgMult.toFixed(1)}`}</div>
+            </div>
+          );
+        })}
       </div>
 
       {showHowTo && (

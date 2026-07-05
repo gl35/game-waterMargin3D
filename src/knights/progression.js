@@ -43,3 +43,26 @@ export function statsFor(heroDef, level, upgrades) {
 }
 
 export const fortuneMult = (upgrades) => 1 + 0.2 * ((upgrades && upgrades.fortune) || 0);
+
+// ── 仙术 Skill milestones ──
+// Levels don't just add stats — they unlock arts. New heroes start with the
+// 3-hit combo and their special; the rest is earned.
+export const SKILLS = [
+  { id: 'dashAttack', lv: 3,  zh: '疾風斬', name: 'Gale Cut',
+    desc: 'Attack while dashing for a charging strike' },
+  { id: 'jumpAttack', lv: 5,  zh: '飛燕落', name: 'Falling Swallow',
+    desc: 'Attack in mid-air for a diving blow' },
+  { id: 'combo4',     lv: 7,  zh: '第四式', name: 'Fourth Form',
+    desc: 'Extends the combo chain to a heavy 4th finisher' },
+  { id: 'empower',    lv: 10, zh: '仙術精通', name: 'Arcane Mastery',
+    desc: 'Special deals +30% damage and costs less HP' },
+  { id: 'crit',       lv: 14, zh: '會心', name: 'Vital Eye',
+    desc: 'Critical strike chance nearly doubles' },
+];
+
+// Set of skill ids available at a level.
+export function skillsFor(level) {
+  const s = {};
+  for (const sk of SKILLS) if (level >= sk.lv) s[sk.id] = true;
+  return s;
+}

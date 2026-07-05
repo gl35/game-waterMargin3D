@@ -108,6 +108,47 @@ export const STAGES = [
     ],
     rewards: { coin: 360, xp: 620 },
   },
+  // ── Crossover chapter: Dream of the Red Chamber (红楼梦) ──
+  // After Gaotang the hero falls asleep at the victory feast and wanders
+  // into the Land of Illusion. Garden NPCs (Jia Baoyu, Lin Daiyu) speak when
+  // approached; the Precious Mirror of Romance spills phantoms; the final
+  // trial is the hero's own reflection.
+  {
+    id: 'red_chamber', chapter: 4, theme: 'dream',
+    name: 'Dream of the Red Chamber', width: 6000,
+    mission: 'Shatter the twin Mirrors of Romance',
+    objective: { text: 'Shatter the Mirrors of Romance', max: 2 },
+    bg: {},
+    intro: 'The wine was strong. The dream is stronger.',
+    barrels: [500, 1200, 1900, 2600, 3300, 4000, 4700, 5400],
+    npcs: [
+      { sprite: 'npc/zhengtianshou', name: 'Jia Baoyu', x: 860, z: 150, color: '#9cc8ff',
+        line: 'Steel, in the Land of Illusion? How vigorous. Sister Lin will want to see this.' },
+      { sprite: 'npc/sunerniang', name: 'Lin Daiyu', x: 1935, z: 165, color: '#ffb0cc', petals: true,
+        line: 'I bury petals, not men. Mind where your boots fall, outlaw.' },
+    ],
+    waves: [
+      { atX: 600,  spawns: [['scout', 4]],
+        bark: { who: 'enemy', text: 'You do not belong in this dream, star of violence.' } },
+      { atX: 1300, spawns: [['raider', 2], ['archer', 2]] },
+      { atX: 2000, spawns: [['archer', 2], ['scout', 2]],
+        mirror: { hp: 420, name: '風月寶鑑 · Mirror of Romance' },
+        bark: { who: 'hero', text: 'A mirror that bleeds shadows. Then it can bleed.' } },
+      { atX: 2700, spawns: [['brute', 2], ['halberd', 2]] },
+      { atX: 3400, spawns: [['scout', 3], ['archer', 2]],
+        bark: { who: 'enemy', text: 'Stay, brother. Sleep. The garden keeps all who dream.' } },
+      { atX: 4200, spawns: [['brute', 1], ['halberd', 2]],
+        mirror: { hp: 480, name: '風月寶鑑 · Mirror of Romance' } },
+      { atX: 4900, spawns: [['halberd', 3], ['brute', 2]] },
+      { atX: 5600, boss: 'phantom', intro: 'The last mirror does not break. It steps out.',
+        dialog: [
+          { who: 'npc', name: '警幻仙姑 Jing Huan', text: 'Mortal star. The Mirror shows what you are. Defeat yourself, or dream here forever.' },
+          { who: 'boss', text: 'I am the you that never left the mountain.' },
+          { who: 'hero', text: 'Then you already know how this ends.' },
+        ] },
+    ],
+    rewards: { coin: 500, xp: 900 },
+  },
 ];
 
 export const getStage = (id) => STAGES.find(s => s.id === id) || STAGES[0];

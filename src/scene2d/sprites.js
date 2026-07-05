@@ -182,6 +182,7 @@ const TARGET_HEIGHT = {
   'npc/qinming': 160, 'npc/dongping': 152, 'npc/sunerniang': 148,
   'npc/zhutong': 158, 'npc/xuning': 152, 'npc/liutang': 150,
   'npc/zhangshun': 148, 'npc/shixiu': 148, 'npc/baisheng': 140,
+  'npc/zhengtianshou': 150,
   'enemy/raider': 140, 'enemy/scout': 130, 'enemy/captain': 190,
   'enemy/berserker': 155, 'enemy/guard': 150, 'enemy/archer': 135,
   'enemy/warlord': 230,

@@ -28,6 +28,11 @@ export const ENEMIES = {
     hp: 3400, atk: 38, moveSpeed: 70, atkRange: 480, atkCooldown: 1.3,
     projectileSpeed: 300, width: 96, height: 140, color: '#629',
     ai: 'boss-kite', boss: true, xp: 220 },
+  // Red Chamber crossover boss — the Mirror of Romance walking out wearing
+  // YOUR shape. Sprite is overridden at spawn to the chosen hero's art.
+  phantom:   { name: 'Mirror Self',    sprite: 'npc/songjiang',   drop: 'boss',
+    hp: 3200, atk: 40, moveSpeed: 155, atkRange: 110, atkCooldown: 0.9,
+    width: 64, height: 104, color: '#c8b0e8', ai: 'boss', boss: true, xp: 260 },
 };
 
 let _eid = 0;

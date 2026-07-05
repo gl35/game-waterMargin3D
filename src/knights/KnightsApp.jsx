@@ -172,6 +172,21 @@ export default function KnightsApp() {
       size: 1 + Math.random() * 1.7, color: Math.random() < 0.5 ? '#ff9a4a' : '#ffcf7a', grav: false,
     });
   }
+  // Falling blossom for the Red Chamber dream (drifts DOWN, swaying)
+  const PETAL_COLORS = ['#ffc8dc', '#ffb0cc', '#ffe0ea'];
+  function spawnPetal(g, x, z, startY) {
+    g.particles.push({
+      kind: 'petal',
+      x: x !== undefined ? x : g.camX + Math.random() * window.innerWidth,
+      z: z !== undefined ? z : Z_MIN + Math.random() * (Z_MAX - Z_MIN),
+      y: startY !== undefined ? startY : 190 + Math.random() * 110,
+      vx: (Math.random() * 2 - 1) * 26, vy: -(24 + Math.random() * 18), vz: 0,
+      life: 7 + Math.random() * 5, max: 12,
+      size: 3 + Math.random() * 2.5,
+      color: PETAL_COLORS[(Math.random() * 3) | 0],
+      rot: Math.random() * Math.PI, vr: (Math.random() * 2 - 1) * 2.2, grav: false,
+    });
+  }
 
   function startStage(id, heroId) {
     const stage = getStage(id);
@@ -203,6 +218,17 @@ export default function KnightsApp() {
     };
     gameRef.current = g;
     window.__KN = g; // debug/test hook
+    // Ambient story NPCs (Red Chamber garden figures) — they stand in the
+    // world and speak when the hero comes near.
+    if (stage.npcs) {
+      for (const n of stage.npcs) {
+        g.actors.push({
+          sprite: n.sprite, name: n.name, x: n.x, z: n.z,
+          vx: 0, y: 0, vy: 0, t: Math.random() * 6, dur: 1e9,
+          static: true, line: n.line, color: n.color, petals: !!n.petals, spoken: false,
+        });
+      }
+    }
     pushBanner(g, stage.name, 1.6);
     if (heroDef.opening) pushSpeech(g, 'hero', heroDef.name, heroDef.opening, { delay: 1.2 });
     sfxBanner();
@@ -222,19 +248,32 @@ export default function KnightsApp() {
     let lastEnemy = null;
     if (wave.boss) {
       const e = makeEnemy(wave.boss, 1 + Math.floor((g.stage.chapter || 1) * 0.5));
+      // The Red Chamber phantom is the hero's own reflection stepping out
+      // of the mirror — it wears the chosen hero's sprite.
+      if (wave.boss === 'phantom') {
+        e.sprite = g.heroDef.sprite;
+        e.name = `Mirror ${g.heroDef.name}`;
+      }
       e.x = lockX + window.innerWidth * 0.45;
       e.z = (Z_MIN + Z_MAX) / 2;
       e.facing = -1;
       g.enemies.push(e);
       lastEnemy = e;
       pushBanner(g, wave.intro || 'A boss arrives.', 2.0);
-      // Boss confrontation — an exchange of speech bubbles
+      // Boss confrontation — an exchange of speech bubbles. who:'npc' lines
+      // come from an unseen presence (a voice in the dream).
       if (wave.dialog) {
         wave.dialog.forEach((ln, di) => {
-          const isBoss = ln.who === 'boss';
-          pushSpeech(g, isBoss ? { kind: 'enemy', id: e.id } : 'hero',
-            isBoss ? e.name : g.heroDef.name, ln.text,
-            { delay: 0.8 + di * 2.5, dur: 2.4, color: isBoss ? '#ff9c7a' : '#ffd676' });
+          const delay = 0.8 + di * 2.5;
+          if (ln.who === 'npc') {
+            pushSpeech(g, { x: wave.atX + 220, z: 30 }, ln.name || '???', ln.text,
+              { delay, dur: 2.6, color: '#c9a0ff' });
+          } else {
+            const isBoss = ln.who === 'boss';
+            pushSpeech(g, isBoss ? { kind: 'enemy', id: e.id } : 'hero',
+              isBoss ? e.name : g.heroDef.name, ln.text,
+              { delay, dur: 2.4, color: isBoss ? '#ff9c7a' : '#ffd676' });
+          }
         });
       }
     } else {
@@ -242,15 +281,21 @@ export default function KnightsApp() {
       for (const [type, count] of wave.spawns) {
         for (let n = 0; n < count; n++) {
           const e = makeEnemy(type, g.stage.chapter || 1);
-          // A gate blocks the right edge — its defenders all come from the left.
-          const side = wave.gate ? -0.6 : ((i + n) % 2 === 0 ? 1 : -0.6);
-          // Far-side spawns enter just past the lock edge (not half a screen
-          // beyond it) so they reach the arena in a beat, not ten seconds.
-          e.x = side > 0
-            ? lockX + window.innerWidth * (0.08 + Math.random() * 0.12)
-            : lockX - window.innerWidth * 0.25 - Math.random() * 80;
+          // A gate blocks the right edge — its defenders all come from the
+          // left. Mirror phantoms pour straight OUT of the glass.
+          const side = (wave.gate || wave.mirror) ? -0.6 : ((i + n) % 2 === 0 ? 1 : -0.6);
+          if (wave.mirror) {
+            e.x = lockX - 50 - Math.random() * 70;
+            e.facing = -1;
+          } else {
+            // Far-side spawns enter just past the lock edge (not half a screen
+            // beyond it) so they reach the arena in a beat, not ten seconds.
+            e.x = side > 0
+              ? lockX + window.innerWidth * (0.08 + Math.random() * 0.12)
+              : lockX - window.innerWidth * 0.25 - Math.random() * 80;
+            e.facing = side > 0 ? -1 : 1;
+          }
           e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
-          e.facing = side > 0 ? -1 : 1;
           g.enemies.push(e);
           lastEnemy = e;
           i++;
@@ -269,6 +314,13 @@ export default function KnightsApp() {
     if (wave.gate) {
       g.gate = {
         x: lockX, hp: wave.gate.hp, hpMax: wave.gate.hp, name: wave.gate.name,
+        broken: false, hitT: 0, waveIdx: g.waveIdx,
+      };
+    }
+    if (wave.mirror) {
+      g.gate = {
+        kind: 'mirror',
+        x: lockX, hp: wave.mirror.hp, hpMax: wave.mirror.hp, name: wave.mirror.name,
         broken: false, hitT: 0, waveIdx: g.waveIdx,
       };
     }
@@ -345,11 +397,21 @@ export default function KnightsApp() {
     g.objCur++;
     addShake(g, 0.65);
     g.zoom = Math.max(g.zoom || 1, 1.07);
-    spawnDebris(g, gt.x - 20, 50, 16, '#5a3d22');
-    spawnDebris(g, gt.x - 20, 150, 14, '#3a2a18');
-    spawnDust(g, gt.x - 30, 100, 8);
-    sfxKill();
-    pushBanner(g, 'The gate is breached!', 2.0);
+    if (gt.kind === 'mirror') {
+      // the glass rings apart — pale shards, a white flash
+      g.vfx.push({ kind: 'flash', dur: 0.35, t: 0, world: false, x: 0, y: 0 });
+      spawnDebris(g, gt.x - 10, 80, 14, '#dfe8f2');
+      spawnDebris(g, gt.x - 10, 130, 12, '#b8cadd');
+      spawnSpark(g, gt.x - 10, 110, 16, '#e8f0ff');
+      sfxCrit();
+      pushBanner(g, 'The mirror shatters!', 2.0);
+    } else {
+      spawnDebris(g, gt.x - 20, 50, 16, '#5a3d22');
+      spawnDebris(g, gt.x - 20, 150, 14, '#3a2a18');
+      spawnDust(g, gt.x - 30, 100, 8);
+      sfxKill();
+      pushBanner(g, 'The gate is breached!', 2.0);
+    }
     sfxBanner();
   }
 
@@ -961,10 +1023,21 @@ export default function KnightsApp() {
     }
     if (g.gate && g.gate.hitT > 0) g.gate.hitT -= dt;
 
-    // Freed captives: leap from the cage, then scamper off trailing dust
+    // Actors: freed captives scamper off; static garden NPCs stand, speak
+    // when approached, and (Daiyu) shed petals.
     for (let i = 0; i < g.actors.length; i++) {
       const a = g.actors[i];
       a.t += dt;
+      if (a.static) {
+        if (!a.spoken && Math.abs(h.x - a.x) < 170 && Math.abs(h.z - a.z) < 90) {
+          a.spoken = true;
+          pushSpeech(g, { x: a.x, z: a.z }, a.name, a.line, { delay: 0.15, dur: 3.4, color: a.color });
+        }
+        if (a.petals && Math.random() < dt * 2 && g.particles.length < 280) {
+          spawnPetal(g, a.x + (Math.random() * 2 - 1) * 50, a.z, 60 + Math.random() * 60);
+        }
+        continue;
+      }
       if (a.vy !== 0 || a.y > 0) {           // the escape hop
         a.y += a.vy * dt;
         a.vy -= GRAVITY * 0.8 * dt;
@@ -1032,11 +1105,13 @@ export default function KnightsApp() {
     }
     compact(g.particles, p => p.life > 0);
 
-    // Ambient embers drifting up from the burning valley
+    // Ambient atmosphere: embers over the war-torn valleys, falling
+    // blossoms in the Land of Illusion.
     g.emberT -= dt;
     if (g.emberT <= 0 && g.particles.length < 200) {
       g.emberT = 0.16 + Math.random() * 0.22;
-      spawnEmber(g);
+      if (g.stage.theme === 'dream') spawnPetal(g);
+      else spawnEmber(g);
     }
 
     // Screen-shake + zoom-punch + combo-counter decay
@@ -1056,7 +1131,7 @@ export default function KnightsApp() {
           const c = g.cages.find(cg => cg.waveIdx === g.waveIdx);
           if (c && !c.broken) objDone = false;
         }
-        if (wv.gate && g.gate && !g.gate.broken) objDone = false;
+        if ((wv.gate || wv.mirror) && g.gate && !g.gate.broken) objDone = false;
         if (wv.defend && g.ritual && g.ritual.active) objDone = false;
       }
       if (alive === 0 && objDone) {

@@ -54,14 +54,29 @@ export const STORY = {
     ],
     outro: [
       'The conjured mist tears apart under the Five-Thunder seal. Gao Lian falls, and Chai Jin rises from the pit alive.',
-      'Three roads, three victories — and the Stars of Destiny now burn together over Liangshan Marsh.',
+      'Three roads, three victories. At the victory feast the wine is strong — and somewhere between the third cup and the fourth, the world goes soft as silk...',
+    ],
+  },
+  // ── Crossover: 红楼梦 Dream of the Red Chamber ──
+  red_chamber: {
+    chapter: 'Chapter Four · Crossover',
+    titleZh: '太虚幻境',
+    title: 'The Land of Illusion',
+    intro: [
+      'You wake in a garden that no map of Shandong has ever shown: covered walks, jade pools, pavilions of a great house — and petals falling out of a moonlit sky.',
+      'This is the Land of Illusion, where another book is being written. A pale young gentleman watches you with amusement; a girl buries fallen blossoms and does not look up.',
+      'The goddess Jing Huan keeps a mirror here — 風月寶鑑, the Precious Mirror of Romance. Whatever looks into it walks out wearing your shadow. Shatter the mirrors, outlaw, or the dream keeps you.',
+    ],
+    outro: [
+      'The last shard rings like a temple bell. Your reflection bows — and scatters into petals.',
+      'You wake at the Liangshan feast, a cup still warm in your hand. In your sleeve: one pink petal that did not stay behind in the dream.',
     ],
   },
 };
 
 export const FINALE_LINES = [
-  'The chronicle of the Water Margin has only begun.',
-  '替天行道 — the Way is carried out.',
+  'Two books touched for a single night, and both kept a page of the other.',
+  'The chronicle of the Water Margin has only begun. 替天行道 — the Way is carried out.',
 ];
 
 export const getStory = (id) => STORY[id] || STORY.mountain_pass;

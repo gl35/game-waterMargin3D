@@ -41,6 +41,14 @@ const THEMES = {
     orb: { x: 0.26, y: 0.16, r: 42, c1: 'rgba(200,255,215,0.75)', c2: 'rgba(140,220,170,0.16)' },
     mist: true,             // drifting fog bands over the floor
   },
+  dream: {                  // 红楼梦 crossover — the Land of Illusion
+    sky: ['#251b40', '#5a3f6e', '#b87e96'],
+    ground: ['#5c4660', '#4a3850', '#362a40', '#221a2c'],
+    mts: ['#68557f', '#52426a', '#3d3156'],
+    orb: { x: 0.5, y: 0.13, r: 56, c1: 'rgba(255,244,252,0.95)', c2: 'rgba(240,200,225,0.28)' },
+    mist: true,
+    ghost: true,            // enemies are dream-phantoms: translucent + jade aura
+  },
 };
 
 // Attack thrust envelope: p in [0,1] across the move's duration.
@@ -181,6 +189,20 @@ export function createRenderer(canvas, themeName = 'dusk') {
     // ground PNG either — same reason.
     ctx.fillStyle = groundGrad;
     ctx.fillRect(-M, horizonY, w + 2 * M, h - horizonY + M);
+  }
+
+  // Dream-phantom aura: a soft jade glow drawn behind ghostly enemies.
+  let ghostGlow = null;
+  function ensureGhostGlow() {
+    if (ghostGlow || !theme.ghost) return;
+    ghostGlow = offscreen(120, 150);
+    const gc = ghostGlow.getContext('2d');
+    const gr = gc.createRadialGradient(60, 75, 8, 60, 75, 72);
+    gr.addColorStop(0, 'rgba(150,255,215,0.30)');
+    gr.addColorStop(0.6, 'rgba(150,235,215,0.12)');
+    gr.addColorStop(1, 'rgba(150,235,215,0)');
+    gc.fillStyle = gr;
+    gc.fillRect(0, 0, 120, 150);
   }
 
   // Sorcerous fog: translucent bands drifting across the floor (mist theme).
@@ -415,7 +437,20 @@ export function createRenderer(canvas, themeName = 'dusk') {
     const footY = fy - bob;
     drawShadow(sx, fy, e.width || 56, 1 - Math.min(0.6, lift / 200));
 
-    const drew = drawPosed(e.sprite, sx, footY, { flip, lean, lungeX, scaleX, scaleY, lift, scale });
+    // Dream theme: enemies are phantoms — jade aura + slight translucency
+    if (theme.ghost) {
+      ensureGhostGlow();
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(ghostGlow, sx + lungeX - 60, footY - lift - charH * scale + 8,
+        120, charH * scale + 16);
+      ctx.restore();
+    }
+
+    const drew = drawPosed(e.sprite, sx, footY, {
+      flip, lean, lungeX, scaleX, scaleY, lift, scale,
+      alpha: theme.ghost ? 0.88 : 1,
+    });
     if (!drew) {
       const w = e.width || 56, hh = charH;
       const bx = sx + lungeX, by = footY - lift;
@@ -705,15 +740,29 @@ export function createRenderer(canvas, themeName = 'dusk') {
         ctx.arc(sx, fy, p.size, 0, Math.PI * 2);
         ctx.fill();
         break;
+      case 'petal': {
+        // falling blossom — a small rotating ellipse
+        ctx.globalAlpha = Math.min(1, lifeK * 2) * 0.85;
+        ctx.save();
+        ctx.translate(sx, fy);
+        ctx.rotate(p.rot || 0);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.size, p.size * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        break;
+      }
     }
   }
 
-  // Ground-hugging particles (dust, wood debris) — drawn behind characters.
+  // Ground-hugging particles (dust, wood debris, falling petals) — drawn
+  // behind characters.
   function drawGroundParticles(g) {
     const camX = g.camX;
     for (let i = 0; i < g.particles.length; i++) {
       const p = g.particles[i];
-      if (p.kind === 'dust' || p.kind === 'debris') drawParticle(p, camX);
+      if (p.kind === 'dust' || p.kind === 'debris' || p.kind === 'petal') drawParticle(p, camX);
     }
     ctx.globalAlpha = 1;
   }
@@ -775,6 +824,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
   }
 
   function drawGate(gt, camX, time) {
+    if (gt.kind === 'mirror') { drawMirror(gt, camX, time); return; }
     const sx = gt.x - camX;
     if (sx < -160 || sx > cssW + 160) return;
     const baseY = floorYFromZ(Z_MAX) + 8;
@@ -844,6 +894,76 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
   }
 
+  // 風月寶鑑 — a standing oval mirror that spills phantoms until shattered.
+  function drawMirror(gt, camX, time) {
+    const sx = gt.x - camX;
+    if (sx < -160 || sx > cssW + 160) return;
+    const fy = floorYFromZ(120);
+    const shake = gt.hitT > 0 ? Math.sin(gt.hitT * 80) * 4 * Math.min(1, gt.hitT / 0.2) : 0;
+    const rw = 52, rh = 96;                      // mirror radii
+    const cy = fy - rh - 26;
+    drawShadow(sx, fy, 70);
+    ctx.save();
+    ctx.translate(sx + shake, cy);
+    // stand legs
+    ctx.strokeStyle = '#6a5230';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(-rw * 0.7, rh + 24); ctx.lineTo(0, rh - 10);
+    ctx.moveTo(rw * 0.7, rh + 24); ctx.lineTo(0, rh - 10);
+    ctx.stroke();
+    // gold frame
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#c9a23a';
+    ctx.beginPath(); ctx.ellipse(0, 0, rw + 6, rh + 6, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#8a6a20';
+    ctx.beginPath(); ctx.ellipse(0, 0, rw + 11, rh + 11, 0, 0, Math.PI * 2); ctx.stroke();
+    // glass — pale, with a slow moving glint
+    ctx.fillStyle = 'rgba(190,210,225,0.85)';
+    ctx.beginPath(); ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2); ctx.clip();
+    const gx = ((time * 40) % (rw * 4)) - rw * 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(gx - 20, -rh); ctx.lineTo(gx + 30, rh); ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(gx + 18, -rh); ctx.lineTo(gx + 68, rh); ctx.stroke();
+    // a dark silhouette stirs inside the glass
+    ctx.fillStyle = 'rgba(60,40,80,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(Math.sin(time * 1.4) * 10, rh * 0.25, 16, 34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // damage cracks radiating from center
+    const hurt = 1 - gt.hp / gt.hpMax;
+    if (hurt > 0.12) {
+      ctx.strokeStyle = 'rgba(30,20,40,0.9)';
+      ctx.lineWidth = 2;
+      const cracks = Math.min(7, Math.floor(hurt * 8));
+      for (let i = 0; i < cracks; i++) {
+        const ang = (i / 7) * Math.PI * 2 + 0.4;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ang) * 6, Math.sin(ang) * 10);
+        ctx.lineTo(Math.cos(ang) * rw * 0.55, Math.sin(ang) * rh * 0.55);
+        ctx.lineTo(Math.cos(ang + 0.18) * rw * 0.85, Math.sin(ang + 0.18) * rh * 0.85);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+    // HP bar + name
+    const bw = 130;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(sx - bw / 2 - 1, cy - rh - 34, bw + 2, 9);
+    ctx.fillStyle = '#b48cff';
+    ctx.fillRect(sx - bw / 2, cy - rh - 33, bw * Math.max(0, gt.hp / gt.hpMax), 7);
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e8d8ff';
+    ctx.fillText(gt.name, sx, cy - rh - 40);
+  }
+
   function drawRitual(r, camX, time) {
     const sx = r.x - camX;
     const fy = floorYFromZ(r.z);
@@ -896,9 +1016,19 @@ export function createRenderer(canvas, themeName = 'dusk') {
     drawShadow(sx, fy, 44, 1 - Math.min(0.6, (a.y || 0) / 160));
     drawPosed(a.sprite, sx, fy, {
       flip: a.vx < 0, lift: a.y || 0,
-      lean: Math.sin(a.t * 9) * 0.08,       // scampering wobble
-      scale: 0.9, alpha: a.alpha == null ? 1 : a.alpha,
+      // static garden NPCs breathe gently; freed captives scamper-wobble
+      lean: a.static ? Math.sin(a.t * 1.6) * 0.025 : Math.sin(a.t * 9) * 0.08,
+      scale: a.static ? 1 : 0.9, alpha: a.alpha == null ? 1 : a.alpha,
     });
+    if (a.static && a.name) {
+      ctx.font = 'bold 11px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      const nw = ctx.measureText(a.name).width + 12;
+      ctx.fillRect(sx - nw / 2, fy - 172, nw, 15);
+      ctx.fillStyle = a.color || '#ffd676';
+      ctx.fillText(a.name, sx, fy - 161);
+    }
   }
 
   // ── In-world speech bubbles ──

@@ -9,6 +9,7 @@ import { STAGES, getStage } from './stages.js';
 import { ENEMIES, makeEnemy } from './enemies.js';
 import { STORY, getStory, PROLOGUE_LINES, FINALE_LINES } from './story.js';
 import { levelFromXp, statsFor, fortuneMult, UPGRADES, SKILLS, skillsFor } from './progression.js';
+import { RELICS, relicByBoss, relicById } from './relics.js';
 import {
   ELEMENTS, ELEMENT_KEYS, elementMult, charmDealt, charmTaken,
   SPIRITS_PER_FUSE, SPIRIT_CHANCE, CHARM_MAX_TIER,
@@ -32,6 +33,8 @@ function loadSave() {
   if (!s.upgrades) s.upgrades = { atk: 0, hp: 0, fortune: 0 };
   if (!s.pot) s.pot = {};          // 炼妖壶 spirits, keyed by element
   if (!s.charms) s.charms = {};    // fused charm tiers, keyed by element
+  if (!s.relics) s.relics = {};    // owned boss relics, keyed by relic id
+  if (!s.relicEq) s.relicEq = {};  // equipped relic per hero id
   return s;
 }
 function persistSave(s) {
@@ -208,6 +211,11 @@ export default function KnightsApp() {
     const persistedXp = (save.heroXp && save.heroXp[heroId]) || 0;
     const lv = levelFromXp(persistedXp);
     const hero = makeHero(heroDef, lv.level, save.upgrades);
+    // Equipped boss relic bends the hero's numbers
+    const relic = relicById((save.relicEq || {})[heroId]);
+    const ef = (relic && save.relics[relic.id] && relic.effects) || {};
+    if (ef.atkPct) hero.atk = Math.round(hero.atk * (1 + ef.atkPct));
+    if (ef.hpPct) { hero.hpMax = Math.round(hero.hpMax * (1 + ef.hpPct)); hero.hp = hero.hpMax; }
     const barrels = (stage.barrels || []).map((bx, i) => ({
       id: 'b' + i, x: bx, z: Z_MIN + 30 + (i % 3) * 60, broken: false,
     }));
@@ -236,7 +244,14 @@ export default function KnightsApp() {
       charms: { ...(save.charms || {}) },
       potGained: {},                 // spirits refined this run
       skills: skillsFor(lv.level),   // 仙术 arts unlocked at this level
-      critChance: lv.level >= 14 ? 0.15 : 0.08,
+      critChance: (lv.level >= 14 ? 0.15 : 0.08) + (ef.critAdd || 0),
+      // relic modifiers
+      relicCritAdd: ef.critAdd || 0,
+      relicTaken: ef.takenMult || 1,
+      relicSpCost: ef.spCostMult || 1,
+      relicSpDmg: ef.spDmgMult || 1,
+      relicMinEl: ef.minElementMult || 0,
+      relicGained: null,
       _ended: false,
       _drawList: [],
     };
@@ -408,7 +423,7 @@ export default function KnightsApp() {
       }
     }
     g.skills = skillsFor(lv.level);
-    g.critChance = lv.level >= 14 ? 0.15 : 0.08;
+    g.critChance = (lv.level >= 14 ? 0.15 : 0.08) + (g.relicCritAdd || 0);
     const hpGain = ns.hpMax - h.hpMax;
     h.hpMax = ns.hpMax;
     h.atk = ns.atk;
@@ -512,8 +527,10 @@ export default function KnightsApp() {
   function damageEnemy(g, e, amount, opts) {
     if (e.dead) return 0;
     const isCrit = opts && opts.crit !== undefined ? opts.crit : Math.random() < (g.critChance || 0.08);
-    // 五行相剋 — the five-phase cycle bends every hit, plus fused charms
-    const em = elementMult(g.hero.el, e.el);
+    // 五行相剋 — the five-phase cycle bends every hit, plus fused charms.
+    // The Mirror Shard relic keeps strikes from ever being resisted.
+    let em = elementMult(g.hero.el, e.el);
+    if (g.relicMinEl && em < g.relicMinEl) em = g.relicMinEl;
     const dmg = Math.round(amount * em * charmDealt(g.charms, e.el) * (isCrit ? 1.8 : 1));
     e.hp -= dmg;
     e.hitFlash = 0.35;
@@ -574,6 +591,24 @@ export default function KnightsApp() {
       sfxKill();
       const dropKey = rollDrop(e.drop);
       if (dropKey) dropItem(g, e.x, e.z, dropKey);
+      // 寶物 — a boss guards its relic: guaranteed on the first kill,
+      // a coin bounty on repeats
+      if (e.boss) {
+        const relic = relicByBoss(e.typeId);
+        if (relic && !save.relics[relic.id]) {
+          g.relicGained = relic.id;
+          pushBanner(g, `寶物 ${relic.zh} — ${relic.name} obtained!`, 2.6, 32);
+          g.vfx.push({
+            kind: 'damageNumber', x: e.x, z: e.z, text: `寶 ${relic.zh}`,
+            effColor: '#ffd676', dur: 1.6, t: 0, world: true, yOff: -140,
+          });
+          spawnSpark(g, e.x, e.z, 26, '#ffe6a0');
+          sfxBanner();
+        } else if (relic) {
+          g.hero.coins += 150;
+          pushDamage(g, e.x, e.z, 150, false, true);
+        }
+      }
     }
     return dmg;
   }
@@ -581,7 +616,7 @@ export default function KnightsApp() {
   function damageHero(g, amount, atkEl = null) {
     const h = g.hero;
     if (h.invuln > 0) return 0;
-    amount = Math.round(amount * elementMult(atkEl, h.el) * charmTaken(g.charms, atkEl));
+    amount = Math.round(amount * elementMult(atkEl, h.el) * charmTaken(g.charms, atkEl) * (g.relicTaken || 1));
     h.hp -= amount;
     h.hitFlash = 0.4;
     h.invuln = 0.55;
@@ -757,7 +792,7 @@ export default function KnightsApp() {
     const m = g.heroKit.magic;
     // 仙術精通 (LV10): specials hit harder and cost less HP
     const empowered = g.skills.empower;
-    const cost = Math.round(h.hpMax * Math.max(0.04, (m.cost || 0.10) - (empowered ? 0.02 : 0)));
+    const cost = Math.round(h.hpMax * Math.max(0.04, (m.cost || 0.10) - (empowered ? 0.02 : 0)) * (g.relicSpCost || 1));
     if (h.hp <= cost + 1) return;          // refuse if would suicide
     h.hp -= cost;
     h.attacking = 0.45;
@@ -780,7 +815,7 @@ export default function KnightsApp() {
       color: m.color, dur: 0.9, t: 0, world: true,
       seed: g.time * 100 | 0,
     });
-    let activeAtk = h.atk * m.dmgMult * (empowered ? 1.3 : 1);
+    let activeAtk = h.atk * m.dmgMult * (empowered ? 1.3 : 1) * (g.relicSpDmg || 1);
     for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) activeAtk *= 1 + h.buffs[i].atk;
     const perHit = activeAtk / (m.hits || 1);
     for (let k = 0; k < (m.hits || 1); k++) {
@@ -1277,8 +1312,9 @@ export default function KnightsApp() {
         } else if (g.stageComplete && !g._ended) {
           g._ended = true;
           const next = nextStageId(g.stageId);
-          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot } };
+          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot }, relics: { ...save.relics } };
           for (const k of Object.keys(g.potGained)) s.pot[k] = (s.pot[k] || 0) + g.potGained[k];
+          if (g.relicGained) s.relics[g.relicGained] = true;
           // kill XP/coins were fortune-boosted as they dropped; only the
           // stage-clear bonus still needs the multiplier
           const totalCoins = Math.round((g.stage.rewards?.coin || 0) * g.fortune) + g.hero.coins;
@@ -1291,7 +1327,8 @@ export default function KnightsApp() {
           const lvAfter = levelFromXp(s.heroXp[chosenHeroId]).level;
           setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
             coins: totalCoins, xp: totalXp, score: g.score, cleared: true, nextId: next,
-            level: lvAfter, levelsGained: lvAfter - g.startLevel });
+            level: lvAfter, levelsGained: lvAfter - g.startLevel,
+            relic: g.relicGained ? relicById(g.relicGained) : null });
           setScreen('reward');
         }
       }
@@ -1533,6 +1570,33 @@ export default function KnightsApp() {
             })}
           </div>
 
+          <h3 style={{ marginTop: 16 }}>寶物 · Relics</h3>
+          <p className="kn-pot-hint">Each boss guards a relic — guaranteed the first time you fell them. Tap an owned relic to equip it for {heroDef.name}.</p>
+          <div className="kn-relic-grid">
+            {RELICS.map(r => {
+              const owned = !!(save.relics || {})[r.id];
+              const equipped = (save.relicEq || {})[chosenHeroId] === r.id;
+              return (
+                <button key={r.id}
+                  className={`kn-relic-card ${owned ? '' : 'unknown'} ${equipped ? 'eq' : ''}`}
+                  disabled={!owned}
+                  onClick={() => {
+                    sfxClick();
+                    const s = { ...save, relicEq: { ...save.relicEq } };
+                    s.relicEq[chosenHeroId] = equipped ? null : r.id;
+                    persistSave(s); setSave(s);
+                  }}>
+                  <div className="kn-relic-zh">{owned ? r.zh : '？'}</div>
+                  <div className="kn-relic-meta">
+                    <div className="kn-relic-name">{owned ? r.name : 'Unclaimed relic'}</div>
+                    <div className="kn-relic-desc">{owned ? r.desc : `Guarded by the Round ${RELICS.indexOf(r) + 1} boss`}</div>
+                  </div>
+                  {equipped && <div className="kn-relic-eqtag">EQUIPPED</div>}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="knights-row" style={{ marginTop: 18, gap: 16 }}>
             <button className="knights-btn" onClick={() => { sfxClick(); setScreen('title'); }}>Back</button>
             <button className="knights-btn primary" onClick={() => { sfxClick(); setScreen('story'); }}>
@@ -1593,6 +1657,9 @@ export default function KnightsApp() {
             <div>Level: <b>LV {endStats.level}</b>
               {endStats.levelsGained > 0 && <span className="kn-lv-up"> ▲ {endStats.levelsGained} level{endStats.levelsGained > 1 ? 's' : ''} gained!</span>}
             </div>
+            {endStats.relic && (
+              <div className="kn-relic-line">寶物 <b>{endStats.relic.zh} {endStats.relic.name}</b> — equip it in the lobby!</div>
+            )}
           </div>
           <div className="knights-row" style={{ gap: 16, marginTop: 20 }}>
             <button className="knights-btn" onClick={() => { sfxClick(); setScreen('select'); }}>Lobby</button>

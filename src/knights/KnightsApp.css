@@ -255,6 +255,39 @@ html, body { overscroll-behavior: none; }
 .kn-pot-count { flex: 1; font-size: 13px; color: #d6c7a0; }
 .kn-pot-charm { font-size: 12px; letter-spacing: 2px; }
 
+/* ── 寶物 relic collection ── */
+.kn-relic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  max-width: 1100px; width: 100%;
+}
+.kn-relic-card {
+  display: flex; align-items: center; gap: 12px; position: relative;
+  background: rgba(22, 12, 8, 0.85);
+  border: 2px solid #5a2a1c; border-radius: 6px;
+  padding: 10px 14px; text-align: left;
+  color: inherit; font-family: inherit;
+  cursor: pointer; transition: all 0.15s;
+}
+.kn-relic-card:hover:not(:disabled) { border-color: var(--kn-accent); transform: translateY(-2px); }
+.kn-relic-card.unknown { opacity: 0.5; cursor: not-allowed; }
+.kn-relic-card.eq { border-color: var(--kn-gold); box-shadow: 0 0 14px rgba(255,214,118,0.35); }
+.kn-relic-zh {
+  font-size: 22px; font-weight: bold; color: var(--kn-gold);
+  width: 44px; height: 44px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,214,118,0.4); border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+}
+.kn-relic-name { font-weight: bold; font-size: 14px; color: var(--kn-fg); }
+.kn-relic-desc { font-size: 12px; color: #b0a080; }
+.kn-relic-eqtag {
+  position: absolute; top: 6px; right: 8px;
+  font-size: 9px; letter-spacing: 0.14em; color: #8adf7a; font-weight: bold;
+}
+.kn-relic-line { color: var(--kn-gold); }
+
 /* ── 仙术 skill track (select screen) + locked HUD card ── */
 .kn-hero-stats {
   margin-top: 10px; text-align: center; font-size: 14px; color: #d6c7a0;

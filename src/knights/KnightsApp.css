@@ -29,8 +29,16 @@ html, body { overscroll-behavior: none; }
     radial-gradient(ellipse at top,   rgba(180, 50, 20, 0.55), transparent 60%),
     radial-gradient(ellipse at bottom, rgba(50, 15, 8, 0.75), transparent 70%),
     linear-gradient(180deg, #2a0e08 0%, #0a0604 100%);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 32px; z-index: 10; overflow: auto;
+  /* flex-start, NOT center: centering + overflow clips the TOP of tall
+     pages into an unscrollable void (the "can only see 2 heroes" bug). */
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  padding: 32px; z-index: 10; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Short screens (title / reward / gameover) still read centered. */
+.knights-title, .knights-reward, .knights-gameover, .knights-story { justify-content: center; }
+@media (max-height: 760px) {
+  .knights-title, .knights-story { justify-content: flex-start; }
 }
 
 .knights-h1 {
@@ -501,6 +509,13 @@ html, body { overscroll-behavior: none; }
   .knights-bars { min-width: 200px; }
   .knights-skill-card { width: 60px; font-size: 10px; }
   .knights-skill-card.sp { width: 80px; }
+  /* Compact 2-column roster so several heroes fit a phone screen at once */
+  .knights-overlay { padding: 18px 10px; }
+  .knights-hero-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .knights-hero-card { flex-direction: column; padding: 8px; gap: 6px; }
+  .knights-hero-portrait { width: 100%; height: 96px; }
+  .knights-hero-blurb { display: none; }
+  .knights-hero-name { font-size: 13px; margin-bottom: 0; text-align: center; }
 }
 
 /* ── On-screen touch controls ── */

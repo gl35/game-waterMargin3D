@@ -6,11 +6,10 @@ import { HEROES, getHero } from './heroes.js';
 import { getMoves } from './moves.js';
 import { ITEMS, rollDrop } from './items.js';
 import { STAGES, getStage } from './stages.js';
-import { ENEMIES } from './enemies.js';
+import { ENEMIES, makeEnemy } from './enemies.js';
 import { STORY, getStory, PROLOGUE_LINES, FINALE_LINES } from './story.js';
 import { levelFromXp, statsFor, fortuneMult, UPGRADES, SKILLS, skillsFor } from './progression.js';
 import { RELICS, relicByBoss, relicById } from './relics.js';
-import Battle from './Battle.jsx';
 import {
   ELEMENTS, ELEMENT_KEYS, elementMult, charmDealt, charmTaken,
   SPIRITS_PER_FUSE, SPIRIT_CHANCE, CHARM_MAX_TIER,
@@ -83,8 +82,6 @@ export default function KnightsApp() {
   const [screen, setScreen] = useState('title');
   const [stageId, setStageId] = useState('mountain_pass');
   const [chosenHeroId, setChosenHeroId] = useState('songjiang');
-  const [party, setParty] = useState(['songjiang']);           // up to 3 members
-  const [activeBattle, setActiveBattle] = useState(null);
   const [muted, setMutedState] = useState(false);
   const [save, setSave] = useState(() => loadSave());
   const [showHowTo, setShowHowTo] = useState(true);
@@ -207,42 +204,18 @@ export default function KnightsApp() {
     });
   }
 
-  // Build one battle-ready party member: level + upgrades + relic + arts + MP.
-  function makePartyMember(hid) {
-    const def = getHero(hid);
-    const xp = (save.heroXp && save.heroXp[hid]) || 0;
-    const lv = levelFromXp(xp);
-    const st = statsFor(def, lv.level, save.upgrades);
-    const relic = relicById((save.relicEq || {})[hid]);
-    const ef = (relic && save.relics[relic.id] && relic.effects) || {};
-    const hpMax = Math.round(st.hpMax * (1 + (ef.hpPct || 0)));
-    const mpMax = 60 + 8 * lv.level;
-    return {
-      id: hid, defName: def.name, sprite: def.sprite, el: def.el,
-      kit: getMoves(def.moveId),
-      level: lv.level, startLevel: lv.level, persistedXp: xp,
-      skills: skillsFor(lv.level),
-      atk: Math.round(st.atk * (1 + (ef.atkPct || 0))),
-      hpMax, hp: hpMax, mpMax, mp: mpMax,
-      moveSpeed: st.moveSpeed,
-      critChance: (lv.level >= 14 ? 0.15 : 0.08) + (ef.critAdd || 0),
-      relicTaken: ef.takenMult || 1,
-      relicSpCost: ef.spCostMult || 1,
-      relicSpDmg: ef.spDmgMult || 1,
-      relicMinEl: ef.minElementMult || 0,
-      atkBuff: 1,
-    };
-  }
-
-  function startStage(id, partyIds) {
+  function startStage(id, heroId) {
     const stage = getStage(id);
-    const ids = (partyIds && partyIds.length ? partyIds : [chosenHeroId]).slice(0, 3);
-    const heroDef = getHero(ids[0]);
+    const heroDef = getHero(heroId);
     const moves = getMoves(heroDef.moveId);
-    const persistedXp = (save.heroXp && save.heroXp[ids[0]]) || 0;
+    const persistedXp = (save.heroXp && save.heroXp[heroId]) || 0;
     const lv = levelFromXp(persistedXp);
     const hero = makeHero(heroDef, lv.level, save.upgrades);
-    const members = ids.map(makePartyMember);
+    // Equipped boss relic bends the hero's numbers
+    const relic = relicById((save.relicEq || {})[heroId]);
+    const ef = (relic && save.relics[relic.id] && relic.effects) || {};
+    if (ef.atkPct) hero.atk = Math.round(hero.atk * (1 + ef.atkPct));
+    if (ef.hpPct) { hero.hpMax = Math.round(hero.hpMax * (1 + ef.hpPct)); hero.hp = hero.hpMax; }
     const barrels = (stage.barrels || []).map((bx, i) => ({
       id: 'b' + i, x: bx, z: Z_MIN + 30 + (i % 3) * 60, broken: false,
     }));
@@ -271,17 +244,13 @@ export default function KnightsApp() {
       charms: { ...(save.charms || {}) },
       potGained: {},                 // spirits refined this run
       skills: skillsFor(lv.level),   // 仙术 arts unlocked at this level
-      critChance: lv.level >= 14 ? 0.15 : 0.08,
-      // turn-based RPG state
-      party: members,
-      // members 2 & 3 walk behind the leader in the overworld
-      followers: members.slice(1).map((m, i) => ({
-        sprite: m.sprite, x: 100 - (i + 1) * 70, z: (Z_MIN + Z_MAX) / 2 + (i === 0 ? 20 : -20),
-        facing: 1, walking: false, phase: Math.random() * 6,
-      })),
-      runXp: 0, runCoins: 0,
-      inventory: { meat: 2, wine: 1, scroll: 0 },
-      pendingWave: null,
+      critChance: (lv.level >= 14 ? 0.15 : 0.08) + (ef.critAdd || 0),
+      // relic modifiers
+      relicCritAdd: ef.critAdd || 0,
+      relicTaken: ef.takenMult || 1,
+      relicSpCost: ef.spCostMult || 1,
+      relicSpDmg: ef.spDmgMult || 1,
+      relicMinEl: ef.minElementMult || 0,
       relicGained: null,
       _ended: false,
       _drawList: [],
@@ -306,15 +275,72 @@ export default function KnightsApp() {
     setShowHowTo(false);
   }
 
-  // Reaching a wave line now opens a TURN-BASED battle. Mission objects
-  // (cage / gate / mirror / rite) appear in the world first; they resolve
-  // when the battle is won.
-  function prepareEncounter(g, wave) {
+  function spawnWaveEnemies(g, wave) {
+    // Arena width is in WORLD units, not screen fraction — otherwise a narrow
+    // phone gets a tiny arena and the hero is pinned near screen-center the
+    // instant a wave spawns.
     const lockX = wave.atX + Math.max(600, window.innerWidth * 0.35);
     g.waveLockX = lockX;
     g.waveActive = true;
-    g.pendingWave = wave;
     if (g.ritual && !g.ritual.active) g.ritual = null;   // clear a finished rite
+
+    let lastEnemy = null;
+    if (wave.boss) {
+      const e = makeEnemy(wave.boss, 1 + Math.floor((g.stage.chapter || 1) * 0.5));
+      // The Red Chamber phantom is the hero's own reflection stepping out
+      // of the mirror — it wears the chosen hero's sprite.
+      if (wave.boss === 'phantom') {
+        e.sprite = g.heroDef.sprite;
+        e.name = `Mirror ${g.heroDef.name}`;
+      }
+      e.x = lockX + window.innerWidth * 0.45;
+      e.z = (Z_MIN + Z_MAX) / 2;
+      e.facing = -1;
+      g.enemies.push(e);
+      lastEnemy = e;
+      pushBanner(g, wave.intro || 'A boss arrives.', 2.0);
+      // Boss confrontation — an exchange of speech bubbles. who:'npc' lines
+      // come from an unseen presence (a voice in the dream).
+      if (wave.dialog) {
+        wave.dialog.forEach((ln, di) => {
+          const delay = 0.8 + di * 2.5;
+          if (ln.who === 'npc') {
+            pushSpeech(g, { x: wave.atX + 220, z: 30 }, ln.name || '???', ln.text,
+              { delay, dur: 2.6, color: '#c9a0ff' });
+          } else {
+            const isBoss = ln.who === 'boss';
+            pushSpeech(g, isBoss ? { kind: 'enemy', id: e.id } : 'hero',
+              isBoss ? e.name : g.heroDef.name, ln.text,
+              { delay, dur: 2.4, color: isBoss ? '#ff9c7a' : '#ffd676' });
+          }
+        });
+      }
+    } else {
+      let i = 0;
+      for (const [type, count] of wave.spawns) {
+        for (let n = 0; n < count; n++) {
+          const e = makeEnemy(type, g.stage.chapter || 1);
+          // A gate blocks the right edge — its defenders all come from the
+          // left. Mirror phantoms pour straight OUT of the glass.
+          const side = (wave.gate || wave.mirror) ? -0.6 : ((i + n) % 2 === 0 ? 1 : -0.6);
+          if (wave.mirror) {
+            e.x = lockX - 50 - Math.random() * 70;
+            e.facing = -1;
+          } else {
+            // Far-side spawns enter just past the lock edge (not half a screen
+            // beyond it) so they reach the arena in a beat, not ten seconds.
+            e.x = side > 0
+              ? lockX + window.innerWidth * (0.08 + Math.random() * 0.12)
+              : lockX - window.innerWidth * 0.25 - Math.random() * 80;
+            e.facing = side > 0 ? -1 : 1;
+          }
+          e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
+          g.enemies.push(e);
+          lastEnemy = e;
+          i++;
+        }
+      }
+    }
 
     // ── Mission objects carried by this wave ──
     if (wave.cage) {
@@ -347,166 +373,36 @@ export default function KnightsApp() {
       pushSpeech(g, 'ritual', d.name, 'Hold them back — the Five Thunders answer slowly.', { delay: 1.2, color: '#c9a0ff' });
     }
 
-    // Hero barks stay as overworld bubbles; enemy barks open the battle.
-    const intro = [];
+    // Wave bark — a shouted line from the fresh enemies or the hero
     if (wave.bark) {
-      if (wave.bark.who === 'enemy') intro.push({ name: '???', text: wave.bark.text });
-      else pushSpeech(g, 'hero', g.heroDef.name, wave.bark.text, { delay: 0.2 });
-    }
-    if (wave.boss && wave.dialog) {
-      const bossName = wave.boss === 'phantom' ? `Mirror ${g.heroDef.name}` : (ENEMIES[wave.boss]?.name || 'Boss');
-      wave.dialog.forEach(ln => {
-        intro.push({
-          name: ln.who === 'boss' ? bossName : ln.who === 'npc' ? (ln.name || '???') : g.heroDef.name,
-          text: ln.text,
-        });
-      });
-    }
-
-    // Split the spawn list into a first group + reinforcement groups of ≤4.
-    const flat = [];
-    (wave.spawns || []).forEach(([t, c]) => { for (let i = 0; i < c; i++) flat.push(t); });
-    const groups = [];
-    for (let i = 0; i < flat.length; i += 4) groups.push(flat.slice(i, i + 4).map(t => [t, 1]));
-    let group, reinforcements;
-    if (wave.boss) {
-      group = [[wave.boss, 1]];
-      reinforcements = groups;                 // any escorts arrive as waves
-    } else {
-      group = groups.shift() || [['raider', 1]];
-      reinforcements = groups;
-    }
-    if (wave.defend && wave.defend.bursts) {   // the rite's bursts become battle waves
-      wave.defend.bursts.forEach(b => {
-        const f = [];
-        b.spawns.forEach(([t, c]) => { for (let i = 0; i < c; i++) f.push([t, 1]); });
-        reinforcements.push(f);
-      });
-    }
-
-    setActiveBattle({
-      theme: g.stage.theme, chapter: g.stage.chapter || 1,
-      group, reinforcements, intro,
-      name: wave.boss ? (wave.intro || 'The foe arrives.') : '遭遇戰 — Encounter!',
-      bossSprite: wave.boss === 'phantom' ? g.heroDef.sprite : null,
-      bossName: wave.boss === 'phantom' ? `Mirror ${g.heroDef.name}` : null,
-    });
-    setScreen('battle');
-  }
-
-  // Per-member level check after a battle — stats grow, arts unlock.
-  function levelUpMember(g, m) {
-    const lv = levelFromXp(m.persistedXp + g.runXp);
-    if (lv.level <= m.level) return false;
-    for (const sk of SKILLS) {
-      if (sk.lv > m.level && sk.lv <= lv.level) {
-        pushBanner(g, `${m.defName} 新技 ${sk.zh} — ${sk.name}!`, 2.2, 26);
-      }
-    }
-    const st = statsFor(getHero(m.id), lv.level, save.upgrades);
-    const newMax = Math.round(st.hpMax * (1 + (m.relicHpPct || 0)));
-    m.hp = Math.min(newMax, m.hp + (newMax - m.hpMax) + Math.round(newMax * 0.15));
-    m.hpMax = newMax;
-    m.atk = Math.round(st.atk * (1 + (m.relicAtkPct || 0)));
-    m.mpMax = 60 + 8 * lv.level;
-    m.mp = m.mpMax;
-    m.skills = skillsFor(lv.level);
-    m.critChance = (lv.level >= 14 ? 0.15 : 0.08) + (m.critChance - (m.level >= 14 ? 0.15 : 0.08));
-    pushBanner(g, `${m.defName} — LEVEL UP! LV ${lv.level}`, 2.0);
-    m.level = lv.level;
-    return true;
-  }
-
-  // Battle resolution: collect spoils, resolve the wave's mission, level up.
-  function onBattleEnd(result) {
-    const g = gameRef.current;
-    setActiveBattle(null);
-    if (!g) { setScreen('select'); return; }
-    g.runXp += result.xp;
-    g.runCoins += result.coins;
-    g.score += result.xp * 2;
-    g.kills += result.kills || 0;
-    for (const k of Object.keys(result.spirits || {})) {
-      g.potGained[k] = (g.potGained[k] || 0) + result.spirits[k];
-    }
-
-    if (!result.victory) {
-      // a fallen party still keeps its training
-      const s = { ...save, heroXp: { ...save.heroXp }, pot: { ...save.pot } };
-      for (const m of g.party) s.heroXp[m.id] = (s.heroXp[m.id] || 0) + g.runXp;
-      s.coins = (s.coins || 0) + g.runCoins;
-      for (const k of Object.keys(g.potGained)) s.pot[k] = (s.pot[k] || 0) + g.potGained[k];
-      s.hero = chosenHeroId;
-      persistSave(s); setSave(s);
-      setEndStats({
-        stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
-        coins: g.runCoins, xp: g.runXp, score: g.score, cleared: false,
-        level: levelFromXp((g.party[0].persistedXp || 0) + g.runXp).level,
-        levelsGained: 0,
-      });
-      setScreen('gameover');
-      return;
-    }
-
-    const wave = g.pendingWave || {};
-    g.pendingWave = null;
-
-    // mission resolution
-    if (wave.cage) {
-      const c = g.cages.find(cg => cg.waveIdx === g.waveIdx && !cg.broken);
-      if (c) setTimeout(() => { if (gameRef.current === g) breakCage(g, c); }, 500);
-    }
-    if ((wave.gate || wave.mirror) && g.gate && !g.gate.broken) {
-      setTimeout(() => { if (gameRef.current === g) breakGate(g); }, 500);
-    }
-    if (wave.defend && g.ritual) {
-      g.ritual.active = false;
-      g.ritual.done = true;
-      g.ritual.t = g.ritual.dur;
-      g.objCur++;
-      g.vfx.push({ kind: 'flash', dur: 0.5, t: 0, world: false, x: 0, y: 0 });
-      for (let k = 0; k < 4; k++) {
-        g.vfx.push({ kind: 'bolt', x: g.ritual.x + (k - 1.5) * 90, z: g.ritual.z, dur: 0.45, t: -(k * 0.1), world: true, yOff: 0, seed: (k * 131) | 0 });
-      }
-      addShake(g, 0.7);
-      pushBanner(g, 'The Five Thunders answer!', 2.2);
-      pushSpeech(g, 'ritual', g.ritual.name, 'The mist obeys Heaven again. Gao Lian is mortal now — go.', { delay: 1.0, color: '#c9a0ff' });
-    }
-    if (wave.boss) {
-      const relic = relicByBoss(wave.boss);
-      if (relic && !save.relics[relic.id]) {
-        g.relicGained = relic.id;
-        pushBanner(g, `寶物 ${relic.zh} — ${relic.name} obtained!`, 2.6, 32);
-      } else if (relic) {
-        g.runCoins += 150;
-      }
-    }
-
-    // spoils + recovery
-    for (const m of g.party) {
-      levelUpMember(g, m);
-      if (m.hp > 0) {
-        m.hp = Math.min(m.hpMax, m.hp + Math.round(m.hpMax * 0.10));
+      if (wave.bark.who === 'enemy' && lastEnemy) {
+        pushSpeech(g, { kind: 'enemy', id: lastEnemy.id }, lastEnemy.name, wave.bark.text,
+          { delay: 0.6, color: '#ff9c7a' });
       } else {
-        m.hp = Math.round(m.hpMax * 0.25);       // fallen allies limp back up
+        pushSpeech(g, 'hero', g.heroDef.name, wave.bark.text, { delay: 0.6 });
       }
-      m.mp = Math.min(m.mpMax, m.mp + Math.round(m.mpMax * 0.4));
     }
-    const lead = levelFromXp(g.party[0].persistedXp + g.runXp);
-    g.heroLevel = lead.level; g.xpInto = lead.into; g.xpNeed = lead.need;
-
-    g.waveActive = false;
-    g.waveIdx++;
-    if (g.waveIdx >= g.stage.waves.length) {
-      g.stageComplete = true;                    // reward flow runs on return
-      pushBanner(g, 'Stage Cleared', 2.2);
-    }
-    sfxBanner();
-    setScreen('stage');
   }
 
   // Timed reinforcement bursts during the defend-the-rite mission. They
   // close in on the caster from BOTH flanks.
+  function spawnBurst(g, spawns) {
+    let i = 0;
+    for (const [type, count] of spawns) {
+      for (let n = 0; n < count; n++) {
+        const e = makeEnemy(type, g.stage.chapter || 1);
+        const fromRight = (i + n) % 2 === 0;
+        e.x = fromRight
+          ? g.waveLockX + 40 + Math.random() * 80
+          : g.camX - 60 - Math.random() * 80;
+        e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
+        e.facing = fromRight ? -1 : 1;
+        g.enemies.push(e);
+        i++;
+      }
+    }
+  }
+
   // Mid-battle level-up: XP earned this run + persisted XP crosses a
   // threshold → stats grow on the spot, with a burst and a partial heal.
   function checkLevelUp(g) {
@@ -606,21 +502,24 @@ export default function KnightsApp() {
     });
   }
 
-  // Picked-up loot goes into the party inventory for use in battle.
   function applyItem(g, key) {
     const def = ITEMS[key];
     if (!def) return;
-    if (key === 'gold' || def.score) {
-      g.runCoins += 25;
-      g.score += def.score || 50;
-      g.vfx.push({ kind: 'damageNumber', x: g.hero.x, z: g.hero.z, text: '◯ +25', effColor: '#ffd95a', dur: 1.0, t: 0, world: true, yOff: -120 });
-    } else {
-      const slot = (key === 'meat' || key === 'bun') ? 'meat'
-        : key === 'wine' ? 'wine' : 'scroll';
-      g.inventory[slot] = (g.inventory[slot] || 0) + 1;
-      const glyph = slot === 'meat' ? '🍖' : slot === 'wine' ? '🍶' : '巻';
-      g.vfx.push({ kind: 'damageNumber', x: g.hero.x, z: g.hero.z, text: `${glyph} +1`, effColor: '#9cffb5', dur: 1.0, t: 0, world: true, yOff: -120 });
+    if (def.heal) {
+      const amt = Math.round(g.hero.hpMax * def.heal);
+      g.hero.hp = Math.min(g.hero.hpMax, g.hero.hp + amt);
+      pushDamage(g, g.hero.x, g.hero.z, amt, false, true);
     }
+    if (def.dot) {
+      g.hero.buffs.push({ kind: 'dot', heal: def.dot.heal, dur: def.dot.dur, t: 0 });
+    }
+    if (def.buff) {
+      g.hero.buffs.push({
+        atk: def.buff.atk || 0, atkSpeed: def.buff.atkSpeed || 0,
+        dur: def.buff.dur || 8, t: 0,
+      });
+    }
+    if (def.score) g.score += def.score;
     spawnSpark(g, g.hero.x, g.hero.z, 7, def.color || '#fff');
     sfxPickup(def.score ? 'gold' : (def.heal ? 'heal' : 'scroll'));
   }
@@ -848,6 +747,30 @@ export default function KnightsApp() {
     }
   }
 
+  function tryAttack(g) {
+    const h = g.hero;
+    if (h.attacking > 0) return;
+    const kit = g.heroKit;
+    let move;
+    if (h.y < -4) {                       // airborne → jump attack (LV5 art)
+      if (!g.skills.jumpAttack) return;
+      move = kit.jumpAttack;
+    } else if (h.dashing > 0 && g.skills.dashAttack) {   // LV3 art
+      move = kit.dashAttack;
+    } else if (h.dashing > 0) {
+      return;                             // untrained: no strike mid-dash
+    } else {
+      // 4th combo finisher unlocks at LV7 (第四式)
+      const comboLen = g.skills.combo4 ? kit.combo.length : Math.min(3, kit.combo.length);
+      move = kit.combo[h.comboStep % comboLen];
+      h.comboStep = (h.comboStep + 1) % comboLen;
+      h.comboTimer = COMBO_WINDOW;
+    }
+    h.attacking = move.dur;
+    h.attackMove = move;
+    h.attackHitDone = false;
+  }
+
   function tryJump(g) {
     const h = g.hero;
     if (h.y < -4 || h.attacking > 0) return; // already airborne or busy
@@ -861,6 +784,59 @@ export default function KnightsApp() {
     h.dashing = 0.25;
     h.dashCdLeft = 0.7;
     h.invuln = Math.max(h.invuln, 0.15);
+  }
+
+  function tryMagic(g) {
+    const h = g.hero;
+    if (h.attacking > 0) return;
+    const m = g.heroKit.magic;
+    // 仙術精通 (LV10): specials hit harder and cost less HP
+    const empowered = g.skills.empower;
+    const cost = Math.round(h.hpMax * Math.max(0.04, (m.cost || 0.10) - (empowered ? 0.02 : 0)) * (g.relicSpCost || 1));
+    if (h.hp <= cost + 1) return;          // refuse if would suicide
+    h.hp -= cost;
+    h.attacking = 0.45;
+    h.attackMove = null;
+    pushBanner(g, m.name, 0.9, 30);
+    addShake(g, 0.34);
+    spawnSpark(g, h.x, h.z, 18, m.color || '#fff');
+    sfxBanner();
+
+    if (m.self && m.buff) {
+      h.buffs.push({ atk: m.buff.atk || 0, atkSpeed: m.buff.atkSpeed || 0, dur: m.buff.dur || 6, t: 0 });
+      g.vfx.push({ kind: 'aoe', x: h.x, z: h.z, yOff: -40, range: 100, color: m.color, dur: 0.6, t: 0, world: true });
+      return;
+    }
+    const dir = h.facing;
+    g.vfx.push({
+      kind: m.beam ? 'beam' : m.rain ? 'rain' : 'spin',
+      x: h.x, z: h.z, yOff: -50,
+      dir, range: m.range, width: m.zRange,
+      color: m.color, dur: 0.9, t: 0, world: true,
+      seed: g.time * 100 | 0,
+    });
+    let activeAtk = h.atk * m.dmgMult * (empowered ? 1.3 : 1) * (g.relicSpDmg || 1);
+    for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) activeAtk *= 1 + h.buffs[i].atk;
+    const perHit = activeAtk / (m.hits || 1);
+    for (let k = 0; k < (m.hits || 1); k++) {
+      setTimeout(() => {
+        if (!gameRef.current || gameRef.current !== g) return;
+        for (let i = 0; i < g.enemies.length; i++) {
+          const e = g.enemies[i];
+          if (e.dead) continue;
+          if (m.beam) {
+            const dx = e.x - h.x;
+            if (Math.sign(dx) !== dir && Math.abs(dx) > 6) continue;
+            if (Math.abs(dx) > m.range) continue;
+            if (Math.abs(e.z - h.z) > (m.zRange || 60)) continue;
+          } else {
+            if (Math.abs(e.x - h.x) > m.range) continue;
+            if (Math.abs(e.z - h.z) > (m.zRange || 200)) continue;
+          }
+          damageEnemy(g, e, perHit, { knockback: m.knockback || 30, stun: 0.15, hitstop: m.hitstop || 40, source: 'magic' });
+        }
+      }, k * 80);
+    }
   }
 
   // ── Main tick ──
@@ -940,10 +916,12 @@ export default function KnightsApp() {
     h.comboTimer -= dt;
     if (h.comboTimer <= 0) h.comboStep = 0;
 
-    // Edge-trigger inputs — overworld traversal only (combat is turn-based)
+    // Edge-trigger inputs (holding the touch attack button auto-chains)
+    if (inp.attackHeld) inp.attackEdge = true;
+    if (inp.attackEdge) { inp.attackEdge = false; tryAttack(g); }
     if (inp.jumpEdge)   { inp.jumpEdge   = false; tryJump(g);   }
+    if (inp.magicEdge)  { inp.magicEdge  = false; tryMagic(g);  }
     if (inp.dashEdge)   { inp.dashEdge   = false; tryDash(g);   }
-    inp.attackEdge = false; inp.magicEdge = false;
 
     // Attack lifecycle — apply hits at the move's midpoint
     if (h.attacking > 0) {
@@ -969,11 +947,11 @@ export default function KnightsApp() {
     if (g.camX < 0) g.camX = 0;
     if (g.camX > g.stage.width - window.innerWidth) g.camX = Math.max(0, g.stage.width - window.innerWidth);
 
-    // Encounter triggers — crossing a wave line opens a turn-based battle
+    // Wave triggers
     if (!g.waveActive && !g.stageComplete && g.waveIdx < g.stage.waves.length) {
       const w = g.stage.waves[g.waveIdx];
       if (h.x >= w.atX) {
-        prepareEncounter(g, w);
+        spawnWaveEnemies(g, w);
       }
     }
 
@@ -1138,36 +1116,6 @@ export default function KnightsApp() {
     }
     compact(g.projectiles, p => p.life > 0);
 
-    // Party followers trail the leader along the road
-    if (g.followers) {
-      for (let i = 0; i < g.followers.length; i++) {
-        const f = g.followers[i];
-        const tx = h.x - h.facing * 74 * (i + 1);
-        const tz = h.z + (i === 0 ? 20 : -20);
-        const dx = tx - f.x, dz = tz - f.z;
-        f.x += dx * Math.min(1, dt * 4.5);
-        f.z += dz * Math.min(1, dt * 4.5);
-        f.walking = Math.abs(dx) > 6 || Math.abs(dz) > 6;
-        if (f.walking) { f.phase += dt * 5.5; f.facing = dx >= 0 ? 1 : -1; }
-      }
-    }
-
-    // Barrels crack open at a touch — supplies for the road
-    for (let i = 0; i < g.barrels.length; i++) {
-      const b = g.barrels[i];
-      if (b.broken) continue;
-      if (Math.abs(b.x - h.x) < 42 && Math.abs(b.z - h.z) < 46) {
-        b.broken = true;
-        pushPop(g, b.x, b.z, '#caa078');
-        spawnDebris(g, b.x, b.z, 11, '#7a4a28');
-        spawnDust(g, b.x, b.z, 5);
-        addShake(g, 0.08);
-        sfxKill();
-        const dropKey = rollDrop('barrel');
-        if (dropKey) dropItem(g, b.x, b.z, dropKey);
-      }
-    }
-
     // Items (pickup if close)
     for (let i = 0; i < g.items.length; i++) {
       const it = g.items[i];
@@ -1221,14 +1169,42 @@ export default function KnightsApp() {
     }
     compact(g.actors, a => a.t < a.dur);
 
-    // The Five-Thunder rite: the caster chants in the overworld; the fight
-    // itself is the turn-based battle, resolved in onBattleEnd.
+    // The Five-Thunder rite: timer, reinforcement bursts, triumph or failure
     if (g.ritual && g.ritual.active) {
       const r = g.ritual;
+      r.t += dt;
+      while (r.burstIdx < r.bursts.length && r.t >= r.bursts[r.burstIdx].at) {
+        spawnBurst(g, r.bursts[r.burstIdx].spawns);
+        r.burstIdx++;
+      }
       r.sparkT -= dt;
       if (r.sparkT <= 0 && g.particles.length < 300) {
         r.sparkT = 0.2;
         spawnSpark(g, r.x + (Math.random() * 2 - 1) * 34, r.z, 1, '#c9a0ff');
+      }
+      if (r.hp <= 0) {
+        r.active = false;
+        g.stageFailed = true;
+        pushBanner(g, 'Gongsun Sheng has fallen', 2.2);
+        addShake(g, 0.5);
+      } else if (r.t >= r.dur) {
+        // 五雷天心正法 — thunder annihilates every foe on the field
+        r.active = false;
+        r.done = true;
+        g.objCur++;
+        g.vfx.push({ kind: 'flash', dur: 0.5, t: 0, world: false, x: 0, y: 0 });
+        let k = 0;
+        for (let i = 0; i < g.enemies.length; i++) {
+          const e = g.enemies[i];
+          if (e.dead) continue;
+          g.vfx.push({ kind: 'bolt', x: e.x, z: e.z, dur: 0.45, t: -(k * 0.09), world: true, yOff: 0, seed: (e.id * 97) | 0 });
+          damageEnemy(g, e, 9999, { crit: false, hitstop: 40 });
+          k++;
+        }
+        addShake(g, 0.8);
+        pushBanner(g, 'The Five Thunders answer!', 2.2);
+        sfxBanner();
+        pushSpeech(g, 'ritual', r.name, 'The mist obeys Heaven again. Gao Lian is mortal now — go.', { delay: 1.0, color: '#c9a0ff' });
       }
     }
 
@@ -1263,7 +1239,31 @@ export default function KnightsApp() {
     if (g.comboT > 0) { g.comboT -= dt; if (g.comboT <= 0) g.comboCount = 0; }
     if (g.comboPop > 0) g.comboPop -= dt;
 
-
+    // Wave completion — enemies down AND this wave's mission objective done
+    if (g.waveActive) {
+      let alive = 0;
+      for (let i = 0; i < g.enemies.length; i++) if (!g.enemies[i].dead) alive++;
+      const wv = g.stage.waves[g.waveIdx];
+      let objDone = true;
+      if (wv) {
+        if (wv.cage) {
+          const c = g.cages.find(cg => cg.waveIdx === g.waveIdx);
+          if (c && !c.broken) objDone = false;
+        }
+        if ((wv.gate || wv.mirror) && g.gate && !g.gate.broken) objDone = false;
+        if (wv.defend && g.ritual && g.ritual.active) objDone = false;
+      }
+      if (alive === 0 && objDone) {
+        g.waveActive = false;
+        g.waveIdx++;
+        h.hp = Math.min(h.hpMax, h.hp + h.hpMax * 0.08);
+        if (g.waveIdx >= g.stage.waves.length) {
+          g.stageComplete = true;
+          pushBanner(g, 'Stage Cleared', 2.2);
+          sfxBanner();
+        }
+      }
+    }
   }
 
   // ── Single RAF: tick + render ──
@@ -1300,13 +1300,13 @@ export default function KnightsApp() {
           g._ended = true;
           // RPG loop: a defeat still trains you — keep run XP, coins, spirits.
           const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot } };
-          for (const m of g.party) s.heroXp[m.id] = (s.heroXp[m.id] || 0) + g.runXp;
-          s.coins = (s.coins || 0) + g.runCoins;
+          s.heroXp[chosenHeroId] = (s.heroXp[chosenHeroId] || 0) + g.hero.xp;
+          s.coins = (s.coins || 0) + g.hero.coins;
           for (const k of Object.keys(g.potGained)) s.pot[k] = (s.pot[k] || 0) + g.potGained[k];
           s.hero = chosenHeroId;
           persistSave(s); setSave(s);
           setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
-            coins: g.runCoins, xp: g.runXp, score: g.score, cleared: false,
+            coins: g.hero.coins, xp: g.hero.xp, score: g.score, cleared: false,
             level: g.heroLevel, levelsGained: g.heroLevel - g.startLevel });
           setScreen('gameover');
         } else if (g.stageComplete && !g._ended) {
@@ -1317,14 +1317,14 @@ export default function KnightsApp() {
           if (g.relicGained) s.relics[g.relicGained] = true;
           // kill XP/coins were fortune-boosted as they dropped; only the
           // stage-clear bonus still needs the multiplier
-          const totalCoins = Math.round((g.stage.rewards?.coin || 0) * g.fortune) + g.runCoins;
-          const totalXp = Math.round((g.stage.rewards?.xp || 0) * g.fortune) + g.runXp;
+          const totalCoins = Math.round((g.stage.rewards?.coin || 0) * g.fortune) + g.hero.coins;
+          const totalXp = Math.round((g.stage.rewards?.xp || 0) * g.fortune) + g.hero.xp;
           s.coins = (s.coins || 0) + totalCoins;
-          for (const m of g.party) s.heroXp[m.id] = (s.heroXp[m.id] || 0) + totalXp;
+          s.heroXp[chosenHeroId] = (s.heroXp[chosenHeroId] || 0) + totalXp;
           if (next && !s.unlocked.includes(next)) s.unlocked = [...s.unlocked, next];
           s.hero = chosenHeroId;
           persistSave(s); setSave(s);
-          const lvAfter = levelFromXp(s.heroXp[g.party[0].id]).level;
+          const lvAfter = levelFromXp(s.heroXp[chosenHeroId]).level;
           setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
             coins: totalCoins, xp: totalXp, score: g.score, cleared: true, nextId: next,
             level: lvAfter, levelsGained: lvAfter - g.startLevel,
@@ -1379,7 +1379,9 @@ export default function KnightsApp() {
       if (k === 'd' || k === 'arrowright') inputRef.current.right = true;
       if (k === 'w' || k === 'arrowup')    inputRef.current.up = true;
       if (k === 's' || k === 'arrowdown')  inputRef.current.down = true;
+      if (k === 'j' || k === 'x')          { if (!e.repeat) inputRef.current.attackEdge = true; }
       if (k === 'k' || k === 'z' || k === ' ') { if (!e.repeat) inputRef.current.jumpEdge = true; }
+      if (k === 'l' || k === 'c')          { if (!e.repeat) inputRef.current.magicEdge = true; }
       if (k === 'shift')                   { if (!e.repeat) inputRef.current.dashEdge = true; }
       if (k === 'm') { setMuted(!isMuted()); setMutedState(isMuted()); }
       if (k === 'escape') setShowHowTo(s => !s);
@@ -1406,10 +1408,6 @@ export default function KnightsApp() {
     <div className="knights-root">
       {screen === 'stage' && (<canvas ref={canvasRef} className="knights-canvas" />)}
 
-      {screen === 'battle' && activeBattle && gameRef.current && (
-        <Battle g={gameRef.current} battle={activeBattle} onEnd={onBattleEnd} />
-      )}
-
       {screen === 'title' && (
         <div className="knights-overlay knights-title">
           <h1 className="knights-h1">Knights of Liangshan</h1>
@@ -1418,36 +1416,29 @@ export default function KnightsApp() {
             Insert Coin
           </button>
           <div className="knights-howto">
-            <h3>How to play</h3>
+            <h3>Controls</h3>
             <ul>
-              <li><b>Explore</b> — WASD / joystick to walk the road, Space to jump</li>
-              <li><b>Encounters</b> — crossing a foe's line opens a turn-based battle</li>
-              <li><b>Battle</b> — Attack · 仙術 Arts (MP) · Items · Defend · 炼妖 Capture</li>
-              <li><b>Party</b> — bring up to three Liangshan heroes</li>
-              <li><b>M</b> — mute · <b>Esc</b> — pause</li>
+              <li><b>WASD / Arrows</b> — move (8-direction on the floor)</li>
+              <li><b>J / X</b> — attack (chain 4 hits)</li>
+              <li><b>K / Z / Space</b> — jump (jump → attack = aerial)</li>
+              <li><b>L / C</b> — special (costs HP, like the arcade)</li>
+              <li><b>Shift</b> — dash · <b>M</b> — mute · <b>Esc</b> — pause</li>
             </ul>
-            <p className="knights-hint">Walk into barrels for supplies. A defeat still trains you.</p>
+            <p className="knights-hint">Smash barrels for food. Eat meat to heal. Brawl on.</p>
           </div>
         </div>
       )}
 
       {screen === 'select' && (
         <div className="knights-overlay knights-select">
-          <h2>Assemble Your Party <span className="kn-party-count">{party.length}/3</span></h2>
+          <h2>Choose Your Knight</h2>
           <div className="knights-hero-grid">
             {HEROES.map(hd => (
               <button key={hd.id}
-                className={`knights-hero-card ${chosenHeroId === hd.id ? 'sel' : ''} ${party.includes(hd.id) ? 'inparty' : ''}`}
-                onClick={() => {
-                  sfxClick();
-                  setChosenHeroId(hd.id);
-                  setParty(pp => pp.includes(hd.id)
-                    ? (pp.length > 1 ? pp.filter(x => x !== hd.id) : pp)
-                    : (pp.length < 3 ? [...pp, hd.id] : pp));
-                }}>
+                className={`knights-hero-card ${chosenHeroId === hd.id ? 'sel' : ''}`}
+                onClick={() => { sfxClick(); setChosenHeroId(hd.id); }}>
                 <div className="knights-hero-portrait" style={{ background: hd.portrait }}>
                   <SpriteThumb name={hd.sprite} w={96} h={120} />
-                  {party.includes(hd.id) && <span className="kn-party-badge">{party.indexOf(hd.id) + 1}</span>}
                   <span className="kn-portrait-lv">LV {levelFromXp((save.heroXp || {})[hd.id] || 0).level}</span>
                   <span className="kn-portrait-el" style={{ color: ELEMENTS[hd.el].color }}>{ELEMENTS[hd.el].zh}</span>
                   <span className="kn-portrait-name">{hd.name}</span>
@@ -1618,14 +1609,14 @@ export default function KnightsApp() {
       {screen === 'story' && (
         <StoryScreen
           stageId={stageId}
-          heroDef={getHero(party[0])}
-          onBegin={() => { sfxClick(); startStage(stageId, party); }}
+          heroDef={heroDef}
+          onBegin={() => { sfxClick(); startStage(stageId, chosenHeroId); }}
           onBack={() => { sfxClick(); setScreen('select'); }}
         />
       )}
 
       {screen === 'stage' && gameRef.current && (
-        <StageHUD g={gameRef.current}
+        <StageHUD g={gameRef.current} heroDef={heroDef} moves={moves}
           tick={hudTick}
           muted={muted}
           onMute={() => { setMuted(!isMuted()); setMutedState(isMuted()); }}
@@ -1676,7 +1667,7 @@ export default function KnightsApp() {
               <button className="knights-btn primary" onClick={() => {
                 sfxClick();
                 setStageId(endStats.nextId);
-                startStage(endStats.nextId, party);
+                startStage(endStats.nextId, chosenHeroId);
               }}>Next Round</button>
             )}
           </div>
@@ -1695,7 +1686,7 @@ export default function KnightsApp() {
           </div>
           <div className="knights-row" style={{ gap: 16, marginTop: 20 }}>
             <button className="knights-btn" onClick={() => { sfxClick(); setScreen('select'); }}>Lobby</button>
-            <button className="knights-btn primary" onClick={() => { sfxClick(); startStage(endStats.stageId, party); }}>
+            <button className="knights-btn primary" onClick={() => { sfxClick(); startStage(endStats.stageId, chosenHeroId); }}>
               Retry
             </button>
           </div>
@@ -1815,6 +1806,15 @@ function TouchControls({ inputRef }) {
   };
 
   const press = (field) => (e) => { e.preventDefault(); inputRef.current[field] = true; };
+  // Attack: tap = one hit, hold = auto-chain. Capture the pointer so a finger
+  // that slides off the button still delivers pointerup (no stuck auto-attack).
+  const atkDown = (e) => {
+    e.preventDefault();
+    try { e.target.setPointerCapture(e.pointerId); } catch { /* ok */ }
+    inputRef.current.attackHeld = true;
+    inputRef.current.attackEdge = true;
+  };
+  const atkUp = (e) => { e.preventDefault(); inputRef.current.attackHeld = false; };
 
   return (
     <div className="kn-touch">
@@ -1824,57 +1824,49 @@ function TouchControls({ inputRef }) {
         <div className="kn-joy-thumb" style={{ transform: `translate(${thumb.x}px, ${thumb.y}px)` }} />
       </div>
       <div className="kn-btns">
+        <button className="kn-tbtn sp"  onPointerDown={press('magicEdge')}>絕</button>
         <button className="kn-tbtn dsh" onPointerDown={press('dashEdge')}>閃</button>
         <button className="kn-tbtn jmp" onPointerDown={press('jumpEdge')}>跳</button>
+        <button className="kn-tbtn atk" onPointerDown={atkDown}
+          onPointerUp={atkUp} onPointerCancel={atkUp}>攻</button>
       </div>
     </div>
   );
 }
 
-function StageHUD({ g, muted, onMute, onPause, showHowTo, dismissHowTo }) {
-  const lead = g.party[0];
-  const leadDef = getHero(lead.id);
+function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismissHowTo }) {
+  const h = g.hero;
   return (
     <>
       <div className="knights-hud knights-hud-tl">
         <div className="knights-hp-row">
           <div className="knights-chip-wrap">
-            <div className="knights-hero-chip" style={{ background: leadDef.portrait }}>
-              <SpriteThumb name={leadDef.sprite} fit="head" w={64} h={64} />
+            <div className="knights-hero-chip" style={{ background: heroDef.portrait }}>
+              <SpriteThumb name={heroDef.sprite} fit="head" w={64} h={64} />
             </div>
             <div className="knights-lv-badge">LV {g.heroLevel}</div>
           </div>
           <div className="knights-bars">
             <div className="knights-bar hp">
-              <div className="knights-bar-fill" style={{ width: `${100 * Math.max(0, lead.hp) / lead.hpMax}%` }} />
-              <div className="knights-bar-text">{Math.max(0, Math.round(lead.hp))} / {lead.hpMax}</div>
+              <div className="knights-bar-fill" style={{ width: `${100 * h.hp / h.hpMax}%` }} />
+              <div className="knights-bar-text">{Math.max(0, Math.round(h.hp))} / {h.hpMax}</div>
             </div>
             <div className="knights-bar xp">
               <div className="knights-bar-fill" style={{ width: `${g.xpNeed > 0 ? Math.min(100, 100 * g.xpInto / g.xpNeed) : 100}%` }} />
             </div>
             <div className="knights-stats">
-              <span className="knights-coin">◯ {g.runCoins}</span>
-              <span className="knights-xp">XP {g.runXp}</span>
-              <span style={{ color: ELEMENTS[lead.el] ? ELEMENTS[lead.el].color : '#fff', fontWeight: 'bold' }}>
-                {ELEMENTS[lead.el] ? ELEMENTS[lead.el].zh : ''}
+              <span className="knights-coin">◯ {h.coins}</span>
+              <span className="knights-xp">XP {h.xp}</span>
+              <span style={{ color: ELEMENTS[h.el] ? ELEMENTS[h.el].color : '#fff', fontWeight: 'bold' }}>
+                {ELEMENTS[h.el] ? ELEMENTS[h.el].zh : ''}
               </span>
-              <span className="knights-xp">🍖{g.inventory.meat} 🍶{g.inventory.wine} 巻{g.inventory.scroll}</span>
+              <span className="knights-combo">Combo {h.comboStep > 0 ? h.comboStep : '–'}</span>
             </div>
             {g.objective && (
               <div className="knights-objective">
                 ⚑ {g.objective.text}
                 <b> {Math.min(g.objCur, g.objective.max)}/{g.objective.max}</b>
                 {g.objCur >= g.objective.max && <span className="kn-obj-done"> ✓</span>}
-              </div>
-            )}
-            {g.party.length > 1 && (
-              <div className="kn-party-strip">
-                {g.party.map((m, i) => (
-                  <div key={i} className={`kn-party-pill ${m.hp <= 0 ? 'down' : ''}`}>
-                    <span style={{ color: ELEMENTS[m.el]?.color }}>{ELEMENTS[m.el]?.zh}</span> {m.defName}
-                    <span className="kn-party-hp"> {Math.max(0, Math.round(100 * m.hp / m.hpMax))}%</span>
-                  </div>
-                ))}
               </div>
             )}
           </div>
@@ -1889,18 +1881,40 @@ function StageHUD({ g, muted, onMute, onPause, showHowTo, dismissHowTo }) {
         </div>
       </div>
 
+      <div className="knights-hud knights-hud-bottom">
+        <div className="knights-skill-card sp" title={moves.magic.description}>
+          <div className="knights-skill-num">SP</div>
+          <div className="knights-skill-name">{moves.magic.name}</div>
+          <div className="knights-skill-cost">−{Math.round(moves.magic.cost * 100)}% HP</div>
+        </div>
+        {moves.combo.map((m, i) => {
+          const locked = i === 3 && !(g.skills && g.skills.combo4);
+          const comboLen = g.skills && g.skills.combo4 ? moves.combo.length : 3;
+          return (
+            <div key={i} className={`knights-skill-card ${locked ? 'kn-locked' : ''}`}
+              style={{ borderColor: !locked && i === (h.comboStep || 0) % comboLen ? '#ffd676' : '' }}>
+              <div className="knights-skill-num">{locked ? '🔒' : i + 1}</div>
+              <div className="knights-skill-name">{locked ? 'LV 7' : m.name}</div>
+              <div className="knights-skill-cost">{locked ? '第四式' : `×${m.dmgMult.toFixed(1)}`}</div>
+            </div>
+          );
+        })}
+      </div>
+
       {showHowTo && (
         <div className="knights-modal" onClick={dismissHowTo}>
           <div className="knights-modal-card" onClick={e => e.stopPropagation()}>
-            <h3>How to play</h3>
+            <h3>Controls</h3>
             <ul>
-              <li><b>WASD / joystick</b> — walk the road; <b>Space</b> jump · <b>Shift</b> dash</li>
-              <li><b>Encounters</b> — crossing a foe's line opens a turn-based battle</li>
-              <li><b>Battle</b> — Attack · 仙術 Arts (MP) · Items · Defend · 炼妖 Capture</li>
-              <li>Weakened foes (可炼) can be refined straight into the pot</li>
+              <li><b>WASD / Arrows</b> — 8-direction floor movement</li>
+              <li><b>J / X</b> — attack (chain combo)</li>
+              <li><b>K / Z / Space</b> — jump (+ attack = aerial)</li>
+              <li><b>L / C</b> — special (costs HP)</li>
+              <li><b>Shift</b> — dash</li>
+              <li><b>M</b> — mute · <b>Esc</b> — pause</li>
             </ul>
             <p style={{ fontStyle: 'italic', color: '#caa07a' }}>
-              Walk into barrels for supplies. Talk to those you meet on the road.
+              Pick up meat / wine / scrolls from barrels and felled foes.
             </p>
             <button className="knights-btn primary" onClick={dismissHowTo}>Got it</button>
           </div>

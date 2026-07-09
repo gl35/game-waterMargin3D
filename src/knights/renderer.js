@@ -1060,25 +1060,6 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
   }
 
-  // Party members trailing the leader on the road.
-  function drawFollower(f, camX) {
-    const sx = f.x - camX;
-    if (sx < -120 || sx > cssW + 120) return;
-    const fy = floorYFromZ(f.z);
-    const bob = f.walking ? Math.abs(Math.sin(f.phase * Math.PI)) * 7 : Math.sin(f.phase + performance.now() / 900) * 1.2;
-    drawShadow(sx, fy, 48);
-    const drew = drawPosed(f.sprite, sx, fy - bob, {
-      flip: f.facing < 0,
-      lean: f.walking ? 0.04 * f.facing : 0,
-      alpha: 0.97,
-    });
-    if (!drew) {
-      ctx.fillStyle = '#c9a979';
-      ctx.fillRect(sx - 13, fy - bob - 74, 26, 60);
-      ctx.beginPath(); ctx.arc(sx, fy - bob - 82, 11, 0, Math.PI * 2); ctx.fill();
-    }
-  }
-
   // ── In-world speech bubbles ──
   function wrapText(text, maxW) {
     const words = text.split(' ');
@@ -1218,7 +1199,6 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
     if (g.ritual) list.push({ kind: 'r', z: g.ritual.z, ref: g.ritual });
     if (g.actors) for (let i = 0; i < g.actors.length; i++) list.push({ kind: 'a', z: g.actors[i].z, ref: g.actors[i] });
-    if (g.followers) for (let i = 0; i < g.followers.length; i++) list.push({ kind: 'p', z: g.followers[i].z, ref: g.followers[i] });
     list.push({ kind: 'h', z: g.hero.z, ref: g.hero });
     list.sort(_zAsc);
 
@@ -1231,7 +1211,6 @@ export function createRenderer(canvas, themeName = 'dusk') {
       else if (it.kind === 'c') drawCage(it.ref, camX);
       else if (it.kind === 'r') drawRitual(it.ref, camX, g.time);
       else if (it.kind === 'a') drawActor(it.ref, camX);
-      else if (it.kind === 'p') drawFollower(it.ref, camX);
       else if (it.kind === 'h') drawHero(g);
     }
 

@@ -91,11 +91,19 @@ export default function Battle({ g, battle, onEnd }) {
   function slotPos(c) {
     const W = window.innerWidth, H = Math.min(window.innerHeight * 0.62, 560);
     if (c.kind === 'hero') {
-      return { x: W * 0.72 + c.slot * W * 0.075, y: H * 0.52 + c.slot * H * 0.17 };
+      return {
+        x: Math.min(W - 60, W * 0.68 + c.slot * Math.max(52, W * 0.075)),
+        y: H * 0.50 + c.slot * H * 0.17,
+      };
     }
     const col = c.slot % 2, row = (c.slot / 2) | 0;
-    return { x: W * 0.24 - col * W * 0.085, y: H * 0.45 + row * H * 0.24 + col * H * 0.10 };
+    return {
+      x: Math.max(56, W * 0.26 - col * Math.max(60, W * 0.085)),
+      y: H * 0.45 + row * H * 0.24 + col * H * 0.10,
+    };
   }
+  // Shrink everyone a little on narrow screens so all combatants fit.
+  const fitScale = () => Math.max(0.6, Math.min(1, window.innerWidth / 900));
 
   // ── damage helpers ──
   function heroAtkValue(m) { return m.atk * (m.atkBuff || 1); }
@@ -343,7 +351,7 @@ export default function Battle({ g, battle, onEnd }) {
         const p = slotPos(c);
         const bob = Math.sin(st.time * 2 + c.slot * 1.7) * 3;
         const isTurn = st.turn === c && !st.over;
-        let alpha = 1, scale = c.boss ? 1.05 : 0.85;
+        let alpha = 1, scale = (c.boss ? 1.05 : 0.85) * fitScale();
         if (c.capturedFx) {
           c.capturedFx = Math.max(0, c.capturedFx - dt * 1.4);
           alpha = c.capturedFx;
@@ -359,9 +367,26 @@ export default function Battle({ g, battle, onEnd }) {
         ctx.restore();
         ctx.save();
         ctx.globalAlpha = alpha;
-        drawSprite(ctx, c.sprite, p.x + c.ax, p.y + c.ay - bob, {
+        const drew = drawSprite(ctx, c.sprite, p.x + c.ax, p.y + c.ay - bob, {
           flip: c.kind === 'foe', anchorY: 'bottom', scale,
         });
+        if (!drew) {
+          // Sprite still loading/processing — draw a silhouette so every
+          // combatant is ALWAYS visible on screen.
+          const col = (ELEMENTS[c.el] && ELEMENTS[c.el].color) || '#c9a979';
+          const hgt = 110 * scale, wid = 34 * scale;
+          const bx = p.x + c.ax, by = p.y + c.ay - bob;
+          ctx.fillStyle = col;
+          ctx.globalAlpha = alpha * 0.85;
+          ctx.fillRect(bx - wid / 2, by - hgt * 0.72, wid, hgt * 0.72);
+          ctx.beginPath();
+          ctx.arc(bx, by - hgt * 0.72 - 13 * scale, 14 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.font = `bold ${Math.round(11 * scale) + 4}px system-ui`;
+          ctx.textAlign = 'center';
+          ctx.fillText('…', bx, by - hgt * 0.3);
+        }
         ctx.restore();
         if (c.flash > 0) {
           ctx.save();

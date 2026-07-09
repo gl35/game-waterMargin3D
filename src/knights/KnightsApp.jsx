@@ -274,6 +274,11 @@ export default function KnightsApp() {
       critChance: lv.level >= 14 ? 0.15 : 0.08,
       // turn-based RPG state
       party: members,
+      // members 2 & 3 walk behind the leader in the overworld
+      followers: members.slice(1).map((m, i) => ({
+        sprite: m.sprite, x: 100 - (i + 1) * 70, z: (Z_MIN + Z_MAX) / 2 + (i === 0 ? 20 : -20),
+        facing: 1, walking: false, phase: Math.random() * 6,
+      })),
       runXp: 0, runCoins: 0,
       inventory: { meat: 2, wine: 1, scroll: 0 },
       pendingWave: null,
@@ -1133,6 +1138,20 @@ export default function KnightsApp() {
     }
     compact(g.projectiles, p => p.life > 0);
 
+    // Party followers trail the leader along the road
+    if (g.followers) {
+      for (let i = 0; i < g.followers.length; i++) {
+        const f = g.followers[i];
+        const tx = h.x - h.facing * 74 * (i + 1);
+        const tz = h.z + (i === 0 ? 20 : -20);
+        const dx = tx - f.x, dz = tz - f.z;
+        f.x += dx * Math.min(1, dt * 4.5);
+        f.z += dz * Math.min(1, dt * 4.5);
+        f.walking = Math.abs(dx) > 6 || Math.abs(dz) > 6;
+        if (f.walking) { f.phase += dt * 5.5; f.facing = dx >= 0 ? 1 : -1; }
+      }
+    }
+
     // Barrels crack open at a touch — supplies for the road
     for (let i = 0; i < g.barrels.length; i++) {
       const b = g.barrels[i];
@@ -1599,14 +1618,14 @@ export default function KnightsApp() {
       {screen === 'story' && (
         <StoryScreen
           stageId={stageId}
-          heroDef={heroDef}
+          heroDef={getHero(party[0])}
           onBegin={() => { sfxClick(); startStage(stageId, party); }}
           onBack={() => { sfxClick(); setScreen('select'); }}
         />
       )}
 
       {screen === 'stage' && gameRef.current && (
-        <StageHUD g={gameRef.current} heroDef={heroDef} moves={moves}
+        <StageHUD g={gameRef.current}
           tick={hudTick}
           muted={muted}
           onMute={() => { setMuted(!isMuted()); setMutedState(isMuted()); }}
@@ -1812,15 +1831,16 @@ function TouchControls({ inputRef }) {
   );
 }
 
-function StageHUD({ g, heroDef, muted, onMute, onPause, showHowTo, dismissHowTo }) {
+function StageHUD({ g, muted, onMute, onPause, showHowTo, dismissHowTo }) {
   const lead = g.party[0];
+  const leadDef = getHero(lead.id);
   return (
     <>
       <div className="knights-hud knights-hud-tl">
         <div className="knights-hp-row">
           <div className="knights-chip-wrap">
-            <div className="knights-hero-chip" style={{ background: heroDef.portrait }}>
-              <SpriteThumb name={heroDef.sprite} fit="head" w={64} h={64} />
+            <div className="knights-hero-chip" style={{ background: leadDef.portrait }}>
+              <SpriteThumb name={leadDef.sprite} fit="head" w={64} h={64} />
             </div>
             <div className="knights-lv-badge">LV {g.heroLevel}</div>
           </div>

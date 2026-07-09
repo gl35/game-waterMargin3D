@@ -18,6 +18,10 @@ const USED = [
   'npc_黑旋风-李逵.png', 'npc_一丈青-扈三娘.png', 'npc_武松.png',
   'enemy_raider.png', 'enemy_scout.png', 'enemy_captain.png', 'enemy_berserker.png',
   'enemy_guard.png', 'enemy_archer.png', 'enemy_warlord.png',
+  // Mission actors (cages / defend-the-rite)
+  'npc_白日鼠-白胜.png', 'npc_拼命三郎-石秀.png', 'npc_智多星-吴用.png',
+  // Red Chamber crossover (Baoyu / Daiyu stand-ins)
+  'npc_白面郎君-郑天寿.png', 'npc_母夜叉-孙二娘.png',
 ];
 const MAX_H = 640;   // source is scaled down at draw time; 640 keeps 2x crispness
 

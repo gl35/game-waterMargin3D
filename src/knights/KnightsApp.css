@@ -29,8 +29,16 @@ html, body { overscroll-behavior: none; }
     radial-gradient(ellipse at top,   rgba(180, 50, 20, 0.55), transparent 60%),
     radial-gradient(ellipse at bottom, rgba(50, 15, 8, 0.75), transparent 70%),
     linear-gradient(180deg, #2a0e08 0%, #0a0604 100%);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 32px; z-index: 10; overflow: auto;
+  /* flex-start, NOT center: centering + overflow clips the TOP of tall
+     pages into an unscrollable void (the "can only see 2 heroes" bug). */
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  padding: 32px; z-index: 10; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Short screens (title / reward / gameover) still read centered. */
+.knights-title, .knights-reward, .knights-gameover, .knights-story { justify-content: center; }
+@media (max-height: 760px) {
+  .knights-title, .knights-story { justify-content: flex-start; }
 }
 
 .knights-h1 {
@@ -185,11 +193,135 @@ html, body { overscroll-behavior: none; }
 }
 
 .knights-hp-row { display: flex; gap: 10px; align-items: center; }
+.knights-chip-wrap { position: relative; flex-shrink: 0; }
 .knights-hero-chip {
   width: 64px; height: 64px; overflow: hidden;
   border-radius: 50%;
   border: 3px solid rgba(255,214,118,0.7);
   flex-shrink: 0;
+}
+.knights-lv-badge {
+  position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(180deg, #d8a83a, #8a6210);
+  color: #fff; font-size: 10px; font-weight: bold;
+  padding: 1px 8px; border-radius: 10px; white-space: nowrap;
+  border: 1px solid rgba(0,0,0,0.5);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+}
+
+/* Level chip on select cards + reward level-up callout */
+.kn-portrait-lv {
+  position: absolute; top: 4px; left: 4px;
+  background: rgba(0,0,0,0.72);
+  color: var(--kn-gold); font-size: 10px; font-weight: bold;
+  padding: 2px 6px; border-radius: 3px;
+  border: 1px solid rgba(255,214,118,0.4);
+}
+.kn-lv-up { color: #8adf7a; font-size: 13px; font-style: italic; }
+
+/* ── The Camp (lobby upgrade shop) ── */
+.kn-camp-coins { color: #ffd95a; font-size: 16px; margin-left: 10px; }
+.kn-camp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  max-width: 1100px; width: 100%;
+}
+.kn-camp-card {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(22, 12, 8, 0.85);
+  border: 2px solid #5a2a1c; border-radius: 6px;
+  padding: 10px 14px;
+  color: inherit; font-family: inherit; text-align: left;
+  cursor: pointer; transition: all 0.15s;
+}
+.kn-camp-card:hover:not(:disabled) { border-color: var(--kn-accent); transform: translateY(-2px); }
+.kn-camp-card:disabled { opacity: 0.55; cursor: not-allowed; }
+.kn-camp-card.maxed { border-color: rgba(255,214,118,0.6); opacity: 0.8; }
+.kn-camp-icon { font-size: 26px; }
+.kn-camp-meta { flex: 1; }
+.kn-camp-name { font-weight: bold; color: var(--kn-fg); font-size: 14px; }
+.kn-camp-tier { color: var(--kn-gold); font-size: 11px; letter-spacing: 2px; margin-left: 6px; }
+.kn-camp-desc { font-size: 12px; color: #b0a080; }
+.kn-camp-cost { color: #ffd95a; font-weight: bold; font-size: 14px; white-space: nowrap; }
+
+/* ── 炼妖壶 Refining Pot ── */
+.kn-pot-hint { font-size: 12px; color: #b0a080; max-width: 640px; text-align: center; margin: 0 0 10px; }
+.kn-pot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  max-width: 1100px; width: 100%;
+}
+.kn-pot-row {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(22, 12, 8, 0.85);
+  border: 1px solid #5a2a1c; border-left: 3px solid;
+  border-radius: 5px; padding: 8px 12px;
+}
+.kn-pot-el { font-size: 20px; font-weight: bold; }
+.kn-pot-count { flex: 1; font-size: 13px; color: #d6c7a0; }
+.kn-pot-charm { font-size: 12px; letter-spacing: 2px; }
+
+/* ── 寶物 relic collection ── */
+.kn-relic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  max-width: 1100px; width: 100%;
+}
+.kn-relic-card {
+  display: flex; align-items: center; gap: 12px; position: relative;
+  background: rgba(22, 12, 8, 0.85);
+  border: 2px solid #5a2a1c; border-radius: 6px;
+  padding: 10px 14px; text-align: left;
+  color: inherit; font-family: inherit;
+  cursor: pointer; transition: all 0.15s;
+}
+.kn-relic-card:hover:not(:disabled) { border-color: var(--kn-accent); transform: translateY(-2px); }
+.kn-relic-card.unknown { opacity: 0.5; cursor: not-allowed; }
+.kn-relic-card.eq { border-color: var(--kn-gold); box-shadow: 0 0 14px rgba(255,214,118,0.35); }
+.kn-relic-zh {
+  font-size: 22px; font-weight: bold; color: var(--kn-gold);
+  width: 44px; height: 44px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,214,118,0.4); border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+}
+.kn-relic-name { font-weight: bold; font-size: 14px; color: var(--kn-fg); }
+.kn-relic-desc { font-size: 12px; color: #b0a080; }
+.kn-relic-eqtag {
+  position: absolute; top: 6px; right: 8px;
+  font-size: 9px; letter-spacing: 0.14em; color: #8adf7a; font-weight: bold;
+}
+.kn-relic-line { color: var(--kn-gold); }
+
+/* ── 仙术 skill track (select screen) + locked HUD card ── */
+.kn-hero-stats {
+  margin-top: 10px; text-align: center; font-size: 14px; color: #d6c7a0;
+}
+.kn-hero-stats b { color: var(--kn-gold); }
+.kn-skill-track {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px;
+}
+.kn-skill-chip {
+  font-size: 12px; color: #8a7a60;
+  background: rgba(22, 12, 8, 0.7);
+  border: 1px solid #4a2a1c; border-radius: 12px;
+  padding: 3px 10px;
+}
+.kn-skill-chip.got { color: #ffe2a4; border-color: rgba(255,214,118,0.5); }
+.kn-skill-chip .kn-skill-lv { font-weight: bold; margin-right: 4px; color: #6a5a45; }
+.kn-skill-chip.got .kn-skill-lv { color: #8adf7a; }
+.kn-skill-zh { font-weight: bold; }
+.knights-skill-card.kn-locked { opacity: 0.45; filter: grayscale(0.6); }
+
+.kn-portrait-el {
+  position: absolute; top: 4px; right: 4px;
+  background: rgba(0,0,0,0.72);
+  font-size: 12px; font-weight: bold;
+  padding: 2px 5px; border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.25);
 }
 .knights-bars { display: flex; flex-direction: column; gap: 4px; min-width: 280px; }
 .knights-bar {
@@ -202,6 +334,8 @@ html, body { overscroll-behavior: none; }
 }
 .knights-bar-fill { height: 100%; transition: width 0.18s ease-out; }
 .knights-bar.hp .knights-bar-fill { background: linear-gradient(180deg, #ff8484 0%, #d63030 100%); }
+.knights-bar.xp { height: 8px; border-color: rgba(255,214,118,0.3); }
+.knights-bar.xp .knights-bar-fill { background: linear-gradient(180deg, #ffe2a4 0%, #d8a83a 100%); }
 .knights-bar-text {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
@@ -220,6 +354,26 @@ html, body { overscroll-behavior: none; }
 .knights-coin { color: #ffd95a; }
 .knights-xp { color: #b6d4ff; }
 .knights-combo { color: var(--kn-gold); }
+
+.knights-objective {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #ffe2a4;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,180,120,0.3);
+  border-left: 3px solid var(--kn-accent);
+  padding: 4px 10px;
+  border-radius: 3px;
+}
+.knights-objective b { color: var(--kn-gold); }
+.kn-obj-done { color: #8adf7a; font-weight: bold; }
+
+.knights-stage-mission {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ffe2a4;
+  font-style: italic;
+}
 
 .knights-stage-label {
   background: rgba(0,0,0,0.6);
@@ -355,6 +509,13 @@ html, body { overscroll-behavior: none; }
   .knights-bars { min-width: 200px; }
   .knights-skill-card { width: 60px; font-size: 10px; }
   .knights-skill-card.sp { width: 80px; }
+  /* Compact 2-column roster so several heroes fit a phone screen at once */
+  .knights-overlay { padding: 18px 10px; }
+  .knights-hero-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .knights-hero-card { flex-direction: column; padding: 8px; gap: 6px; }
+  .knights-hero-portrait { width: 100%; height: 96px; }
+  .knights-hero-blurb { display: none; }
+  .knights-hero-name { font-size: 13px; margin-bottom: 0; text-align: center; }
 }
 
 /* ── On-screen touch controls ── */

@@ -8,6 +8,12 @@ import { ITEMS, rollDrop } from './items.js';
 import { STAGES, getStage } from './stages.js';
 import { ENEMIES, makeEnemy } from './enemies.js';
 import { STORY, getStory, PROLOGUE_LINES, FINALE_LINES } from './story.js';
+import { levelFromXp, statsFor, fortuneMult, UPGRADES, SKILLS, skillsFor } from './progression.js';
+import { RELICS, relicByBoss, relicById } from './relics.js';
+import {
+  ELEMENTS, ELEMENT_KEYS, elementMult, charmDealt, charmTaken,
+  SPIRITS_PER_FUSE, SPIRIT_CHANCE, CHARM_MAX_TIER,
+} from './elements.js';
 import { createRenderer, Z_MIN, Z_MAX } from './renderer.js';
 import { preloadKnightsSprites } from './preload.js';
 import { getSprite } from '../scene2d/sprites.js';
@@ -18,8 +24,18 @@ import {
 
 const SAVE_KEY = 'knights_save_v1';
 function loadSave() {
-  try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }
-  catch { return null; }
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }
+  catch { s = null; }
+  // Normalize older saves to the RPG schema.
+  s = s || { unlocked: ['mountain_pass'], coins: 0, hero: 'songjiang' };
+  if (!s.heroXp) s.heroXp = {};
+  if (!s.upgrades) s.upgrades = { atk: 0, hp: 0, fortune: 0 };
+  if (!s.pot) s.pot = {};          // 炼妖壶 spirits, keyed by element
+  if (!s.charms) s.charms = {};    // fused charm tiers, keyed by element
+  if (!s.relics) s.relics = {};    // owned boss relics, keyed by relic id
+  if (!s.relicEq) s.relicEq = {};  // equipped relic per hero id
+  return s;
 }
 function persistSave(s) {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); }
@@ -36,10 +52,10 @@ function compact(arr, alive) {
   arr.length = w;
 }
 
-function makeHero(heroDef) {
-  const s = heroDef.stats;
+function makeHero(heroDef, level = 1, upgrades = null) {
+  const s = statsFor(heroDef, level, upgrades);
   return {
-    id: heroDef.id, color: heroDef.color, sprite: heroDef.sprite,
+    id: heroDef.id, color: heroDef.color, sprite: heroDef.sprite, el: heroDef.el,
     x: 100, z: (Z_MIN + Z_MAX) / 2,
     vx: 0, vz: 0,
     y: 0, vy: 0,                   // airborne offset & vertical velocity
@@ -67,7 +83,7 @@ export default function KnightsApp() {
   const [stageId, setStageId] = useState('mountain_pass');
   const [chosenHeroId, setChosenHeroId] = useState('songjiang');
   const [muted, setMutedState] = useState(false);
-  const [save, setSave] = useState(() => loadSave() || { unlocked: ['mountain_pass'], coins: 0, hero: 'songjiang' });
+  const [save, setSave] = useState(() => loadSave());
   const [showHowTo, setShowHowTo] = useState(true);
   const [endStats, setEndStats] = useState(null);
   const [hudTick, setHudTick] = useState(0);
@@ -97,11 +113,28 @@ export default function KnightsApp() {
       world: false,
     });
   }
-  function pushDamage(g, x, z, value, crit = false, heal = false) {
-    g.vfx.push({ kind: 'damageNumber', x, z, value, crit, heal, dur: 0.9, t: 0, world: true, yOff: -100 });
+  function pushDamage(g, x, z, value, crit = false, heal = false, eff = null) {
+    g.vfx.push({ kind: 'damageNumber', x, z, value, crit, heal, eff, dur: 0.9, t: 0, world: true, yOff: -100 });
   }
   function pushPop(g, x, z, color) {
     g.vfx.push({ kind: 'pop', x, z, color: color || '#ffe080', dur: 0.3, t: 0, world: true, yOff: -50 });
+  }
+
+  // In-world speech bubble. target: 'hero' | 'ritual' | {kind:'enemy', id}
+  // | {x, z} fixed point. Negative t delays the bubble's appearance.
+  function pushSpeech(g, target, name, text, opts = {}) {
+    const s = {
+      target, name, text,
+      t: -(opts.delay || 0),
+      dur: opts.dur || Math.min(4.2, 1.6 + text.length * 0.045),
+      color: opts.color || '#ffd676',
+      lastX: null, lastZ: null,
+    };
+    if (target && typeof target === 'object' && target.x !== undefined) {
+      s.lastX = target.x; s.lastZ = target.z;
+      s.target = null;                       // fixed point — resolved via lastX/Z
+    }
+    g.speech.push(s);
   }
 
   // ── Game-feel: screen shake + particle bursts ──
@@ -155,12 +188,34 @@ export default function KnightsApp() {
       size: 1 + Math.random() * 1.7, color: Math.random() < 0.5 ? '#ff9a4a' : '#ffcf7a', grav: false,
     });
   }
+  // Falling blossom for the Red Chamber dream (drifts DOWN, swaying)
+  const PETAL_COLORS = ['#ffc8dc', '#ffb0cc', '#ffe0ea'];
+  function spawnPetal(g, x, z, startY) {
+    g.particles.push({
+      kind: 'petal',
+      x: x !== undefined ? x : g.camX + Math.random() * window.innerWidth,
+      z: z !== undefined ? z : Z_MIN + Math.random() * (Z_MAX - Z_MIN),
+      y: startY !== undefined ? startY : 190 + Math.random() * 110,
+      vx: (Math.random() * 2 - 1) * 26, vy: -(24 + Math.random() * 18), vz: 0,
+      life: 7 + Math.random() * 5, max: 12,
+      size: 3 + Math.random() * 2.5,
+      color: PETAL_COLORS[(Math.random() * 3) | 0],
+      rot: Math.random() * Math.PI, vr: (Math.random() * 2 - 1) * 2.2, grav: false,
+    });
+  }
 
   function startStage(id, heroId) {
     const stage = getStage(id);
     const heroDef = getHero(heroId);
     const moves = getMoves(heroDef.moveId);
-    const hero = makeHero(heroDef);
+    const persistedXp = (save.heroXp && save.heroXp[heroId]) || 0;
+    const lv = levelFromXp(persistedXp);
+    const hero = makeHero(heroDef, lv.level, save.upgrades);
+    // Equipped boss relic bends the hero's numbers
+    const relic = relicById((save.relicEq || {})[heroId]);
+    const ef = (relic && save.relics[relic.id] && relic.effects) || {};
+    if (ef.atkPct) hero.atk = Math.round(hero.atk * (1 + ef.atkPct));
+    if (ef.hpPct) { hero.hpMax = Math.round(hero.hpMax * (1 + ef.hpPct)); hero.hp = hero.hpMax; }
     const barrels = (stage.barrels || []).map((bx, i) => ({
       id: 'b' + i, x: bx, z: Z_MIN + 30 + (i % 3) * 60, broken: false,
     }));
@@ -178,15 +233,43 @@ export default function KnightsApp() {
       lastFootstepT: 0,
       particles: [], shake: 0, emberT: 0, zoom: 1,
       comboCount: 0, comboT: 0, comboPop: 0,
+      // mission & dialog state
+      cages: [], actors: [], speech: [],
+      gate: null, ritual: null,
+      objective: stage.objective || null, objCur: 0,
+      // RPG progression (persisted XP + this run's gains)
+      persistedXp,
+      heroLevel: lv.level, startLevel: lv.level, xpInto: lv.into, xpNeed: lv.need,
+      fortune: fortuneMult(save.upgrades),
+      charms: { ...(save.charms || {}) },
+      potGained: {},                 // spirits refined this run
+      skills: skillsFor(lv.level),   // 仙术 arts unlocked at this level
+      critChance: (lv.level >= 14 ? 0.15 : 0.08) + (ef.critAdd || 0),
+      // relic modifiers
+      relicCritAdd: ef.critAdd || 0,
+      relicTaken: ef.takenMult || 1,
+      relicSpCost: ef.spCostMult || 1,
+      relicSpDmg: ef.spDmgMult || 1,
+      relicMinEl: ef.minElementMult || 0,
+      relicGained: null,
+      _ended: false,
       _drawList: [],
     };
     gameRef.current = g;
     window.__KN = g; // debug/test hook
+    // Ambient story NPCs (Red Chamber garden figures) — they stand in the
+    // world and speak when the hero comes near.
+    if (stage.npcs) {
+      for (const n of stage.npcs) {
+        g.actors.push({
+          sprite: n.sprite, name: n.name, x: n.x, z: n.z,
+          vx: 0, y: 0, vy: 0, t: Math.random() * 6, dur: 1e9,
+          static: true, line: n.line, color: n.color, petals: !!n.petals, spoken: false,
+        });
+      }
+    }
     pushBanner(g, stage.name, 1.6);
-    if (heroDef.opening) g.vfx.push({
-      kind: 'banner', text: heroDef.opening, size: 22, dur: 2.6, t: -1.4,   // appears after the stage title
-      x: window.innerWidth / 2, y: window.innerHeight * 0.40, world: false,
-    });
+    if (heroDef.opening) pushSpeech(g, 'hero', heroDef.name, heroDef.opening, { delay: 1.2 });
     sfxBanner();
     setScreen('stage');
     setShowHowTo(false);
@@ -199,31 +282,210 @@ export default function KnightsApp() {
     const lockX = wave.atX + Math.max(600, window.innerWidth * 0.35);
     g.waveLockX = lockX;
     g.waveActive = true;
+    if (g.ritual && !g.ritual.active) g.ritual = null;   // clear a finished rite
+
+    let lastEnemy = null;
     if (wave.boss) {
       const e = makeEnemy(wave.boss, 1 + Math.floor((g.stage.chapter || 1) * 0.5));
+      // The Red Chamber phantom is the hero's own reflection stepping out
+      // of the mirror — it wears the chosen hero's sprite.
+      if (wave.boss === 'phantom') {
+        e.sprite = g.heroDef.sprite;
+        e.name = `Mirror ${g.heroDef.name}`;
+      }
       e.x = lockX + window.innerWidth * 0.45;
       e.z = (Z_MIN + Z_MAX) / 2;
       e.facing = -1;
       g.enemies.push(e);
+      lastEnemy = e;
       pushBanner(g, wave.intro || 'A boss arrives.', 2.0);
-      return;
+      // Boss confrontation — an exchange of speech bubbles. who:'npc' lines
+      // come from an unseen presence (a voice in the dream).
+      if (wave.dialog) {
+        wave.dialog.forEach((ln, di) => {
+          const delay = 0.8 + di * 2.5;
+          if (ln.who === 'npc') {
+            pushSpeech(g, { x: wave.atX + 220, z: 30 }, ln.name || '???', ln.text,
+              { delay, dur: 2.6, color: '#c9a0ff' });
+          } else {
+            const isBoss = ln.who === 'boss';
+            pushSpeech(g, isBoss ? { kind: 'enemy', id: e.id } : 'hero',
+              isBoss ? e.name : g.heroDef.name, ln.text,
+              { delay, dur: 2.4, color: isBoss ? '#ff9c7a' : '#ffd676' });
+          }
+        });
+      }
+    } else {
+      let i = 0;
+      for (const [type, count] of wave.spawns) {
+        for (let n = 0; n < count; n++) {
+          const e = makeEnemy(type, g.stage.chapter || 1);
+          // A gate blocks the right edge — its defenders all come from the
+          // left. Mirror phantoms pour straight OUT of the glass.
+          const side = (wave.gate || wave.mirror) ? -0.6 : ((i + n) % 2 === 0 ? 1 : -0.6);
+          if (wave.mirror) {
+            e.x = lockX - 50 - Math.random() * 70;
+            e.facing = -1;
+          } else {
+            // Far-side spawns enter just past the lock edge (not half a screen
+            // beyond it) so they reach the arena in a beat, not ten seconds.
+            e.x = side > 0
+              ? lockX + window.innerWidth * (0.08 + Math.random() * 0.12)
+              : lockX - window.innerWidth * 0.25 - Math.random() * 80;
+            e.facing = side > 0 ? -1 : 1;
+          }
+          e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
+          g.enemies.push(e);
+          lastEnemy = e;
+          i++;
+        }
+      }
     }
+
+    // ── Mission objects carried by this wave ──
+    if (wave.cage) {
+      g.cages.push({
+        x: wave.atX + 300, z: 34, hp: 60, hpMax: 60,
+        broken: false, hitT: 0, waveIdx: g.waveIdx,
+        occupant: wave.cage.occupant, name: wave.cage.name,
+      });
+    }
+    if (wave.gate) {
+      g.gate = {
+        x: lockX, hp: wave.gate.hp, hpMax: wave.gate.hp, name: wave.gate.name,
+        broken: false, hitT: 0, waveIdx: g.waveIdx,
+      };
+    }
+    if (wave.mirror) {
+      g.gate = {
+        kind: 'mirror',
+        x: lockX, hp: wave.mirror.hp, hpMax: wave.mirror.hp, name: wave.mirror.name,
+        broken: false, hitT: 0, waveIdx: g.waveIdx,
+      };
+    }
+    if (wave.defend) {
+      const d = wave.defend;
+      g.ritual = {
+        x: wave.atX + 330, z: 104, t: 0, dur: d.dur,
+        hp: d.hp, hpMax: d.hp, name: d.name, sprite: d.sprite,
+        bursts: d.bursts || [], burstIdx: 0, active: true, done: false, sparkT: 0,
+      };
+      pushSpeech(g, 'ritual', d.name, 'Hold them back — the Five Thunders answer slowly.', { delay: 1.2, color: '#c9a0ff' });
+    }
+
+    // Wave bark — a shouted line from the fresh enemies or the hero
+    if (wave.bark) {
+      if (wave.bark.who === 'enemy' && lastEnemy) {
+        pushSpeech(g, { kind: 'enemy', id: lastEnemy.id }, lastEnemy.name, wave.bark.text,
+          { delay: 0.6, color: '#ff9c7a' });
+      } else {
+        pushSpeech(g, 'hero', g.heroDef.name, wave.bark.text, { delay: 0.6 });
+      }
+    }
+  }
+
+  // Timed reinforcement bursts during the defend-the-rite mission. They
+  // close in on the caster from BOTH flanks.
+  function spawnBurst(g, spawns) {
     let i = 0;
-    for (const [type, count] of wave.spawns) {
+    for (const [type, count] of spawns) {
       for (let n = 0; n < count; n++) {
         const e = makeEnemy(type, g.stage.chapter || 1);
-        const side = (i + n) % 2 === 0 ? 1 : -0.6;
-        // Far-side spawns enter just past the lock edge (not half a screen
-        // beyond it) so they reach the arena in a beat, not ten seconds.
-        e.x = side > 0
-          ? lockX + window.innerWidth * (0.08 + Math.random() * 0.12)
-          : lockX - window.innerWidth * 0.25 - Math.random() * 80;
+        const fromRight = (i + n) % 2 === 0;
+        e.x = fromRight
+          ? g.waveLockX + 40 + Math.random() * 80
+          : g.camX - 60 - Math.random() * 80;
         e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
-        e.facing = side > 0 ? -1 : 1;
+        e.facing = fromRight ? -1 : 1;
         g.enemies.push(e);
         i++;
       }
     }
+  }
+
+  // Mid-battle level-up: XP earned this run + persisted XP crosses a
+  // threshold → stats grow on the spot, with a burst and a partial heal.
+  function checkLevelUp(g) {
+    const lv = levelFromXp(g.persistedXp + g.hero.xp);
+    g.xpInto = lv.into; g.xpNeed = lv.need;
+    if (lv.level <= g.heroLevel) return;
+    const prevLevel = g.heroLevel;
+    g.heroLevel = lv.level;
+    const h = g.hero;
+    const ns = statsFor(g.heroDef, lv.level, save.upgrades);
+    // Announce every art unlocked by this level-up
+    for (const sk of SKILLS) {
+      if (sk.lv > prevLevel && sk.lv <= lv.level) {
+        g.vfx.push({
+          kind: 'banner', text: `新技 ${sk.zh} — ${sk.name} unlocked!`, size: 26,
+          dur: 2.4, t: -0.9, x: window.innerWidth / 2, y: window.innerHeight * 0.42, world: false,
+        });
+      }
+    }
+    g.skills = skillsFor(lv.level);
+    g.critChance = (lv.level >= 14 ? 0.15 : 0.08) + (g.relicCritAdd || 0);
+    const hpGain = ns.hpMax - h.hpMax;
+    h.hpMax = ns.hpMax;
+    h.atk = ns.atk;
+    h.hp = Math.min(h.hpMax, h.hp + hpGain + Math.round(h.hpMax * 0.20));
+    pushBanner(g, `LEVEL UP — LV ${lv.level}`, 2.0);
+    pushDamage(g, h.x, h.z, hpGain + Math.round(h.hpMax * 0.20), false, true);
+    g.vfx.push({ kind: 'aoe', x: h.x, z: h.z, yOff: -40, range: 130, color: '#ffd676', dur: 0.7, t: 0, world: true });
+    spawnSpark(g, h.x, h.z, 22, '#ffe6a0');
+    addShake(g, 0.2);
+    g.zoom = Math.max(g.zoom || 1, 1.05);
+    sfxBanner();
+  }
+
+  function damageRitual(g, amount) {
+    const r = g.ritual;
+    if (!r || !r.active) return;
+    r.hp -= amount;
+    spawnSpark(g, r.x, r.z, 5, '#ff8484');
+    addShake(g, 0.10);
+    sfxHit();
+  }
+
+  function breakCage(g, c) {
+    c.broken = true;
+    g.objCur++;
+    spawnDebris(g, c.x, c.z, 12, '#5d3d20');
+    spawnDust(g, c.x, c.z, 5);
+    addShake(g, 0.18);
+    sfxKill();
+    pushBanner(g, `${c.name} freed!`, 1.6, 30);
+    // the captive leaps out and scampers off toward the safe (left) edge
+    g.actors.push({
+      sprite: c.occupant, x: c.x, z: c.z + 30,
+      vx: -170, y: 0, vy: 330, t: 0, dur: 3.4, alpha: 1,
+    });
+    pushSpeech(g, { x: c.x, z: c.z }, c.name,
+      c.name === 'Shi Xiu' ? 'Brother! The Zhus will regret this day.' : 'Bless you, hero! I run for the marsh!',
+      { delay: 0.15, dur: 2.2, color: '#9cffb5' });
+  }
+
+  function breakGate(g) {
+    const gt = g.gate;
+    gt.broken = true;
+    g.objCur++;
+    addShake(g, 0.65);
+    g.zoom = Math.max(g.zoom || 1, 1.07);
+    if (gt.kind === 'mirror') {
+      // the glass rings apart — pale shards, a white flash
+      g.vfx.push({ kind: 'flash', dur: 0.35, t: 0, world: false, x: 0, y: 0 });
+      spawnDebris(g, gt.x - 10, 80, 14, '#dfe8f2');
+      spawnDebris(g, gt.x - 10, 130, 12, '#b8cadd');
+      spawnSpark(g, gt.x - 10, 110, 16, '#e8f0ff');
+      sfxCrit();
+      pushBanner(g, 'The mirror shatters!', 2.0);
+    } else {
+      spawnDebris(g, gt.x - 20, 50, 16, '#5a3d22');
+      spawnDebris(g, gt.x - 20, 150, 14, '#3a2a18');
+      spawnDust(g, gt.x - 30, 100, 8);
+      sfxKill();
+      pushBanner(g, 'The gate is breached!', 2.0);
+    }
+    sfxBanner();
   }
 
   function dropItem(g, x, z, key) {
@@ -264,8 +526,12 @@ export default function KnightsApp() {
 
   function damageEnemy(g, e, amount, opts) {
     if (e.dead) return 0;
-    const isCrit = opts && opts.crit !== undefined ? opts.crit : Math.random() < 0.08;
-    const dmg = Math.round(amount * (isCrit ? 1.8 : 1));
+    const isCrit = opts && opts.crit !== undefined ? opts.crit : Math.random() < (g.critChance || 0.08);
+    // 五行相剋 — the five-phase cycle bends every hit, plus fused charms.
+    // The Mirror Shard relic keeps strikes from ever being resisted.
+    let em = elementMult(g.hero.el, e.el);
+    if (g.relicMinEl && em < g.relicMinEl) em = g.relicMinEl;
+    const dmg = Math.round(amount * em * charmDealt(g.charms, e.el) * (isCrit ? 1.8 : 1));
     e.hp -= dmg;
     e.hitFlash = 0.35;
     e.stun = Math.max(e.stun || 0, (opts && opts.stun) || 0.10);
@@ -276,7 +542,7 @@ export default function KnightsApp() {
       e.vy = 380;
       e.launched = 0.8;
     }
-    pushDamage(g, e.x, e.z, dmg, isCrit);
+    pushDamage(g, e.x, e.z, dmg, isCrit, false, em > 1 ? 'strong' : em < 1 ? 'weak' : null);
     pushPop(g, e.x, e.z, isCrit ? '#fff076' : '#fff');
     spawnSpark(g, e.x, e.z, isCrit ? 14 : 8, isCrit ? '#fff1a0' : '#ffd9a0');
     addShake(g, isCrit ? 0.26 : 0.12);
@@ -301,21 +567,56 @@ export default function KnightsApp() {
       addShake(g, e.boss ? 0.5 : 0.2);
       g.zoom = Math.max(g.zoom || 1, e.boss ? 1.08 : 1.05);   // kill zoom-punch
       spawnSpark(g, e.x, e.z, e.boss ? 28 : 10, '#ffd0a0');
-      const earned = e.xp || 6;
+      const earned = Math.round((e.xp || 6) * g.fortune);
       g.hero.xp += earned;
       g.hero.coins += Math.round(earned * 0.5);
       g.score += earned * 2;
       g.kills++;
+      checkLevelUp(g);
+      // 炼妖壶 — a slain foe's spirit may enter the Refining Pot
+      // (special-kills always refine)
+      if (!e.boss && e.el) {
+        const viaMagic = opts && opts.source === 'magic';
+        if (viaMagic || Math.random() < SPIRIT_CHANCE) {
+          g.potGained[e.el] = (g.potGained[e.el] || 0) + 1;
+          const meta = ELEMENTS[e.el];
+          g.vfx.push({
+            kind: 'damageNumber', x: e.x, z: e.z, text: `壺 +1 ${meta.zh}靈`,
+            effColor: meta.color, dur: 1.2, t: 0, world: true, yOff: -130,
+          });
+          spawnSpark(g, e.x, e.z, 5, meta.color);
+          sfxPickup('scroll');
+        }
+      }
       sfxKill();
       const dropKey = rollDrop(e.drop);
       if (dropKey) dropItem(g, e.x, e.z, dropKey);
+      // 寶物 — a boss guards its relic: guaranteed on the first kill,
+      // a coin bounty on repeats
+      if (e.boss) {
+        const relic = relicByBoss(e.typeId);
+        if (relic && !save.relics[relic.id]) {
+          g.relicGained = relic.id;
+          pushBanner(g, `寶物 ${relic.zh} — ${relic.name} obtained!`, 2.6, 32);
+          g.vfx.push({
+            kind: 'damageNumber', x: e.x, z: e.z, text: `寶 ${relic.zh}`,
+            effColor: '#ffd676', dur: 1.6, t: 0, world: true, yOff: -140,
+          });
+          spawnSpark(g, e.x, e.z, 26, '#ffe6a0');
+          sfxBanner();
+        } else if (relic) {
+          g.hero.coins += 150;
+          pushDamage(g, e.x, e.z, 150, false, true);
+        }
+      }
     }
     return dmg;
   }
 
-  function damageHero(g, amount) {
+  function damageHero(g, amount, atkEl = null) {
     const h = g.hero;
     if (h.invuln > 0) return 0;
+    amount = Math.round(amount * elementMult(atkEl, h.el) * charmTaken(g.charms, atkEl) * (g.relicTaken || 1));
     h.hp -= amount;
     h.hitFlash = 0.4;
     h.invuln = 0.55;
@@ -410,6 +711,40 @@ export default function KnightsApp() {
       const dropKey = rollDrop('barrel');
       if (dropKey) dropItem(g, b.x, b.z, dropKey);
     }
+
+    // Smash prisoner cages open
+    for (let i = 0; i < g.cages.length; i++) {
+      const c = g.cages[i];
+      if (c.broken) continue;
+      const dx = c.x - h.x;
+      if (Math.sign(dx) !== dir && Math.abs(dx) > 14) continue;
+      if (Math.abs(dx) > move.xRange + 24) continue;
+      if (Math.abs(c.z - z) > Math.max(move.zRange, 48)) continue;
+      const dmg = Math.round(activeAtk * 0.8);
+      c.hp -= dmg;
+      c.hitT = 0.25;
+      pushDamage(g, c.x, c.z, dmg);
+      spawnSpark(g, c.x, c.z, 4, '#e8c890');
+      sfxHit();
+      if (c.hp <= 0) breakCage(g, c);
+    }
+
+    // Batter the manor gate
+    if (g.gate && !g.gate.broken) {
+      const gt = g.gate;
+      const dxg = gt.x - h.x;
+      if (dir > 0 && dxg > 0 && dxg < move.xRange + 60) {
+        const dmg = Math.round(activeAtk);
+        gt.hp -= dmg;
+        gt.hitT = 0.25;
+        pushDamage(g, gt.x - 30, h.z, dmg);
+        spawnSpark(g, gt.x - 20, h.z, 5, '#e8c890');
+        spawnDebris(g, gt.x - 16, h.z, 2, '#5a3d22');
+        addShake(g, 0.08);
+        sfxHit();
+        if (gt.hp <= 0) breakGate(g);
+      }
+    }
   }
 
   function tryAttack(g) {
@@ -417,13 +752,18 @@ export default function KnightsApp() {
     if (h.attacking > 0) return;
     const kit = g.heroKit;
     let move;
-    if (h.y < -4) {                       // airborne → jump attack
+    if (h.y < -4) {                       // airborne → jump attack (LV5 art)
+      if (!g.skills.jumpAttack) return;
       move = kit.jumpAttack;
-    } else if (h.dashing > 0) {
+    } else if (h.dashing > 0 && g.skills.dashAttack) {   // LV3 art
       move = kit.dashAttack;
+    } else if (h.dashing > 0) {
+      return;                             // untrained: no strike mid-dash
     } else {
-      move = kit.combo[h.comboStep];
-      h.comboStep = (h.comboStep + 1) % kit.combo.length;
+      // 4th combo finisher unlocks at LV7 (第四式)
+      const comboLen = g.skills.combo4 ? kit.combo.length : Math.min(3, kit.combo.length);
+      move = kit.combo[h.comboStep % comboLen];
+      h.comboStep = (h.comboStep + 1) % comboLen;
       h.comboTimer = COMBO_WINDOW;
     }
     h.attacking = move.dur;
@@ -450,7 +790,9 @@ export default function KnightsApp() {
     const h = g.hero;
     if (h.attacking > 0) return;
     const m = g.heroKit.magic;
-    const cost = Math.round(h.hpMax * (m.cost || 0.10));
+    // 仙術精通 (LV10): specials hit harder and cost less HP
+    const empowered = g.skills.empower;
+    const cost = Math.round(h.hpMax * Math.max(0.04, (m.cost || 0.10) - (empowered ? 0.02 : 0)) * (g.relicSpCost || 1));
     if (h.hp <= cost + 1) return;          // refuse if would suicide
     h.hp -= cost;
     h.attacking = 0.45;
@@ -473,7 +815,7 @@ export default function KnightsApp() {
       color: m.color, dur: 0.9, t: 0, world: true,
       seed: g.time * 100 | 0,
     });
-    let activeAtk = h.atk * m.dmgMult;
+    let activeAtk = h.atk * m.dmgMult * (empowered ? 1.3 : 1) * (g.relicSpDmg || 1);
     for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) activeAtk *= 1 + h.buffs[i].atk;
     const perHit = activeAtk / (m.hits || 1);
     for (let k = 0; k < (m.hits || 1); k++) {
@@ -491,7 +833,7 @@ export default function KnightsApp() {
             if (Math.abs(e.x - h.x) > m.range) continue;
             if (Math.abs(e.z - h.z) > (m.zRange || 200)) continue;
           }
-          damageEnemy(g, e, perHit, { knockback: m.knockback || 30, stun: 0.15, hitstop: m.hitstop || 40 });
+          damageEnemy(g, e, perHit, { knockback: m.knockback || 30, stun: 0.15, hitstop: m.hitstop || 40, source: 'magic' });
         }
       }, k * 80);
     }
@@ -649,8 +991,11 @@ export default function KnightsApp() {
         continue;
       }
 
-      const dx = h.x - e.x;
-      const dz = h.z - e.z;
+      // During the defend mission the attackers single-mindedly hunt the
+      // ritual caster — the hero must intercept them.
+      const tgt = (g.ritual && g.ritual.active) ? g.ritual : h;
+      const dx = tgt.x - e.x;
+      const dz = tgt.z - e.z;
       const dist = Math.hypot(dx, dz);
       e.facing = Math.sign(dx) || e.facing;
 
@@ -699,7 +1044,8 @@ export default function KnightsApp() {
         // the danger zone during the wind-up to make the blow whiff.
         e.windup -= dt;
         if (e.windup <= 0) {
-          const sdx = h.x - e.x, sdz = h.z - e.z;
+          const rtgt = (g.ritual && g.ritual.active) ? g.ritual : h;
+          const sdx = rtgt.x - e.x, sdz = rtgt.z - e.z;
           const sdist = Math.hypot(sdx, sdz);
           if (e.projectileSpeed && sdist > 100) {
             g.projectiles.push({
@@ -707,12 +1053,13 @@ export default function KnightsApp() {
               x: e.x, z: e.z, yOff: -60,
               vx: Math.sign(sdx) * e.projectileSpeed, vz: 0,
               angle: Math.sign(sdx) < 0 ? Math.PI : 0,
-              dmg: e.atk, enemy: true, life: 1.5, color: '#a44',
+              dmg: e.atk, enemy: true, life: 1.5, color: '#a44', el: e.el,
             });
           } else if (sdist < e.atkRange + 34 && Math.abs(sdz) < 46) {
-            damageHero(g, e.atk);
+            if (rtgt === h) damageHero(g, e.atk, e.el);
+            else damageRitual(g, e.atk);
           }
-          // else: the hero dodged — the blow finds empty air.
+          // else: the target dodged — the blow finds empty air.
         }
       } else if (e.atkCdLeft <= 0 && dist < e.atkRange && Math.abs(dz) < 36) {
         e.atkCdLeft = e.atkCooldown * (0.85 + Math.random() * 0.3);
@@ -730,7 +1077,11 @@ export default function KnightsApp() {
       p.life -= dt;
       if (p.enemy) {
         if (Math.abs(p.x - h.x) < 28 && Math.abs(p.z - h.z) < 30 && h.y > -40) {
-          damageHero(g, p.dmg);
+          damageHero(g, p.dmg, p.el);
+          p.life = 0;
+        } else if (g.ritual && g.ritual.active &&
+                   Math.abs(p.x - g.ritual.x) < 30 && Math.abs(p.z - g.ritual.z) < 32) {
+          damageRitual(g, p.dmg);
           p.life = 0;
         }
       } else {
@@ -741,6 +1092,25 @@ export default function KnightsApp() {
           if (Math.abs(p.z - e.z) > 28) continue;
           damageEnemy(g, e, p.dmg, { stun: p.stun, knockback: p.knockback || 12, hitstop: 35 });
           if (!p.pierces) { p.life = 0; break; }
+        }
+        // Arrows also chip cages and the gate
+        if (p.life > 0) {
+          for (let j = 0; j < g.cages.length; j++) {
+            const c = g.cages[j];
+            if (c.broken) continue;
+            if (Math.abs(p.x - c.x) < 40 && Math.abs(p.z - c.z) < 42) {
+              c.hp -= p.dmg; c.hitT = 0.25;
+              pushDamage(g, c.x, c.z, Math.round(p.dmg));
+              if (c.hp <= 0) breakCage(g, c);
+              p.life = 0; break;
+            }
+          }
+        }
+        if (p.life > 0 && g.gate && !g.gate.broken && p.vx > 0 && p.x >= g.gate.x - 20) {
+          g.gate.hp -= p.dmg; g.gate.hitT = 0.25;
+          pushDamage(g, g.gate.x - 30, p.z, Math.round(p.dmg));
+          if (g.gate.hp <= 0) breakGate(g);
+          p.life = 0;
         }
       }
     }
@@ -762,6 +1132,82 @@ export default function KnightsApp() {
     for (let i = 0; i < g.vfx.length; i++) g.vfx[i].t += dt;
     compact(g.vfx, fx => fx.t < fx.dur);
 
+    // Speech bubbles (negative t = still delayed)
+    for (let i = 0; i < g.speech.length; i++) g.speech[i].t += dt;
+    compact(g.speech, s => s.t < s.dur);
+
+    // Mission objects: cage/gate hit-shake timers
+    for (let i = 0; i < g.cages.length; i++) {
+      if (g.cages[i].hitT > 0) g.cages[i].hitT -= dt;
+    }
+    if (g.gate && g.gate.hitT > 0) g.gate.hitT -= dt;
+
+    // Actors: freed captives scamper off; static garden NPCs stand, speak
+    // when approached, and (Daiyu) shed petals.
+    for (let i = 0; i < g.actors.length; i++) {
+      const a = g.actors[i];
+      a.t += dt;
+      if (a.static) {
+        if (!a.spoken && Math.abs(h.x - a.x) < 170 && Math.abs(h.z - a.z) < 90) {
+          a.spoken = true;
+          pushSpeech(g, { x: a.x, z: a.z }, a.name, a.line, { delay: 0.15, dur: 3.4, color: a.color });
+        }
+        if (a.petals && Math.random() < dt * 2 && g.particles.length < 280) {
+          spawnPetal(g, a.x + (Math.random() * 2 - 1) * 50, a.z, 60 + Math.random() * 60);
+        }
+        continue;
+      }
+      if (a.vy !== 0 || a.y > 0) {           // the escape hop
+        a.y += a.vy * dt;
+        a.vy -= GRAVITY * 0.8 * dt;
+        if (a.y <= 0) { a.y = 0; a.vy = 0; spawnDust(g, a.x, a.z, 3); }
+      } else {
+        a.x += a.vx * dt;
+        if (Math.random() < dt * 6) spawnDust(g, a.x - Math.sign(a.vx) * 8, a.z, 1);
+      }
+      if (a.t > a.dur - 0.6) a.alpha = Math.max(0, (a.dur - a.t) / 0.6);
+    }
+    compact(g.actors, a => a.t < a.dur);
+
+    // The Five-Thunder rite: timer, reinforcement bursts, triumph or failure
+    if (g.ritual && g.ritual.active) {
+      const r = g.ritual;
+      r.t += dt;
+      while (r.burstIdx < r.bursts.length && r.t >= r.bursts[r.burstIdx].at) {
+        spawnBurst(g, r.bursts[r.burstIdx].spawns);
+        r.burstIdx++;
+      }
+      r.sparkT -= dt;
+      if (r.sparkT <= 0 && g.particles.length < 300) {
+        r.sparkT = 0.2;
+        spawnSpark(g, r.x + (Math.random() * 2 - 1) * 34, r.z, 1, '#c9a0ff');
+      }
+      if (r.hp <= 0) {
+        r.active = false;
+        g.stageFailed = true;
+        pushBanner(g, 'Gongsun Sheng has fallen', 2.2);
+        addShake(g, 0.5);
+      } else if (r.t >= r.dur) {
+        // 五雷天心正法 — thunder annihilates every foe on the field
+        r.active = false;
+        r.done = true;
+        g.objCur++;
+        g.vfx.push({ kind: 'flash', dur: 0.5, t: 0, world: false, x: 0, y: 0 });
+        let k = 0;
+        for (let i = 0; i < g.enemies.length; i++) {
+          const e = g.enemies[i];
+          if (e.dead) continue;
+          g.vfx.push({ kind: 'bolt', x: e.x, z: e.z, dur: 0.45, t: -(k * 0.09), world: true, yOff: 0, seed: (e.id * 97) | 0 });
+          damageEnemy(g, e, 9999, { crit: false, hitstop: 40 });
+          k++;
+        }
+        addShake(g, 0.8);
+        pushBanner(g, 'The Five Thunders answer!', 2.2);
+        sfxBanner();
+        pushSpeech(g, 'ritual', r.name, 'The mist obeys Heaven again. Gao Lian is mortal now — go.', { delay: 1.0, color: '#c9a0ff' });
+      }
+    }
+
     // Particles (sparks, dust, debris, embers)
     for (let i = 0; i < g.particles.length; i++) {
       const p = g.particles[i];
@@ -778,11 +1224,13 @@ export default function KnightsApp() {
     }
     compact(g.particles, p => p.life > 0);
 
-    // Ambient embers drifting up from the burning valley
+    // Ambient atmosphere: embers over the war-torn valleys, falling
+    // blossoms in the Land of Illusion.
     g.emberT -= dt;
     if (g.emberT <= 0 && g.particles.length < 200) {
       g.emberT = 0.16 + Math.random() * 0.22;
-      spawnEmber(g);
+      if (g.stage.theme === 'dream') spawnPetal(g);
+      else spawnEmber(g);
     }
 
     // Screen-shake + zoom-punch + combo-counter decay
@@ -791,11 +1239,21 @@ export default function KnightsApp() {
     if (g.comboT > 0) { g.comboT -= dt; if (g.comboT <= 0) g.comboCount = 0; }
     if (g.comboPop > 0) g.comboPop -= dt;
 
-    // Wave completion
+    // Wave completion — enemies down AND this wave's mission objective done
     if (g.waveActive) {
       let alive = 0;
       for (let i = 0; i < g.enemies.length; i++) if (!g.enemies[i].dead) alive++;
-      if (alive === 0) {
+      const wv = g.stage.waves[g.waveIdx];
+      let objDone = true;
+      if (wv) {
+        if (wv.cage) {
+          const c = g.cages.find(cg => cg.waveIdx === g.waveIdx);
+          if (c && !c.broken) objDone = false;
+        }
+        if ((wv.gate || wv.mirror) && g.gate && !g.gate.broken) objDone = false;
+        if (wv.defend && g.ritual && g.ritual.active) objDone = false;
+      }
+      if (alive === 0 && objDone) {
         g.waveActive = false;
         g.waveIdx++;
         h.hp = Math.min(h.hpMax, h.hp + h.hpMax * 0.08);
@@ -813,7 +1271,7 @@ export default function KnightsApp() {
     if (screen !== 'stage') return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    rendererRef.current = createRenderer(canvas);
+    rendererRef.current = createRenderer(canvas, gameRef.current && gameRef.current.stage.theme);
     rendererRef.current.resize(window.innerWidth, window.innerHeight);
 
     const onResize = () => {
@@ -838,21 +1296,39 @@ export default function KnightsApp() {
         }
         rendererRef.current.render(g);
 
-        if (g.stageFailed) {
-          setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
-            coins: g.hero.coins, xp: g.hero.xp, score: g.score, cleared: false });
-          setScreen('gameover');
-        } else if (g.stageComplete) {
-          const next = nextStageId(g.stageId);
-          const s = { ...save };
-          const totalCoins = (g.stage.rewards?.coin || 0) + g.hero.coins;
-          const totalXp = (g.stage.rewards?.xp || 0) + g.hero.xp;
-          s.coins = (s.coins || 0) + totalCoins;
-          if (next && !s.unlocked.includes(next)) s.unlocked = [...s.unlocked, next];
+        if (g.stageFailed && !g._ended) {
+          g._ended = true;
+          // RPG loop: a defeat still trains you — keep run XP, coins, spirits.
+          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot } };
+          s.heroXp[chosenHeroId] = (s.heroXp[chosenHeroId] || 0) + g.hero.xp;
+          s.coins = (s.coins || 0) + g.hero.coins;
+          for (const k of Object.keys(g.potGained)) s.pot[k] = (s.pot[k] || 0) + g.potGained[k];
           s.hero = chosenHeroId;
           persistSave(s); setSave(s);
           setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
-            coins: totalCoins, xp: totalXp, score: g.score, cleared: true, nextId: next });
+            coins: g.hero.coins, xp: g.hero.xp, score: g.score, cleared: false,
+            level: g.heroLevel, levelsGained: g.heroLevel - g.startLevel });
+          setScreen('gameover');
+        } else if (g.stageComplete && !g._ended) {
+          g._ended = true;
+          const next = nextStageId(g.stageId);
+          const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot }, relics: { ...save.relics } };
+          for (const k of Object.keys(g.potGained)) s.pot[k] = (s.pot[k] || 0) + g.potGained[k];
+          if (g.relicGained) s.relics[g.relicGained] = true;
+          // kill XP/coins were fortune-boosted as they dropped; only the
+          // stage-clear bonus still needs the multiplier
+          const totalCoins = Math.round((g.stage.rewards?.coin || 0) * g.fortune) + g.hero.coins;
+          const totalXp = Math.round((g.stage.rewards?.xp || 0) * g.fortune) + g.hero.xp;
+          s.coins = (s.coins || 0) + totalCoins;
+          s.heroXp[chosenHeroId] = (s.heroXp[chosenHeroId] || 0) + totalXp;
+          if (next && !s.unlocked.includes(next)) s.unlocked = [...s.unlocked, next];
+          s.hero = chosenHeroId;
+          persistSave(s); setSave(s);
+          const lvAfter = levelFromXp(s.heroXp[chosenHeroId]).level;
+          setEndStats({ stageId: g.stageId, stageName: g.stage.name, kills: g.kills,
+            coins: totalCoins, xp: totalXp, score: g.score, cleared: true, nextId: next,
+            level: lvAfter, levelsGained: lvAfter - g.startLevel,
+            relic: g.relicGained ? relicById(g.relicGained) : null });
           setScreen('reward');
         }
       }
@@ -963,6 +1439,8 @@ export default function KnightsApp() {
                 onClick={() => { sfxClick(); setChosenHeroId(hd.id); }}>
                 <div className="knights-hero-portrait" style={{ background: hd.portrait }}>
                   <SpriteThumb name={hd.sprite} w={96} h={120} />
+                  <span className="kn-portrait-lv">LV {levelFromXp((save.heroXp || {})[hd.id] || 0).level}</span>
+                  <span className="kn-portrait-el" style={{ color: ELEMENTS[hd.el].color }}>{ELEMENTS[hd.el].zh}</span>
                   <span className="kn-portrait-name">{hd.name}</span>
                 </div>
                 <div className="knights-hero-meta">
@@ -991,6 +1469,29 @@ export default function KnightsApp() {
                 <div className="knights-move-desc">{moves.magic.description}</div>
               </div>
             </div>
+            {(() => {
+              const lvNow = levelFromXp((save.heroXp || {})[chosenHeroId] || 0).level;
+              const st = statsFor(heroDef, lvNow, save.upgrades);
+              return (
+                <>
+                  <div className="kn-hero-stats">
+                    LV {lvNow} · HP <b>{st.hpMax}</b> · ATK <b>{st.atk}</b> ·
+                    <span style={{ color: ELEMENTS[heroDef.el].color }}> {ELEMENTS[heroDef.el].zh} {ELEMENTS[heroDef.el].name}</span>
+                  </div>
+                  <div className="kn-skill-track">
+                    {SKILLS.map(sk => {
+                      const got = lvNow >= sk.lv;
+                      return (
+                        <div key={sk.id} className={`kn-skill-chip ${got ? 'got' : ''}`} title={sk.desc}>
+                          <span className="kn-skill-lv">{got ? '✓' : `LV${sk.lv}`}</span>
+                          <span className="kn-skill-zh">{sk.zh}</span> {sk.name}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           <h3 style={{ marginTop: 16 }}>Choose Your Stage</h3>
@@ -1005,7 +1506,92 @@ export default function KnightsApp() {
                   <div className="knights-stage-chap">ROUND {s.chapter}</div>
                   <div className="knights-stage-name">{s.name}</div>
                   <div className="knights-stage-waves">{s.waves.length} waves</div>
+                  {s.mission && <div className="knights-stage-mission">⚑ {s.mission}</div>}
                   {locked && <div className="knights-stage-lock">LOCKED</div>}
+                </button>
+              );
+            })}
+          </div>
+
+          <h3 style={{ marginTop: 16 }}>The Camp <span className="kn-camp-coins">◯ {save.coins || 0}</span></h3>
+          <div className="kn-camp-grid">
+            {UPGRADES.map(u => {
+              const tier = (save.upgrades || {})[u.id] || 0;
+              const maxed = tier >= u.tiers;
+              const cost = maxed ? 0 : u.costs[tier];
+              const afford = (save.coins || 0) >= cost;
+              return (
+                <button key={u.id} className={`kn-camp-card ${maxed ? 'maxed' : ''}`}
+                  disabled={maxed || !afford}
+                  onClick={() => {
+                    sfxClick();
+                    const s = { ...save, upgrades: { ...save.upgrades, [u.id]: tier + 1 } };
+                    s.coins = (s.coins || 0) - cost;
+                    persistSave(s); setSave(s);
+                  }}>
+                  <div className="kn-camp-icon">{u.icon}</div>
+                  <div className="kn-camp-meta">
+                    <div className="kn-camp-name">{u.name} <span className="kn-camp-tier">{'●'.repeat(tier)}{'○'.repeat(u.tiers - tier)}</span></div>
+                    <div className="kn-camp-desc">{u.desc}</div>
+                  </div>
+                  <div className="kn-camp-cost">{maxed ? 'MAX' : `◯ ${cost}`}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <h3 style={{ marginTop: 16 }}>炼妖壶 · The Refining Pot</h3>
+          <p className="kn-pot-hint">Slain foes may leave a spirit (special-kills always do). Fuse {SPIRITS_PER_FUSE} spirits of an element into a charm: +6% damage dealt / −6% taken against that element per tier.</p>
+          <div className="kn-pot-grid">
+            {ELEMENT_KEYS.map(k => {
+              const meta = ELEMENTS[k];
+              const count = (save.pot || {})[k] || 0;
+              const tier = (save.charms || {})[k] || 0;
+              const canFuse = count >= SPIRITS_PER_FUSE && tier < CHARM_MAX_TIER;
+              return (
+                <div key={k} className="kn-pot-row" style={{ borderLeftColor: meta.color }}>
+                  <span className="kn-pot-el" style={{ color: meta.color }}>{meta.zh}</span>
+                  <span className="kn-pot-count">{count} spirit{count === 1 ? '' : 's'}</span>
+                  <span className="kn-pot-charm" style={{ color: meta.color }}>
+                    {'◆'.repeat(tier)}{'◇'.repeat(CHARM_MAX_TIER - tier)}
+                  </span>
+                  <button className="knights-btn small" disabled={!canFuse}
+                    onClick={() => {
+                      sfxClick();
+                      const s = { ...save, pot: { ...save.pot }, charms: { ...save.charms } };
+                      s.pot[k] = count - SPIRITS_PER_FUSE;
+                      s.charms[k] = tier + 1;
+                      persistSave(s); setSave(s);
+                    }}>
+                    {tier >= CHARM_MAX_TIER ? 'MAX' : `Fuse ${SPIRITS_PER_FUSE}`}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <h3 style={{ marginTop: 16 }}>寶物 · Relics</h3>
+          <p className="kn-pot-hint">Each boss guards a relic — guaranteed the first time you fell them. Tap an owned relic to equip it for {heroDef.name}.</p>
+          <div className="kn-relic-grid">
+            {RELICS.map(r => {
+              const owned = !!(save.relics || {})[r.id];
+              const equipped = (save.relicEq || {})[chosenHeroId] === r.id;
+              return (
+                <button key={r.id}
+                  className={`kn-relic-card ${owned ? '' : 'unknown'} ${equipped ? 'eq' : ''}`}
+                  disabled={!owned}
+                  onClick={() => {
+                    sfxClick();
+                    const s = { ...save, relicEq: { ...save.relicEq } };
+                    s.relicEq[chosenHeroId] = equipped ? null : r.id;
+                    persistSave(s); setSave(s);
+                  }}>
+                  <div className="kn-relic-zh">{owned ? r.zh : '？'}</div>
+                  <div className="kn-relic-meta">
+                    <div className="kn-relic-name">{owned ? r.name : 'Unclaimed relic'}</div>
+                    <div className="kn-relic-desc">{owned ? r.desc : `Guarded by the Round ${RELICS.indexOf(r) + 1} boss`}</div>
+                  </div>
+                  {equipped && <div className="kn-relic-eqtag">EQUIPPED</div>}
                 </button>
               );
             })}
@@ -1066,8 +1652,14 @@ export default function KnightsApp() {
           <div className="knights-reward-stats">
             <div>Kills: <b>{endStats.kills}</b></div>
             <div>Coins: <b>{endStats.coins}</b></div>
-            <div>XP: <b>{endStats.xp}</b></div>
+            <div>XP: <b>+{endStats.xp}</b></div>
             <div>Score: <b>{endStats.score}</b></div>
+            <div>Level: <b>LV {endStats.level}</b>
+              {endStats.levelsGained > 0 && <span className="kn-lv-up"> ▲ {endStats.levelsGained} level{endStats.levelsGained > 1 ? 's' : ''} gained!</span>}
+            </div>
+            {endStats.relic && (
+              <div className="kn-relic-line">寶物 <b>{endStats.relic.zh} {endStats.relic.name}</b> — equip it in the lobby!</div>
+            )}
           </div>
           <div className="knights-row" style={{ gap: 16, marginTop: 20 }}>
             <button className="knights-btn" onClick={() => { sfxClick(); setScreen('select'); }}>Lobby</button>
@@ -1089,6 +1681,8 @@ export default function KnightsApp() {
           <div className="knights-reward-stats">
             <div>Kills before falling: <b>{endStats.kills}</b></div>
             <div>Score: <b>{endStats.score}</b></div>
+            <div>XP kept: <b>+{endStats.xp}</b> <span className="kn-lv-up">a defeat still trains you</span></div>
+            <div>Level: <b>LV {endStats.level}</b></div>
           </div>
           <div className="knights-row" style={{ gap: 16, marginTop: 20 }}>
             <button className="knights-btn" onClick={() => { sfxClick(); setScreen('select'); }}>Lobby</button>
@@ -1246,19 +1840,35 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
     <>
       <div className="knights-hud knights-hud-tl">
         <div className="knights-hp-row">
-          <div className="knights-hero-chip" style={{ background: heroDef.portrait }}>
-            <SpriteThumb name={heroDef.sprite} fit="head" w={64} h={64} />
+          <div className="knights-chip-wrap">
+            <div className="knights-hero-chip" style={{ background: heroDef.portrait }}>
+              <SpriteThumb name={heroDef.sprite} fit="head" w={64} h={64} />
+            </div>
+            <div className="knights-lv-badge">LV {g.heroLevel}</div>
           </div>
           <div className="knights-bars">
             <div className="knights-bar hp">
               <div className="knights-bar-fill" style={{ width: `${100 * h.hp / h.hpMax}%` }} />
               <div className="knights-bar-text">{Math.max(0, Math.round(h.hp))} / {h.hpMax}</div>
             </div>
+            <div className="knights-bar xp">
+              <div className="knights-bar-fill" style={{ width: `${g.xpNeed > 0 ? Math.min(100, 100 * g.xpInto / g.xpNeed) : 100}%` }} />
+            </div>
             <div className="knights-stats">
               <span className="knights-coin">◯ {h.coins}</span>
               <span className="knights-xp">XP {h.xp}</span>
+              <span style={{ color: ELEMENTS[h.el] ? ELEMENTS[h.el].color : '#fff', fontWeight: 'bold' }}>
+                {ELEMENTS[h.el] ? ELEMENTS[h.el].zh : ''}
+              </span>
               <span className="knights-combo">Combo {h.comboStep > 0 ? h.comboStep : '–'}</span>
             </div>
+            {g.objective && (
+              <div className="knights-objective">
+                ⚑ {g.objective.text}
+                <b> {Math.min(g.objCur, g.objective.max)}/{g.objective.max}</b>
+                {g.objCur >= g.objective.max && <span className="kn-obj-done"> ✓</span>}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1277,13 +1887,18 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
           <div className="knights-skill-name">{moves.magic.name}</div>
           <div className="knights-skill-cost">−{Math.round(moves.magic.cost * 100)}% HP</div>
         </div>
-        {moves.combo.map((m, i) => (
-          <div key={i} className="knights-skill-card" style={{ borderColor: i === (h.comboStep || 0) % moves.combo.length ? '#ffd676' : '' }}>
-            <div className="knights-skill-num">{i + 1}</div>
-            <div className="knights-skill-name">{m.name}</div>
-            <div className="knights-skill-cost">×{m.dmgMult.toFixed(1)}</div>
-          </div>
-        ))}
+        {moves.combo.map((m, i) => {
+          const locked = i === 3 && !(g.skills && g.skills.combo4);
+          const comboLen = g.skills && g.skills.combo4 ? moves.combo.length : 3;
+          return (
+            <div key={i} className={`knights-skill-card ${locked ? 'kn-locked' : ''}`}
+              style={{ borderColor: !locked && i === (h.comboStep || 0) % comboLen ? '#ffd676' : '' }}>
+              <div className="knights-skill-num">{locked ? '🔒' : i + 1}</div>
+              <div className="knights-skill-name">{locked ? 'LV 7' : m.name}</div>
+              <div className="knights-skill-cost">{locked ? '第四式' : `×${m.dmgMult.toFixed(1)}`}</div>
+            </div>
+          );
+        })}
       </div>
 
       {showHowTo && (

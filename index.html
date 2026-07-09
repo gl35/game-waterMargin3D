@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/game-waterMargin3D/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <title>夢 Dream of Water Margin</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { background: #0a1520; overflow: hidden; }
+      #loading-screen {
+        position: fixed; inset: 0;
+        background: radial-gradient(ellipse at center, #1a2d3e 0%, #0a1018 100%);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        z-index: 9999; transition: opacity 0.6s ease;
+      }
+      #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+      #loading-title {
+        font-family: serif; font-size: clamp(22px, 5vw, 36px);
+        color: #d9b36b; text-shadow: 0 0 20px rgba(217,179,107,0.5);
+        margin-bottom: 8px; letter-spacing: 0.05em;
+      }
+      #loading-sub {
+        font-family: serif; font-size: clamp(12px, 2.5vw, 16px);
+        color: #8899aa; margin-bottom: 40px;
+      }
+      #loading-bar-wrap {
+        width: min(280px, 70vw); height: 6px;
+        background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;
+      }
+      #loading-bar {
+        height: 100%; width: 0%; border-radius: 3px;
+        background: linear-gradient(90deg, #d9b36b, #f0d090);
+        animation: load-progress 2.5s ease-out forwards;
+      }
+      @keyframes load-progress {
+        0%   { width: 0%; }
+        40%  { width: 60%; }
+        70%  { width: 85%; }
+        90%  { width: 95%; }
+        100% { width: 100%; }
+      }
+      #loading-hint {
+        margin-top: 20px; font-size: clamp(11px, 2vw, 14px);
+        color: #7a9aaa; font-family: sans-serif;
+        animation: hint-pulse 2s ease-in-out 2.5s infinite;
+      }
+      @keyframes hint-pulse {
+        0%,100% { opacity: 0.5; }
+        50%     { opacity: 1; }
+      }
+      #loading-screen {
+        cursor: pointer;
+      }
+    </style>
+    <script type="module" crossorigin src="/game-waterMargin3D/assets/index-Dg3MhJKj.js"></script>
+    <link rel="stylesheet" crossorigin href="/game-waterMargin3D/assets/index-u89bNroj.css">
+  </head>
+  <body>
+    <div id="loading-screen">
+      <div id="loading-title">夢 Dream of Water Margin</div>
+      <div id="loading-sub">Forged by oath, steel, and storm</div>
+      <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+      <div id="loading-hint">Tap or click to continue if this takes too long</div>
+    </div>
+    <div id="root"></div>
+    <script>
+      window.__hideLoading = function() {
+        const el = document.getElementById('loading-screen');
+        if (el) { el.classList.add('fade-out'); setTimeout(() => el.remove(), 600); }
+      };
+      // Hard fallback: force-hide after 3.5 seconds no matter what
+      setTimeout(window.__hideLoading, 3500);
+      // Also hide on tap/click
+      document.getElementById('loading-screen').addEventListener('click', window.__hideLoading);
+    </script>
+  </body>
+</html>

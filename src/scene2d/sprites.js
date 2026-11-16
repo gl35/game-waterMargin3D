@@ -702,7 +702,7 @@ export function preloadAllSprites() {
 export function drawSprite(ctx, name, sx, sy, options = {}) {
   const sprite = getSprite(name);
   if (!sprite) return false;
-  const { scale = 1, flip = false, anchorY = 'bottom', alpha = 1, tint = null, tintAlpha = 0, silhouette = false } = options;
+  const { scale = 1, flip = false, anchorY = 'bottom', alpha = 1, tint = null, tintAlpha = 0, silhouette = false, rig = null } = options;
   const iw = sprite.width;
   const ih = sprite.height;
   const target = TARGET_HEIGHT[name];
@@ -712,6 +712,9 @@ export function drawSprite(ctx, name, sx, sy, options = {}) {
   const h = ih * finalScale;
   const dy = anchorY === 'bottom' ? sy - h : anchorY === 'center' ? sy - h / 2 : sy;
   const dx = flip ? -w / 2 : sx - w / 2;
+  // The cut-out rig only runs on fully opaque draws (overlapping strips would
+  // band on translucent ones); afterimages and fades use the whole picture.
+  const info = rig && alpha >= 0.999 && !silhouette ? getRigInfo(name) : null;
   ctx.save();
   if (alpha !== 1) ctx.globalAlpha = alpha;
   if (flip) {
@@ -719,16 +722,142 @@ export function drawSprite(ctx, name, sx, sy, options = {}) {
     ctx.scale(-1, 1);
   }
   // silhouette: draw ONLY the flat-colour shape (afterimages, smears)
-  if (!(silhouette && tint)) ctx.drawImage(sprite, dx, dy, w, h);
+  if (!(silhouette && tint)) {
+    if (info) drawStrips(ctx, sprite, dx, dy, w, h, rig, info);
+    else ctx.drawImage(sprite, dx, dy, w, h);
+  }
   if (tint && (silhouette || tintAlpha > 0.01)) {
     const tinted = getTintedSprite(name, sprite, tint);
     if (tinted) {
       if (!silhouette) ctx.globalAlpha = alpha * Math.min(1, tintAlpha);
-      ctx.drawImage(tinted, dx, dy, w, h);
+      if (info) drawStrips(ctx, tinted, dx, dy, w, h, rig, info);
+      else ctx.drawImage(tinted, dx, dy, w, h);
     }
   }
   ctx.restore();
   return true;
+}
+
+// ── Cut-out rig: make a single picture move ──
+// Each character is one painted picture. To animate it we slice the picture
+// into thin horizontal strips and move them independently: the spine bends
+// (attacks whip forward, hits fold back), the head tilts, the chest breathes,
+// and — where the art shows two separate legs — the lower body splits into a
+// left and right half that stride against each other with a foot lift. Art
+// with no visible legs (robes, gowns) gets a swaying hem instead.
+//
+// Rig values are in px at a 150px-tall character, in ART space (before any
+// horizontal flip): { bend, belly, head, stride, liftL, liftR, breathe, hem, phase }.
+const RIG_CACHE = new Map();
+const RIG_STRIPS = 28;
+
+export function getRigInfo(name) {
+  const sprite = REGISTRY.get(name);
+  if (!sprite) return null;
+  let r = RIG_CACHE.get(name);
+  if (r && r._src === sprite) return r;
+  r = analyzeRig(sprite);
+  r._src = sprite;
+  RIG_CACHE.set(name, r);
+  return r;
+}
+
+// Find out from the picture itself whether it stands on two separate legs,
+// where the gap between them is, and how high the legs join (the hip line).
+function analyzeRig(sprite) {
+  const w = sprite.width, h = sprite.height;
+  const k = Math.min(1, 170 / h);
+  const cw = Math.max(8, Math.round(w * k)), ch = Math.max(8, Math.round(h * k));
+  const c = document.createElement('canvas');
+  c.width = cw; c.height = ch;
+  const cx = c.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(sprite, 0, 0, cw, ch);
+  let data;
+  try { data = cx.getImageData(0, 0, cw, ch).data; }
+  catch { return { legs: false, splitX: 0.5, hipU: 0.34 }; }
+  const solid = (x, y) => data[(y * cw + x) * 4 + 3] > 70;
+
+  // horizontal centre of the torso — the legs hang below this, wherever the
+  // weapon or cloak pushes the picture's bounding box
+  let mx = 0, mn = 0;
+  for (let y = Math.floor(ch * 0.35); y < Math.floor(ch * 0.7); y += 2) {
+    for (let x = 0; x < cw; x++) if (solid(x, y)) { mx += x; mn++; }
+  }
+  const bodyX = mn ? mx / mn : cw / 2;
+
+  let rows = 0, votes = 0, gapSum = 0;
+  for (let y = Math.floor(ch * 0.85); y < Math.floor(ch * 0.97); y++) {
+    rows++;
+    const runs = [];
+    let start = -1;
+    for (let x = 0; x < cw; x++) {
+      const on = solid(x, y);
+      if (on && start < 0) start = x;
+      if (start >= 0 && (!on || x === cw - 1)) { runs.push([start, on ? x : x - 1]); start = -1; }
+    }
+    if (runs.length < 2) continue;
+    // the gap closest to the middle of the figure
+    let best = null;
+    for (let i = 0; i + 1 < runs.length; i++) {
+      const a = runs[i][1], b = runs[i + 1][0];
+      const g = b - a;
+      if (g < cw * 0.025) continue;
+      const footL = runs[i][1] - runs[i][0], footR = runs[i + 1][1] - runs[i + 1][0];
+      if (footL < cw * 0.05 || footR < cw * 0.05) continue;
+      const mid = (a + b) / 2;
+      const score = g - Math.abs(mid - bodyX) * 1.2;
+      if (!best || score > best.score) best = { score, mid };
+    }
+    if (best) { votes++; gapSum += best.mid; }
+  }
+  const legs = rows > 0 && votes / rows >= 0.5;
+  const splitX = legs ? Math.min(0.8, Math.max(0.2, gapSum / votes / cw)) : 0.5;
+  let hipU = 0.34;
+  if (legs) {
+    // climb the gap from the feet until the two legs merge into the body
+    const sxp = Math.round(splitX * cw);
+    let y = Math.floor(ch * 0.9), run = 0;
+    for (; y > ch * 0.45; y--) {
+      if (solid(sxp, y)) { if (++run >= 3) break; } else run = 0;
+    }
+    hipU = Math.min(0.45, Math.max(0.16, 1 - (y + 3) / ch));
+  }
+  return { legs, splitX, hipU };
+}
+
+function drawStrips(ctx, img, x0, y0, w, h, rig, info) {
+  const iw = img.width, ih = img.height;
+  const s = h / 150;                              // amplitudes scale with size
+  const N = RIG_STRIPS;
+  const bend = rig.bend || 0, belly = rig.belly || 0, head = rig.head || 0;
+  const hem = rig.hem || 0, phase = rig.phase || 0, breathe = rig.breathe || 0;
+  const stride = rig.stride || 0, liftL = rig.liftL || 0, liftR = rig.liftR || 0;
+  const striding = info.legs && (stride || liftL || liftR);
+  const split = info.splitX, hipU = info.hipU;
+  for (let i = 0; i < N; i++) {
+    const v0 = i / N, v1 = (i + 1) / N;
+    const u = 1 - (v0 + v1) / 2;                  // 1 at the head → 0 at the feet
+    let off = bend * Math.pow(u, 1.6) + belly * Math.sin(u * Math.PI);
+    if (u > 0.76) off += head * (u - 0.76) / 0.24;
+    const hemTop = info.legs ? hipU + 0.26 : 0.42, hemBot = info.legs ? hipU : 0;
+    if (hem && u < hemTop && u >= hemBot && (!info.legs || hipU < 0.26)) {
+      off += hem * Math.pow(1 - (u - hemBot) / (hemTop - hemBot), 1.3) * Math.sin(phase + u * 7);
+    }
+    off *= s;
+    const srcY = v0 * ih, srcH = (v1 - v0) * ih;
+    const dy = y0 + v0 * h, dh = (v1 - v0) * h + 0.75;   // slight overlap hides seams
+    if (striding && u < hipU) {
+      const t = 1 - u / hipU;                     // 0 at the hip → 1 at the foot
+      const a = stride * s * t;
+      const sxSplit = split * iw, dSplit = split * w;
+      ctx.drawImage(img, 0, srcY, sxSplit, srcH, x0 + off - a, dy - liftL * s * t, dSplit + 0.75, dh);
+      ctx.drawImage(img, sxSplit, srcY, iw - sxSplit, srcH, x0 + dSplit + off + a, dy - liftR * s * t, w - dSplit, dh);
+    } else {
+      let dw = w;
+      if (breathe) { const b = (u - 0.6) / 0.17; dw = w * (1 + breathe * Math.exp(-b * b)); }
+      ctx.drawImage(img, 0, srcY, iw, srcH, x0 + off + (w - dw) / 2, dy, dw, dh);
+    }
+  }
 }
 
 // Flat-colour copy of a sprite's silhouette (same alpha, one colour). Used for

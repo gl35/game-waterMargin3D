@@ -388,9 +388,23 @@ export function createRenderer(canvas, themeName = 'dusk') {
       flip: !!p.flip, anchorY: 'bottom', scale: p.scale || 1,
       alpha: p.alpha == null ? 1 : p.alpha,
       tint: p.tint || null, tintAlpha: p.tintAlpha || 0, silhouette: !!p.silhouette,
+      rig: p.rig || null,
     });
     ctx.restore();
     return drew;
+  }
+
+  // Shared cut-out rig poses. `art` is the way the picture faces (+1 right,
+  // -1 left) so "forward" values land on the right side whatever the flip.
+  function rigWalk(rig, art, phase, amp) {
+    const sw = Math.sin(phase), cw = Math.cos(phase);
+    rig.stride = amp * sw;
+    rig.liftL = amp * 1.4 * Math.max(0, -cw * art);     // the leg swinging forward lifts
+    rig.liftR = amp * 1.4 * Math.max(0, cw * art);
+    rig.bend += 5 * art;                                // lean into the walk
+    rig.belly += sw * 3.2;                              // shoulders and hips counter-swing
+    rig.head += (-1.5 + Math.sin(phase * 2) * 1.6) * art - sw * 2.2;
+    rig.hem = 7; rig.phase = phase;                     // skirts and robes swing with each step
   }
 
   // Turn-around: the sprite folds flat and unfolds facing the new way.
@@ -421,22 +435,31 @@ export function createRenderer(canvas, themeName = 'dusk') {
     // Pose accumulators — every state layers a whole-body transform onto these.
     let lean = 0, lungeX = 0, scaleX = 1, scaleY = 1, lift = 0, swing = 0, alpha = 1, pivotY = 0;
     let tint = null, tintAlpha = 0;
+    // Cut-out rig: the picture's own parts move (legs, spine, head, hem).
+    const rig = { bend: 0, belly: 0, head: 0, stride: 0, liftL: 0, liftR: 0, breathe: 0, hem: 0, phase: 0 };
+    const art = 1;                                        // hero art faces right
 
     // Airborne lift (h.y is NEGATIVE while airborne → raise up the screen).
     lift += -(h.y || 0);
 
     if (!airborne && !ko && h.attacking <= 0 && h.dashing <= 0) {
       if (walking) {
-        // paper-doll gait: rock from foot to foot, dip on each footfall
+        // legs stride, the body dips on each footfall and leans into the walk
         const dip = 1 - Math.abs(step);
-        lean += 0.045 * dir + step * 0.05;
-        scaleY *= 1 - dip * 0.05; scaleX *= 1 + dip * 0.035;
+        lean += 0.03 * dir + step * 0.018;
+        scaleY *= 1 - dip * 0.035; scaleX *= 1 + dip * 0.02;
+        rigWalk(rig, art, h.walkPhase * Math.PI, 11);
       } else {
         const br = Math.sin(t * 2.2);
-        scaleY *= 1 + br * 0.018; scaleX *= 1 - br * 0.008;
-        lean += Math.sin(t * 1.1) * 0.008;
+        scaleY *= 1 + br * 0.012;
+        rig.breathe = 0.02 + br * 0.022;
+        rig.bend = Math.sin(t * 1.3) * 1.6;
+        rig.head = Math.sin(t * 1.7 + 0.6) * 1.3;
+        rig.hem = 1.6; rig.phase = t * 2.2;
       }
     }
+    if (airborne && !ko) { rig.liftL = rig.liftR = 9; rig.stride = 4; rig.bend += 3 * art; }
+    if (h.dashing > 0) { rig.bend += 13 * art; rig.stride = 9; rig.head += 3 * art; }
 
     if (h.land > 0) {
       const k = h.land / 0.15;
@@ -455,6 +478,11 @@ export function createRenderer(canvas, themeName = 'dusk') {
         const p = clamp(1 - h.attacking / mv.dur, 0, 1);
         const thr = thrustEnv(p);
         const fwd = Math.max(0, thr);
+        // the spine coils back on the wind-up, then whips through the blow
+        rig.bend += (thr < 0 ? thr * 26 : thr * 17) * art;
+        rig.head += thr * 5 * art;
+        rig.belly += -thr * 4 * art;
+        if (!airborne) { rig.stride = 3 + fwd * 6; }      // feet plant wide
         if (mv.downward) {
           // dive: tip forward and stretch toward the ground
           lean += (0.35 + fwd * 0.2) * dir; scaleY *= 1 + fwd * 0.1; swing = fwd;
@@ -485,14 +513,18 @@ export function createRenderer(canvas, themeName = 'dusk') {
         lean += e * 0.08 * dir;
         scaleY *= 1 + Math.max(0, e) * 0.12 - Math.max(0, -e) * 0.10;
         scaleX *= 1 + Math.max(0, -e) * 0.10 - Math.max(0, e) * 0.04;
+        rig.bend += -e * 7 * art; rig.head += -Math.max(0, e) * 6 * art;
+        rig.breathe = 0.05 + Math.max(0, e) * 0.06;
+        rig.hem = 6; rig.phase = t * 14;
       }
     }
 
     if (h.hitFlash > 0 && h.attacking <= 0 && !ko) {
       const k = Math.min(1, h.hitFlash / 0.4);
-      lean += -0.16 * dir * k;
+      lean += -0.10 * dir * k;
       lungeX += -dir * 8 * k + Math.sin(t * 70) * 3 * k;
       scaleX *= 1 + 0.05 * k; scaleY *= 1 - 0.05 * k;
+      rig.bend += -14 * k * art; rig.head += -6 * k * art; rig.belly += 5 * k * art;   // folds around the blow
     }
 
     if (ko) {
@@ -508,7 +540,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
     if (h.hitFlash > 0) { tint = '#ff5a4a'; tintAlpha = Math.min(0.7, h.hitFlash * 2); }
     else if (h.castT > 0) { tint = '#ffffff'; tintAlpha = Math.min(0.55, h.castT * 1.2); }
     else if (h.invuln > 0 && h.dashing <= 0 && !ko && !g.stageComplete) {
-      alpha = Math.sin(t * 46) > 0 ? 1 : 0.5;              // i-frame blink
+      if (Math.sin(t * 46) > 0) { tint = '#ffffff'; tintAlpha = 0.4; }   // i-frame flicker
     }
 
     const footY = fy - bob;
@@ -532,7 +564,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
       ctx.restore();
     }
 
-    const pose = { flip, lean, scaleX, scaleY, lift, lungeX, pivotY };
+    const pose = { flip, lean, scaleX, scaleY, lift, lungeX, pivotY, rig: ko ? null : rig };
     if (h.dashing > 0) {                          // dash afterimages (silhouettes)
       const ga = Math.min(1, h.dashing / 0.25);
       for (let i = 3; i >= 1; i--) {
@@ -555,6 +587,19 @@ export function createRenderer(canvas, themeName = 'dusk') {
       ctx.fillStyle = h.color || '#ffc26b';
       ctx.fillRect(bx - 14, by - 80, 28, 64);
       ctx.beginPath(); ctx.arc(bx, by - 88, 12, 0, Math.PI * 2); ctx.fill();
+    }
+
+    if (h.grab) {                                  // what to do with a held foe
+      ctx.save();
+      ctx.font = 'bold 12px system-ui';
+      ctx.textAlign = 'center';
+      const label = 'J: strike   ←/→ + J: throw';
+      const lw = ctx.measureText(label).width + 14;
+      ctx.fillStyle = 'rgba(0,0,0,0.62)';
+      ctx.fillRect(sx - lw / 2, fy - visH - 34, lw, 18);
+      ctx.fillStyle = '#ffe6a0';
+      ctx.fillText(label, sx, fy - visH - 21);
+      ctx.restore();
     }
 
     // Stars circle a knocked-out hero
@@ -607,7 +652,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
       const dlift = e.deathY || 0;
       drawShadow(sx, dfy, e.width || 56, clamp(1 - dlift / 160 - fade * 0.5, 0, 1));
       drawPosed(e.sprite, sx, dfy, {
-        flip: e.facing >= 0, lean: e.deathSpin || 0, lift: dlift, pivotY: visH * 0.45,
+        flip: e.artRight ? e.facing < 0 : e.facing >= 0, lean: e.deathSpin || 0, lift: dlift, pivotY: visH * 0.45,
         scale: scale * (1 - fade * 0.3), alpha: a,
         tint: '#ffffff', tintAlpha: Math.max(0, 0.9 - fade * 3.5),
       });
@@ -615,31 +660,47 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
 
     const fy = floorYFromZ(e.z);
-    let flip = e.facing >= 0;
+    // enemy art faces LEFT; the mirror phantom wears hero art, which faces right
+    const art = e.artRight ? 1 : -1;
+    let flip = e.artRight ? e.facing < 0 : e.facing >= 0;
     let lean = 0, lungeX = 0, scaleX = 1, scaleY = 1, pivotY = 0, alpha = 1, bob = 0;
+    const rig = { bend: 0, belly: 0, head: 0, stride: 0, liftL: 0, liftR: 0, breathe: 0, hem: 0, phase: 0 };
     let lift = (e.y || 0);                     // height above the floor while launched
     let tint = null, tintAlpha = 0;
 
-    if (e.launched > 0) {
+    if (e.grabbed) {
+      // seized by the collar: hoisted off balance, struggling
+      lift += 10;
+      lean += -0.2 * dir + Math.sin(e.bobPhase * 6) * 0.05;
+      rig.bend = -10 * art; rig.head = Math.sin(e.bobPhase * 7) * 4;
+      rig.liftL = 5 + Math.sin(e.bobPhase * 8) * 4; rig.liftR = 5 - Math.sin(e.bobPhase * 8) * 4;
+    } else if (e.launched > 0) {
       // juggled: a full tumble through the air, landing upright
       const spinDir = (e.kbVx || dir) < 0 ? -1 : 1;
       lean += clamp((e.launchT || 0) / 0.63, 0, 1) * Math.PI * 2 * spinDir;
       pivotY = visH * 0.45;
     } else if (e.stun > 0) {
       const k = Math.min(1, e.stun / 0.2);
-      lean += -0.14 * dir * k;
+      lean += -0.08 * dir * k;
       lungeX += -dir * 6 * k + Math.sin(e.hitFlash * 120) * 3 * k;
+      rig.bend = -13 * k * art; rig.head = -6 * k * art; rig.belly = 5 * k * art;   // doubles over
     } else if (e.moving) {
-      // waddling march: rock foot to foot with a little hop
-      const st = Math.sin((e.walkPhase || 0) * Math.PI);
+      // marching: legs stride, a small hop and dip on each footfall
+      const ph = (e.walkPhase || 0) * Math.PI;
+      const st = Math.sin(ph);
       const dip = 1 - Math.abs(st);
-      bob = Math.abs(st) * 5;
-      lean += 0.04 * dir + st * 0.055;
-      scaleY *= 1 - dip * 0.04; scaleX *= 1 + dip * 0.03;
+      bob = Math.abs(st) * 4;
+      lean += 0.025 * dir + st * 0.02;
+      scaleY *= 1 - dip * 0.03; scaleX *= 1 + dip * 0.02;
+      rigWalk(rig, art, ph, 10);
     } else {
       const br = Math.sin(e.bobPhase);
-      scaleY *= 1 + br * 0.015;
+      scaleY *= 1 + br * 0.01;
       lean += 0.02 * dir;
+      rig.breathe = 0.02 + br * 0.02;
+      rig.bend = Math.sin(e.bobPhase * 0.6) * 1.5;
+      rig.head = Math.sin(e.bobPhase * 0.8 + 1) * 1.2;
+      rig.hem = 1.5; rig.phase = e.bobPhase;
     }
 
     if (e.landT > 0) {                          // crash-landing squash
@@ -651,9 +712,10 @@ export function createRenderer(canvas, themeName = 'dusk') {
       // anticipation: coil back and flush red as the blow charges
       const k = clamp(1 - e.windup / (e.windupMax || 0.3), 0, 1);
       const pulse = 0.75 + 0.25 * Math.sin(k * 26);
-      lean += -0.17 * dir * k;
+      lean += -0.08 * dir * k;
       lungeX += -dir * 11 * k;
       scaleY *= 1 - 0.07 * k; scaleX *= 1 + 0.06 * k;
+      rig.bend += -16 * k * art; rig.head += -4 * k * art; rig.stride = 5 * k;   // rears back
       tint = e.projectileSpeed ? '#ffd86a' : '#ff3a24'; tintAlpha = 0.42 * k * pulse;
     } else if (e.atkAnim > 0) {
       // the strike itself: snap forward, then recover
@@ -662,8 +724,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
       if (e.projectileSpeed) {
         lungeX += -f * 7 * dir; lean += -f * 0.06 * dir;       // recoil from the shot
       } else {
-        lungeX += f * 30 * dir; lean += f * 0.22 * dir;
+        lungeX += f * 30 * dir; lean += f * 0.10 * dir;
         scaleX *= 1 + f * 0.08; scaleY *= 1 - f * 0.03;
+        rig.bend += f * 20 * art; rig.head += f * 5 * art; rig.stride = 4 + f * 6;   // whips through
       }
     }
 
@@ -696,11 +759,11 @@ export function createRenderer(canvas, themeName = 'dusk') {
       ctx.globalAlpha = alpha;
       ctx.drawImage(ghostGlow, sx + lungeX - 60, footY - lift - visH + 8, 120, visH + 16);
       ctx.restore();
-      alpha *= 0.88;
     }
 
     const drew = drawPosed(e.sprite, sx, footY, {
       flip, lean, lungeX, scaleX, scaleY, lift, scale, pivotY, alpha, tint, tintAlpha,
+      rig: e.launched > 0 ? null : rig,
     });
     if (!drew) {
       const w = e.width || 56, hh = e.height || 88;
@@ -1163,6 +1226,54 @@ export function createRenderer(canvas, themeName = 'dusk') {
         ctx.fillRect(-30, -30, cssW + 60, cssH + 60);
         break;
       }
+      case 'cutin': {
+        // Full-gauge special: the hero's portrait sweeps across a slashed band.
+        const tt = fx.t / fx.dur;
+        const inK = 1 - Math.pow(1 - Math.min(1, tt / 0.22), 3);
+        const outK = tt > 0.78 ? (tt - 0.78) / 0.22 : 0;
+        const bandH = Math.min(190, cssH * 0.3);
+        const cy = cssH * 0.4;
+        ctx.globalAlpha = (1 - outK) * 0.92;
+        ctx.save();
+        ctx.translate(cssW / 2, cy);
+        ctx.rotate(-0.06);
+        ctx.scale(1, inK);
+        const bg = ctx.createLinearGradient(-cssW, 0, cssW, 0);
+        bg.addColorStop(0, 'rgba(10,6,4,0.95)');
+        bg.addColorStop(0.55, 'rgba(40,14,8,0.92)');
+        bg.addColorStop(1, 'rgba(10,6,4,0.95)');
+        ctx.fillStyle = bg;
+        ctx.fillRect(-cssW, -bandH / 2, cssW * 2, bandH);
+        ctx.fillStyle = fx.color || '#ffd676';
+        ctx.fillRect(-cssW, -bandH / 2 - 4, cssW * 2, 4);
+        ctx.fillRect(-cssW, bandH / 2, cssW * 2, 4);
+        // speed streaks racing through the band
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 9; i++) {
+          const yy = -bandH / 2 + 12 + i * (bandH - 24) / 8;
+          const xx = ((fx.t * 1900 + i * 331) % (cssW * 2)) - cssW;
+          ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + 190, yy); ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.rect(-cssW, -bandH / 2, cssW * 2, bandH);
+        ctx.clip();
+        const px = -cssW * 0.5 + inK * cssW * 0.3 + tt * 30;
+        const sh = spriteDrawHeight(fx.sprite) || 150;
+        drawSprite(ctx, fx.sprite, px, bandH * 1.5, { scale: (bandH * 2.3) / sh, alpha: (1 - outK) });
+        ctx.restore();
+        ctx.globalAlpha = (1 - outK) * Math.min(1, tt / 0.2);
+        ctx.font = `italic 900 ${Math.max(22, Math.min(54, cssW * 0.05))}px system-ui`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 6;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        const tx = cssW * 0.6 + (1 - inK) * 120;
+        ctx.strokeText(fx.text || '', tx, cy + 16);
+        ctx.fillStyle = fx.color || '#ffd676';
+        ctx.fillText(fx.text || '', tx, cy + 16);
+        break;
+      }
       case 'banner': {
         // Brush-stroke title card: snaps in large, settles, then fades.
         const size0 = fx.size || 38;
@@ -1608,6 +1719,35 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
   }
 
+  // The boss's name and a long health bar across the top, arcade-style.
+  function drawBossBar(g) {
+    let boss = null;
+    for (let i = 0; i < g.enemies.length; i++) if (g.enemies[i].boss && !g.enemies[i].dead) boss = g.enemies[i];
+    if (!boss) return;
+    const bw = Math.min(520, cssW * 0.62);
+    const bx = (cssW - bw) / 2, by = 52;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(bx - 3, by - 3, bw + 6, 16);
+    const k = Math.max(0, boss.hp / boss.hpMax);
+    const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    grad.addColorStop(0, '#ffb04a');
+    grad.addColorStop(1, '#d62a2a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(bx, by, bw * k, 10);
+    ctx.strokeStyle = 'rgba(255,214,118,0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx - 3, by - 3, bw + 6, 16);
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillStyle = '#ffe6a0';
+    ctx.strokeText(boss.name, cssW / 2, by + 30);
+    ctx.fillText(boss.name, cssW / 2, by + 30);
+    ctx.restore();
+  }
+
   function drawCombo(g) {
     if (!g.comboCount || g.comboCount < 2) return;
     const fade = clamp(g.comboT / 0.4, 0, 1);
@@ -1703,6 +1843,21 @@ export function createRenderer(canvas, themeName = 'dusk') {
 
     // ── UI overlays — NOT shaken ──
     drawCombo(g);
+    drawBossBar(g);
+
+    // Running K.O. tally
+    if (g.kills > 0) {
+      ctx.save();
+      ctx.textAlign = 'right';
+      ctx.font = 'italic 900 22px system-ui';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillStyle = '#ffd676';
+      const kx = cssW - 20, ky = cssW < 700 ? 118 : 104;
+      ctx.strokeText(`K.O. ${g.kills}`, kx, ky);
+      ctx.fillText(`K.O. ${g.kills}`, kx, ky);
+      ctx.restore();
+    }
 
     // Wave dots
     if (g.stage && g.stage.waves) {

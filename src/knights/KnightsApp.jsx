@@ -298,7 +298,10 @@ export default function KnightsApp() {
     // Arena width is in WORLD units, not screen fraction — otherwise a narrow
     // phone gets a tiny arena and the hero is pinned near screen-center the
     // instant a wave spawns.
-    const lockX = wave.atX + Math.max(600, window.innerWidth * 0.35);
+    // The arena spans the whole screen: its right wall sits near the right
+    // edge of the view, so the hero can fight across the full width instead
+    // of hitting an invisible wall at mid-screen.
+    const lockX = Math.min(g.stage.width, wave.atX + Math.max(600, window.innerWidth * 0.62));
     g.waveLockX = lockX;
     g.waveActive = true;
     if (g.ritual && !g.ritual.active) g.ritual = null;   // clear a finished rite
@@ -951,7 +954,7 @@ export default function KnightsApp() {
 
     // Camera lock during wave
     let leftX = g.camX;
-    let rightX = g.camX + g.stage.width;
+    let rightX = g.stage.width;
     if (g.waveActive) rightX = g.waveLockX;
     if (h.x < leftX + 60) h.x = leftX + 60;
     if (h.x > rightX - 60) h.x = rightX - 60;
@@ -1025,7 +1028,14 @@ export default function KnightsApp() {
     }
 
     // Camera follow (only forward; never scrolls back to keep arcade feel)
-    const target = Math.max(g.camX, h.x - window.innerWidth * 0.42);
+    let target = h.x - window.innerWidth * 0.42;
+    if (g.waveActive) {
+      // During a fight the camera stops with the arena wall just inside the
+      // right edge; the hero then roams the whole screen.
+      const edge = Math.max(g.gate && !g.gate.broken ? 110 : 0, Math.min(150, window.innerWidth * 0.16));
+      target = Math.min(target, g.waveLockX - window.innerWidth + edge);
+    }
+    target = Math.max(g.camX, target);
     g.camX += (target - g.camX) * Math.min(1, dt * 5);
     if (g.camX < 0) g.camX = 0;
     if (g.camX > g.stage.width - window.innerWidth) g.camX = Math.max(0, g.stage.width - window.innerWidth);

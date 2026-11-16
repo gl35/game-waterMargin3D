@@ -51,6 +51,9 @@ const NO_INPUT = Object.freeze({
   attackEdge: false, jumpEdge: false, magicEdge: false, dashEdge: false, attackHeld: false,
 });
 const TURN_T = 0.13;             // seconds for the turn-around flip
+// Pose-only pseudo moves for the grab game (damage is applied directly)
+const KNEE_MOVE = { name: 'knee', dur: 0.16, xRange: 50, zRange: 30, dmgMult: 1 };
+const THROW_MOVE = { name: 'throw', dur: 0.26, xRange: 90, zRange: 30, dmgMult: 1, launches: true };
 const LAUNCH_VY = 600;           // launch impulse for juggled enemies
 
 function compact(arr, alive) {
@@ -86,6 +89,7 @@ function makeHero(heroDef, level = 1, upgrades = null) {
     turnT: 0,                      // turn-around flip animation
     castT: 0,                      // special-cast aura timer
     ko: 0, koVx: 0,                // knocked-out tumble
+    grab: null, grabT: 0, grabHits: 0, grabCd: 0,   // held enemy (grab & throw)
   };
 }
 
@@ -269,6 +273,7 @@ export default function KnightsApp() {
       relicSpDmg: ef.spDmgMult || 1,
       relicMinEl: ef.minElementMult || 0,
       relicGained: null,
+      rage: 0,                       // 氣 gauge: fills as you fight; full = a free, stronger special
       pending: [],                   // timed follow-up hits (game-time, pause-safe)
       slowT: 0, endT: null, winT: 0,
       _ended: false,
@@ -298,7 +303,10 @@ export default function KnightsApp() {
     // Arena width is in WORLD units, not screen fraction — otherwise a narrow
     // phone gets a tiny arena and the hero is pinned near screen-center the
     // instant a wave spawns.
-    const lockX = wave.atX + Math.max(600, window.innerWidth * 0.35);
+    // The arena spans the whole screen: its right wall sits near the right
+    // edge of the view, so the hero can fight across the full width instead
+    // of hitting an invisible wall at mid-screen.
+    const lockX = Math.min(g.stage.width, wave.atX + Math.max(600, window.innerWidth * 0.62));
     g.waveLockX = lockX;
     g.waveActive = true;
     if (g.ritual && !g.ritual.active) g.ritual = null;   // clear a finished rite
@@ -310,6 +318,7 @@ export default function KnightsApp() {
       // of the mirror — it wears the chosen hero's sprite.
       if (wave.boss === 'phantom') {
         e.sprite = g.heroDef.sprite;
+        e.artRight = true;                    // hero art faces right, enemy art left
         e.name = `Mirror ${g.heroDef.name}`;
       }
       e.x = Math.max(lockX + window.innerWidth * 0.45, g.camX + window.innerWidth + 90);
@@ -572,6 +581,16 @@ export default function KnightsApp() {
     const stopMs = (isCrit ? 70 : (opts && opts.hitstop) || 30);
     g.hitStopUntil = Math.max(g.hitStopUntil, performance.now() + stopMs);
 
+    // 氣 builds with every blow you land (specials don't feed themselves)
+    if (!(opts && opts.source === 'magic')) {
+      const was = g.rage;
+      g.rage = Math.min(100, g.rage + (isCrit ? 6 : 3.5));
+      if (was < 100 && g.rage >= 100) {
+        pushBanner(g, '氣 MAX — your special is FREE', 1.4, 26);
+        sfxBanner();
+      }
+    }
+
     // Combo counter ticks on every connected hit.
     g.comboCount = (g.comboCount || 0) + 1;
     g.comboT = 1.1;
@@ -651,6 +670,8 @@ export default function KnightsApp() {
     h.hp -= amount;
     h.hitFlash = 0.4;
     h.invuln = 0.55;
+    g.rage = Math.min(100, g.rage + 8);    // pain feeds the gauge too
+    releaseGrab(g);
     addShake(g, 0.32);
     spawnSpark(g, h.x, h.z, 9, '#ff8484');
     g.comboCount = 0; g.comboT = 0;        // taking a hit drops your combo
@@ -812,6 +833,45 @@ export default function KnightsApp() {
     if (move.downward && h.y < -4) { h.vy = Math.max(h.vy, 520); h.plunge = true; }   // dive
   }
 
+  // ── Grab & throw ──
+  // Walk into a foe to seize them. Attack = a knee (the third hurls them);
+  // hold ← / → with Attack to throw that way at once. A thrown body bowls
+  // over everyone in its path.
+  function releaseGrab(g) {
+    const h = g.hero;
+    if (!h.grab) return;
+    h.grab.grabbed = false;
+    h.grab = null;
+    h.grabCd = 0.6;
+  }
+  function throwGrabbed(g, dir) {
+    const h = g.hero, e = h.grab;
+    if (!e) return;
+    h.facing = dir;
+    e.grabbed = false; h.grab = null; h.grabCd = 0.5;
+    e.thrown = true; e.thrownHit = {};
+    e.launchT = 0; e.launched = 1.4; e.vy = 500; e.y = 8;
+    e.kbVx = dir * 540; e.stun = 0; e.windup = 0;
+    e.x = h.x + dir * 30;
+    h.attacking = THROW_MOVE.dur; h.attackMove = THROW_MOVE; h.attackHitDone = true;
+    g.vfx.push({ kind: 'slash', x: h.x, z: h.z, yOff: -60, dir, range: 110, color: g.heroDef.color || '#ffe080',
+      width: 40, up: true, flipY: false, dur: 0.26, t: 0, world: true });
+    addShake(g, 0.2);
+    spawnDust(g, h.x, h.z, 5);
+    sfxCrit();
+  }
+  function grabStrike(g, inp) {
+    const h = g.hero, e = h.grab;
+    if (!e) return;
+    const dir = inp.left ? -1 : inp.right ? 1 : 0;
+    if (dir) { throwGrabbed(g, dir); return; }
+    h.grabHits++;
+    h.attacking = KNEE_MOVE.dur; h.attackMove = KNEE_MOVE; h.attackHitDone = true;
+    damageEnemy(g, e, h.atk * 1.15, { stun: 1.2, hitstop: 45 });
+    if (e.dead) { releaseGrab(g); return; }
+    if (h.grabHits >= 3) throwGrabbed(g, h.facing);
+  }
+
   function tryJump(g) {
     const h = g.hero;
     if (h.y < -4 || h.attacking > 0) return; // already airborne or busy
@@ -833,20 +893,30 @@ export default function KnightsApp() {
     const m = g.heroKit.magic;
     // 仙術精通 (LV10): specials hit harder and cost less HP
     const empowered = g.skills.empower;
-    const cost = Math.round(h.hpMax * Math.max(0.04, (m.cost || 0.10) - (empowered ? 0.02 : 0)) * (g.relicSpCost || 1));
+    const burst = g.rage >= 100;           // full 氣: no HP cost, bigger blast, hero cut-in
+    const cost = burst ? 0 : Math.round(h.hpMax * Math.max(0.04, (m.cost || 0.10) - (empowered ? 0.02 : 0)) * (g.relicSpCost || 1));
+    releaseGrab(g);
+    if (burst && h.hp > 1) {
+      g.rage = 0;
+      g.slowT = 0.45;
+      h.invuln = Math.max(h.invuln, 0.9);
+      g.vfx.push({ kind: 'flash', dur: 0.25, t: 0, world: false, x: 0, y: 0 });
+      g.vfx.push({ kind: 'cutin', sprite: h.sprite, text: m.name, color: m.color === '#1a1a1a' ? '#8a7cff' : (m.color || '#ffd676'),
+        dur: 0.85, t: 0, world: false, x: 0, y: 0 });
+    }
     if (h.hp <= cost + 1) return;          // refuse if would suicide
     h.hp -= cost;
     h.attacking = 0.45;
     h.attackMove = null;
     h.castT = 0.6;
     g.vfx.push({ kind: 'cast', x: h.x, z: h.z, yOff: 0, color: m.color || '#fff', dur: 0.6, t: 0, world: true });
-    pushBanner(g, m.name, 0.9, 30);
+    if (!burst) pushBanner(g, m.name, 0.9, 30);
     addShake(g, 0.34);
     spawnSpark(g, h.x, h.z, 18, m.color || '#fff');
     sfxBanner();
 
     if (m.self && m.buff) {
-      h.buffs.push({ atk: m.buff.atk || 0, atkSpeed: m.buff.atkSpeed || 0, dur: m.buff.dur || 6, t: 0 });
+      h.buffs.push({ atk: m.buff.atk || 0, atkSpeed: m.buff.atkSpeed || 0, dur: (m.buff.dur || 6) * (burst ? 1.6 : 1), t: 0 });
       g.vfx.push({ kind: 'aoe', x: h.x, z: h.z, yOff: -40, range: 100, color: m.color, dur: 0.6, t: 0, world: true });
       return;
     }
@@ -858,7 +928,7 @@ export default function KnightsApp() {
       color: m.color === '#1a1a1a' ? '#8a7cff' : m.color, dur: 0.9, t: 0, world: true,
       seed: g.time * 100 | 0,
     });
-    let activeAtk = h.atk * m.dmgMult * (empowered ? 1.3 : 1) * (g.relicSpDmg || 1);
+    let activeAtk = h.atk * m.dmgMult * (empowered ? 1.3 : 1) * (g.relicSpDmg || 1) * (burst ? 1.6 : 1);
     for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) activeAtk *= 1 + h.buffs[i].atk;
     const perHit = activeAtk / (m.hits || 1);
     for (let k = 0; k < (m.hits || 1); k++) {
@@ -918,7 +988,17 @@ export default function KnightsApp() {
 
     // Hero input → movement
     let mvx = 0, mvz = 0;
-    if (h.attacking <= 0 && h.dashing <= 0) {
+    if (h.grabCd > 0) h.grabCd -= dt;
+    if (h.grab) {
+      const ge = h.grab;
+      h.grabT -= dt;
+      if (ge.dead || h.ko > 0 || h.grabT <= 0 || h.y < -4 || h.dashing > 0) releaseGrab(g);
+      else {
+        ge.x = h.x + h.facing * 44; ge.z = h.z + 0.5;
+        ge.stun = Math.max(ge.stun || 0, 0.25); ge.windup = 0;
+      }
+    }
+    if (h.attacking <= 0 && h.dashing <= 0 && !h.grab) {
       if (inp.left)  mvx -= 1;
       if (inp.right) mvx += 1;
       if (inp.up)    mvz -= 1;
@@ -951,7 +1031,7 @@ export default function KnightsApp() {
 
     // Camera lock during wave
     let leftX = g.camX;
-    let rightX = g.camX + g.stage.width;
+    let rightX = g.stage.width;
     if (g.waveActive) rightX = g.waveLockX;
     if (h.x < leftX + 60) h.x = leftX + 60;
     if (h.x > rightX - 60) h.x = rightX - 60;
@@ -992,10 +1072,25 @@ export default function KnightsApp() {
     if (inp.attackHeld) inp.attackEdge = true;
     if (inp.attackEdge) { inp.attackEdge = false; h.atkBuf = 0.2; }
     if (h.atkBuf > 0) {
-      if (h.attacking <= 0) { h.atkBuf = 0; tryAttack(g); }
+      if (h.attacking <= 0) { h.atkBuf = 0; if (h.grab) grabStrike(g, inp); else tryAttack(g); }
       else h.atkBuf -= dt;
     }
-    if (inp.jumpEdge)   { inp.jumpEdge   = false; tryJump(g);   }
+    if (inp.jumpEdge)   { inp.jumpEdge   = false; releaseGrab(g); tryJump(g); }
+
+    // Seize a foe by walking into them
+    if (!h.grab && h.grabCd <= 0 && h.walking && mvx !== 0 && h.attacking <= 0 && h.dashing <= 0 && h.y >= 0 && !g.stageComplete) {
+      for (let i = 0; i < g.enemies.length; i++) {
+        const e = g.enemies[i];
+        if (e.dead || e.boss || e.launched > 0 || e.spawnT > 0 || e.windup > 0) continue;
+        const gdx = e.x - h.x;
+        if (Math.sign(gdx) !== h.facing || Math.abs(gdx) > 38 || Math.abs(e.z - h.z) > 16) continue;
+        h.grab = e; h.grabT = 1.6; h.grabHits = 0;
+        e.grabbed = true; e.stun = 0.3; e.windup = 0;
+        spawnDust(g, e.x, e.z, 3);
+        sfxClick();
+        break;
+      }
+    }
     if (inp.magicEdge)  { inp.magicEdge  = false; tryMagic(g);  }
     if (inp.dashEdge)   { inp.dashEdge   = false; tryDash(g);   }
 
@@ -1025,7 +1120,14 @@ export default function KnightsApp() {
     }
 
     // Camera follow (only forward; never scrolls back to keep arcade feel)
-    const target = Math.max(g.camX, h.x - window.innerWidth * 0.42);
+    let target = h.x - window.innerWidth * 0.42;
+    if (g.waveActive) {
+      // During a fight the camera stops with the arena wall just inside the
+      // right edge; the hero then roams the whole screen.
+      const edge = Math.max(g.gate && !g.gate.broken ? 110 : 0, Math.min(150, window.innerWidth * 0.16));
+      target = Math.min(target, g.waveLockX - window.innerWidth + edge);
+    }
+    target = Math.max(g.camX, target);
     g.camX += (target - g.camX) * Math.min(1, dt * 5);
     if (g.camX < 0) g.camX = 0;
     if (g.camX > g.stage.width - window.innerWidth) g.camX = Math.max(0, g.stage.width - window.innerWidth);
@@ -1071,6 +1173,13 @@ export default function KnightsApp() {
             e.stun = Math.max(e.stun || 0, 0.3);
             spawnDust(g, e.x, e.z, 6);
             addShake(g, 0.08);
+            if (e.thrown) {                // a thrown body lands HARD
+              e.thrown = false;
+              e.stun = 0.7;
+              g.vfx.push({ kind: 'ring', x: e.x, z: e.z, yOff: 0, range: 90, color: '#ffe6a0', dur: 0.3, t: 0, world: true });
+              addShake(g, 0.22);
+              damageEnemy(g, e, h.atk * 2.2, { stun: 0.7, hitstop: 55, crit: false });
+            }
           }
         }
       }
@@ -1078,8 +1187,18 @@ export default function KnightsApp() {
         e.launched -= dt;
         e.launchT = (e.launchT || 0) + dt;
         e.x += (e.kbVx || 0) * dt * 1.2;
+        if (e.thrown) {
+          for (let j = 0; j < g.enemies.length; j++) {
+            const o = g.enemies[j];
+            if (o === e || o.dead || e.thrownHit[o.id]) continue;
+            if (Math.abs(o.x - e.x) > 52 || Math.abs(o.z - e.z) > 36) continue;
+            e.thrownHit[o.id] = true;
+            damageEnemy(g, o, h.atk * 1.5, { stun: 0.5, knockback: 90, hitstop: 45, launches: !o.boss });
+          }
+        }
         continue;
       }
+      if (e.grabbed) { e.moving = false; continue; }   // held fast by the hero
 
       if (e.stun > 0) {
         e.stun -= dt;
@@ -1173,10 +1292,10 @@ export default function KnightsApp() {
     // Keep foes from stacking on a single spot — nudge overlapping pairs apart.
     for (let i = 0; i < g.enemies.length; i++) {
       const a = g.enemies[i];
-      if (a.dead || a.launched > 0) continue;
+      if (a.dead || a.launched > 0 || a.grabbed) continue;
       for (let j = i + 1; j < g.enemies.length; j++) {
         const b = g.enemies[j];
-        if (b.dead || b.launched > 0) continue;
+        if (b.dead || b.launched > 0 || b.grabbed) continue;
         const ddx = b.x - a.x, ddz = b.z - a.z;
         const minX = 40, minZ = 18;
         if (Math.abs(ddx) >= minX || Math.abs(ddz) >= minZ) continue;
@@ -1561,6 +1680,8 @@ export default function KnightsApp() {
               <li><b>K / Z / Space</b> — jump (jump → attack = aerial)</li>
               <li><b>L / C</b> — special (costs HP, like the arcade)</li>
               <li><b>Shift</b> — dash · <b>M</b> — mute · <b>Esc</b> — pause</li>
+              <li><b>Grab</b> — walk into a foe; <b>J</b> knees, <b>←/→ + J</b> throws them into the crowd</li>
+              <li><b>氣 gauge</b> — fills as you fight; when full your special is free and stronger</li>
             </ul>
             <p className="knights-hint">Smash barrels for food. Eat meat to heal. Brawl on.</p>
           </div>
@@ -1992,6 +2113,10 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
             <div className="knights-bar xp">
               <div className="knights-bar-fill" style={{ width: `${g.xpNeed > 0 ? Math.min(100, 100 * g.xpInto / g.xpNeed) : 100}%` }} />
             </div>
+            <div className={`knights-bar rage ${g.rage >= 100 ? 'full' : ''}`}>
+              <div className="knights-bar-fill" style={{ width: `${Math.min(100, g.rage)}%` }} />
+              <div className="knights-bar-text">{g.rage >= 100 ? '氣 MAX — SPECIAL IS FREE' : '氣'}</div>
+            </div>
             <div className="knights-stats">
               <span className="knights-coin">◯ {h.coins}</span>
               <span className="knights-xp">XP {h.xp}</span>
@@ -2049,6 +2174,8 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
               <li><b>K / Z / Space</b> — jump (+ attack = aerial)</li>
               <li><b>L / C</b> — special (costs HP)</li>
               <li><b>Shift</b> — dash</li>
+              <li><b>Grab</b> — walk into a foe; <b>J</b> knees, <b>←/→ + J</b> throws</li>
+              <li><b>氣 gauge</b> full — special is free and stronger</li>
               <li><b>M</b> — mute · <b>Esc</b> — pause</li>
             </ul>
             <p style={{ fontStyle: 'italic', color: '#caa07a' }}>

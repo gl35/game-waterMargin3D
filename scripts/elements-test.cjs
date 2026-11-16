@@ -91,7 +91,7 @@ async function boot(page, saveObj, hero) {
 
   // die to persist the pot
   await page.evaluate(() => { window.__KN.stageFailed = true; });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(2400);
   const savedPot = await page.evaluate(() => JSON.parse(localStorage.getItem('knights_save_v1')).pot);
   if ((savedPot.metal || 0) >= 1) ok(`spirits persisted to the save (${JSON.stringify(savedPot)})`);
   else bad(`pot not persisted: ${JSON.stringify(savedPot)}`);

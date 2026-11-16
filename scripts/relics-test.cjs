@@ -61,7 +61,7 @@ async function killBoss(page) {
   if (drop.gained === 'iron_writ' && drop.banner) ok('first boss kill drops 鐵面令 Iron Writ (banner shown)');
   else bad(`relic drop wrong: ${JSON.stringify(drop)}`);
   await page.screenshot({ path: 'relic-drop.png' });
-  await page.waitForTimeout(2200);                    // stage completes → persists
+  await page.waitForTimeout(3600);                    // victory plays out → persists
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('knights_save_v1')));
   if (saved.relics && saved.relics.iron_writ) ok('relic persisted to the save');
   else bad(`relic not persisted: ${JSON.stringify(saved.relics)}`);

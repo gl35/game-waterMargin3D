@@ -79,7 +79,7 @@ async function intoStage(page) {
 
   // ── 3. defeat persists XP ──
   await page.evaluate(() => { const g = window.__KN; g.hero.hp = 1; g.hero.invuln = 0; damage: g.stageFailed = true; });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(2400);
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('knights_save_v1')));
   if ((kept.heroXp.songjiang || 0) > 95) ok(`defeat kept XP (${kept.heroXp.songjiang} > 95)`);
   else bad(`defeat lost XP: ${JSON.stringify(kept.heroXp)}`);

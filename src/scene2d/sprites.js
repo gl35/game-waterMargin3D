@@ -702,7 +702,7 @@ export function preloadAllSprites() {
 export function drawSprite(ctx, name, sx, sy, options = {}) {
   const sprite = getSprite(name);
   if (!sprite) return false;
-  const { scale = 1, flip = false, anchorY = 'bottom', alpha = 1 } = options;
+  const { scale = 1, flip = false, anchorY = 'bottom', alpha = 1, tint = null, tintAlpha = 0, silhouette = false } = options;
   const iw = sprite.width;
   const ih = sprite.height;
   const target = TARGET_HEIGHT[name];
@@ -711,15 +711,53 @@ export function drawSprite(ctx, name, sx, sy, options = {}) {
   const w = iw * finalScale;
   const h = ih * finalScale;
   const dy = anchorY === 'bottom' ? sy - h : anchorY === 'center' ? sy - h / 2 : sy;
+  const dx = flip ? -w / 2 : sx - w / 2;
   ctx.save();
   if (alpha !== 1) ctx.globalAlpha = alpha;
   if (flip) {
     ctx.translate(sx, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(sprite, -w / 2, dy, w, h);
-  } else {
-    ctx.drawImage(sprite, sx - w / 2, dy, w, h);
+  }
+  // silhouette: draw ONLY the flat-colour shape (afterimages, smears)
+  if (!(silhouette && tint)) ctx.drawImage(sprite, dx, dy, w, h);
+  if (tint && (silhouette || tintAlpha > 0.01)) {
+    const tinted = getTintedSprite(name, sprite, tint);
+    if (tinted) {
+      if (!silhouette) ctx.globalAlpha = alpha * Math.min(1, tintAlpha);
+      ctx.drawImage(tinted, dx, dy, w, h);
+    }
   }
   ctx.restore();
   return true;
+}
+
+// Flat-colour copy of a sprite's silhouette (same alpha, one colour). Used for
+// hit flashes and afterimages so they follow the art's outline instead of a
+// bounding box. Cached per sprite+colour at reduced resolution.
+const TINT_CACHE = new Map();
+const TINT_MAX_H = 260;
+function getTintedSprite(name, sprite, color) {
+  const key = name + '|' + color;
+  let c = TINT_CACHE.get(key);
+  if (c && c._src === sprite) return c;
+  const k = Math.min(1, TINT_MAX_H / sprite.height);
+  c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(sprite.width * k));
+  c.height = Math.max(1, Math.round(sprite.height * k));
+  const tc = c.getContext('2d');
+  tc.drawImage(sprite, 0, 0, c.width, c.height);
+  tc.globalCompositeOperation = 'source-in';
+  tc.fillStyle = color;
+  tc.fillRect(0, 0, c.width, c.height);
+  c._src = sprite;
+  TINT_CACHE.set(key, c);
+  return c;
+}
+
+// On-screen height (px) a sprite is drawn at for a given scale multiplier.
+export function spriteDrawHeight(name, scale = 1) {
+  const sprite = REGISTRY.get(name);
+  const target = TARGET_HEIGHT[name];
+  if (target) return target * scale;
+  return sprite ? sprite.height * scale : 0;
 }

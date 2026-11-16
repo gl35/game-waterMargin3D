@@ -10,7 +10,7 @@
 // Perf: cached sky/ground gradients on resize, offscreen mountain
 // silhouette pre-rendered once, no per-frame allocations or
 // createRadialGradient. DPR capped at 1.5.
-import { drawSprite } from '../scene2d/sprites.js';
+import { drawSprite, spriteDrawHeight } from '../scene2d/sprites.js';
 import { ELEMENTS } from './elements.js';
 
 export const Z_MIN = 0;
@@ -76,6 +76,8 @@ export function createRenderer(canvas, themeName = 'dusk') {
   let dpr = 1;
   let skyGrad = null, groundGrad = null;
   let sunCanvas = null, burnCanvas = null, mountainCanvas = null, mountainCanvasW = 0;
+  let groundTile = null, treeTile = null;
+  const GROUND_W = 1024, TREE_W = 1400;
   let floorYTop = 0, floorYBot = 0, horizonY = 0;
 
   function floorYFromZ(z) {
@@ -139,6 +141,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
       bc.fillRect(0, 0, burnCanvas.width, burnCanvas.height);
     }
 
+    buildGroundTile(h);
+    buildTreeTile();
+
     mountainCanvasW = Math.ceil(w * 2);
     mountainCanvas = offscreen(mountainCanvasW, horizonY + 30);
     {
@@ -161,6 +166,97 @@ export function createRenderer(canvas, themeName = 'dusk') {
         mc.fill();
       }
     }
+  }
+
+  // Tiny deterministic RNG so the scenery is identical every frame/resize.
+  function rng(seed) {
+    let v = seed >>> 0;
+    return () => { v = (v * 1664525 + 1013904223) >>> 0; return v / 4294967296; };
+  }
+
+  // The road: brushed streaks, ruts and pebbles that scroll with the camera,
+  // so walking finally reads as covering ground.
+  function buildGroundTile(h) {
+    const gh = Math.max(40, Math.ceil(h - horizonY));
+    groundTile = offscreen(GROUND_W, gh);
+    const gc = groundTile.getContext('2d');
+    const r = rng(theme.sky[0].length * 7919 + 17);
+    const wrap = (fn) => { fn(0); fn(-GROUND_W); fn(GROUND_W); };
+    // long brushed streaks — thin and faint far away, bolder up close
+    for (let i = 0; i < 150; i++) {
+      const k = Math.pow(r(), 0.7);                    // 0 far → 1 near
+      const y = 6 + k * (gh - 12);
+      const len = 30 + k * 150 + r() * 60;
+      const x = r() * GROUND_W;
+      const light = r() < 0.4;
+      gc.strokeStyle = light ? `rgba(255,236,200,${0.03 + k * 0.035})` : `rgba(0,0,0,${0.045 + k * 0.07})`;
+      gc.lineWidth = 1 + k * 2;
+      gc.lineCap = 'round';
+      wrap((ox) => { gc.beginPath(); gc.moveTo(x + ox, y); gc.lineTo(x + ox + len, y + (r() - 0.5) * 2); gc.stroke(); });
+    }
+    // pebbles and tufts
+    for (let i = 0; i < 70; i++) {
+      const k = Math.pow(r(), 0.8);
+      const y = 10 + k * (gh - 20);
+      const x = r() * GROUND_W;
+      const sz = 1.5 + k * 3.5;
+      const tuft = r() < 0.35;
+      wrap((ox) => {
+        if (tuft) {
+          gc.strokeStyle = `rgba(0,0,0,${0.16 + k * 0.12})`;
+          gc.lineWidth = 1.2;
+          gc.beginPath();
+          gc.moveTo(x + ox - sz, y); gc.lineTo(x + ox - sz * 1.6, y - sz * 2.2);
+          gc.moveTo(x + ox, y); gc.lineTo(x + ox, y - sz * 2.8);
+          gc.moveTo(x + ox + sz, y); gc.lineTo(x + ox + sz * 1.7, y - sz * 2);
+          gc.stroke();
+        } else {
+          gc.fillStyle = `rgba(0,0,0,${0.16 + k * 0.10})`;
+          gc.beginPath(); gc.ellipse(x + ox, y, sz * 1.5, sz * 0.7, 0, 0, Math.PI * 2); gc.fill();
+          gc.fillStyle = `rgba(255,240,210,${0.05 + k * 0.05})`;
+          gc.beginPath(); gc.ellipse(x + ox - sz * 0.3, y - sz * 0.25, sz * 0.8, sz * 0.3, 0, 0, Math.PI * 2); gc.fill();
+        }
+      });
+    }
+  }
+
+  // A line of trees along the far edge of the road, drifting slower than the
+  // ground (parallax) to give the scene depth.
+  function buildTreeTile() {
+    const th = 120;
+    treeTile = offscreen(TREE_W, th);
+    const tc = treeTile.getContext('2d');
+    const r = rng(theme.mts[2].length * 104729 + 5);
+    const wrap = (fn) => { fn(0); fn(-TREE_W); fn(TREE_W); };
+    for (let layer = 0; layer < 2; layer++) {
+      tc.fillStyle = layer ? theme.mts[2] : theme.mts[1];
+      tc.globalAlpha = layer ? 0.72 : 0.45;
+      const count = layer ? 13 : 20;
+      for (let i = 0; i < count; i++) {
+        const x = (i + r() * 0.8) * (TREE_W / count);
+        const hgt = (layer ? 34 : 24) + r() * (layer ? 36 : 22);
+        const wid = hgt * (0.34 + r() * 0.2);
+        const pine = r() < 0.6;
+        wrap((ox) => {
+          const bx = x + ox;
+          if (pine) {
+            for (let t = 0; t < 3; t++) {
+              const ty = th - hgt * (0.25 + t * 0.25);
+              const tw = wid * (1 - t * 0.24);
+              tc.beginPath();
+              tc.moveTo(bx - tw, ty + hgt * 0.3); tc.lineTo(bx, ty - hgt * 0.22); tc.lineTo(bx + tw, ty + hgt * 0.3);
+              tc.closePath(); tc.fill();
+            }
+            tc.fillRect(bx - 2, th - hgt * 0.3, 4, hgt * 0.3);
+          } else {
+            tc.beginPath(); tc.ellipse(bx, th - hgt * 0.62, wid * 0.95, hgt * 0.42, 0, 0, Math.PI * 2); tc.fill();
+            tc.beginPath(); tc.ellipse(bx - wid * 0.5, th - hgt * 0.42, wid * 0.6, hgt * 0.28, 0, 0, Math.PI * 2); tc.fill();
+            tc.fillRect(bx - 2.5, th - hgt * 0.45, 5, hgt * 0.45);
+          }
+        });
+      }
+    }
+    tc.globalAlpha = 1;
   }
 
   function drawBackground(g) {
@@ -190,6 +286,32 @@ export function createRenderer(canvas, themeName = 'dusk') {
     // ground PNG either — same reason.
     ctx.fillStyle = groundGrad;
     ctx.fillRect(-M, horizonY, w + 2 * M, h - horizonY + M);
+
+    // Road texture scrolls 1:1 with the world.
+    if (groundTile) {
+      const gx = -(((camX % GROUND_W) + GROUND_W) % GROUND_W);
+      for (let x = gx - GROUND_W; x < w + M; x += GROUND_W) {
+        if (x + GROUND_W > -M) ctx.drawImage(groundTile, Math.round(x), Math.round(horizonY));
+      }
+    }
+    // Tree line straddling the horizon, at mid parallax.
+    if (treeTile) {
+      const tx = -((((camX * 0.5) % TREE_W) + TREE_W) % TREE_W);
+      const ty = Math.round(horizonY - treeTile.height + 12);
+      for (let x = tx - TREE_W; x < w + M; x += TREE_W) {
+        if (x + TREE_W > -M) ctx.drawImage(treeTile, Math.round(x), ty);
+      }
+      // ground the trees with a soft haze so they don't look pasted on
+      const hz = ctx.createLinearGradient(0, horizonY - 6, 0, horizonY + 26);
+      hz.addColorStop(0, 'rgba(0,0,0,0)');
+      hz.addColorStop(0.45, theme.ground[0]);
+      hz.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = hz;
+      ctx.fillRect(-M, horizonY - 6, w + 2 * M, 32);
+      ctx.restore();
+    }
   }
 
   // Dream-phantom aura: a soft jade glow drawn behind ghostly enemies.
@@ -249,20 +371,34 @@ export function createRenderer(canvas, themeName = 'dusk') {
   // Draw a sprite with a full affine pose around its foot point:
   //   lungeX  horizontal slide (screen px)
   //   lift    vertical raise   (screen px, +up)
-  //   lean    rotation about the feet (rad)
+  //   lean    rotation (rad) about the feet, or about `pivotY` px above them
   //   scaleX/scaleY  squash & stretch about the feet
+  //   tint/tintAlpha colour wash that follows the sprite's silhouette
+  //   silhouette     draw ONLY the flat tint shape (afterimages)
   function drawPosed(name, footX, footY, p) {
     ctx.save();
     ctx.translate(footX + (p.lungeX || 0), footY - (p.lift || 0));
-    if (p.lean) ctx.rotate(p.lean);
-    const sxk = p.scaleX || 1, syk = p.scaleY || 1;
+    if (p.lean) {
+      if (p.pivotY) { ctx.translate(0, -p.pivotY); ctx.rotate(p.lean); ctx.translate(0, p.pivotY); }
+      else ctx.rotate(p.lean);
+    }
+    const sxk = p.scaleX == null ? 1 : p.scaleX, syk = p.scaleY == null ? 1 : p.scaleY;
     if (sxk !== 1 || syk !== 1) ctx.scale(sxk, syk);
     const drew = drawSprite(ctx, name, 0, 0, {
       flip: !!p.flip, anchorY: 'bottom', scale: p.scale || 1,
       alpha: p.alpha == null ? 1 : p.alpha,
+      tint: p.tint || null, tintAlpha: p.tintAlpha || 0, silhouette: !!p.silhouette,
     });
     ctx.restore();
     return drew;
+  }
+
+  // Turn-around: the sprite folds flat and unfolds facing the new way.
+  // Returns the horizontal scale factor and whether to show the OLD facing.
+  function turnFold(turnT) {
+    if (!(turnT > 0)) return null;
+    const k = clamp(turnT / 0.13, 0, 1);          // 1 → 0
+    return { sx: Math.max(0.08, Math.abs(Math.cos(k * Math.PI))), old: k > 0.5 };
   }
 
   function drawHero(g) {
@@ -271,93 +407,149 @@ export function createRenderer(canvas, themeName = 'dusk') {
     const fy = floorYFromZ(h.z);
     const t = g.time;
     const dir = h.facing >= 0 ? 1 : -1;
-    const flip = h.facing < 0;
+    let flip = h.facing < 0;
+    const name = h.sprite || 'hero/idle';
+    const visH = spriteDrawHeight(name) || 150;
+    const tintCol = h.color || '#ffd676';
 
-    const walking = h.walking && h.y >= -0.5;
-    const bob = walking ? Math.abs(Math.sin(h.walkPhase * Math.PI)) * 8 : Math.sin(t * 2.2) * 1.5;
+    const ko = h.ko > 0;
+    const airborne = h.y < -0.5;
+    const walking = h.walking && !airborne && !ko;
+    const step = Math.sin(h.walkPhase * Math.PI);          // one footfall per unit
+    const bob = walking ? Math.abs(step) * 7 : 0;
 
     // Pose accumulators — every state layers a whole-body transform onto these.
-    let lean = 0, lungeX = 0, scaleX = 1, scaleY = 1, lift = 0, swing = 0;
+    let lean = 0, lungeX = 0, scaleX = 1, scaleY = 1, lift = 0, swing = 0, alpha = 1, pivotY = 0;
+    let tint = null, tintAlpha = 0;
 
     // Airborne lift (h.y is NEGATIVE while airborne → raise up the screen).
-    const airborne = h.y < -0.5;
     lift += -(h.y || 0);
 
-    if (!airborne && h.attacking <= 0 && h.dashing <= 0) {
+    if (!airborne && !ko && h.attacking <= 0 && h.dashing <= 0) {
       if (walking) {
-        lungeX += Math.sin(h.walkPhase) * 3;
-        lean += 0.05 * dir;
-        scaleY *= 1 + Math.sin(h.walkPhase * 2) * 0.03;
+        // paper-doll gait: rock from foot to foot, dip on each footfall
+        const dip = 1 - Math.abs(step);
+        lean += 0.045 * dir + step * 0.05;
+        scaleY *= 1 - dip * 0.05; scaleX *= 1 + dip * 0.035;
       } else {
-        scaleY *= 1 + Math.sin(t * 2.2) * 0.02;
+        const br = Math.sin(t * 2.2);
+        scaleY *= 1 + br * 0.018; scaleX *= 1 - br * 0.008;
+        lean += Math.sin(t * 1.1) * 0.008;
       }
     }
 
     if (h.land > 0) {
       const k = h.land / 0.15;
       scaleY *= 1 - 0.30 * k; scaleX *= 1 + 0.28 * k;
-    } else if (airborne) {
+    } else if (airborne && !ko) {
       const s = Math.min(0.26, Math.abs(h.vy) / 1500);
       scaleY *= 1 + s; scaleX *= 1 - s * 0.7;
+      if (g.stageComplete) lean += Math.sin(t * 9) * 0.05;   // victory wiggle
     }
 
     if (h.dashing > 0) { lean += 0.26 * dir; scaleX *= 1.12; scaleY *= 0.95; }
 
-    if (h.attacking > 0) {
+    if (h.attacking > 0 && !ko) {
       const mv = h.attackMove;
       if (mv) {
         const p = clamp(1 - h.attacking / mv.dur, 0, 1);
         const thr = thrustEnv(p);
         const fwd = Math.max(0, thr);
-        if (mv.aoe || mv.downward) {
+        if (mv.downward) {
+          // dive: tip forward and stretch toward the ground
+          lean += (0.35 + fwd * 0.2) * dir; scaleY *= 1 + fwd * 0.1; swing = fwd;
+        } else if (mv.aoe) {
           lean += thr * 0.30 * dir; lift += -thr * 14; lungeX += fwd * 20 * dir;
           scaleY *= 1 - fwd * 0.08; scaleX *= 1 + fwd * 0.10; swing = fwd;
         } else if (mv.projectile) {
-          lungeX += thr * 10 * dir; lean += thr * 0.07 * dir; scaleX *= 1 + fwd * 0.03;
+          lungeX += -Math.max(0, -thr) * 14 * dir - fwd * 8 * dir;   // draw back, recoil
+          lean += -fwd * 0.06 * dir; scaleX *= 1 + fwd * 0.03;
         } else if (mv.launches) {
-          lift += fwd * 22; lean += -thr * 0.12 * dir; scaleY *= 1 + fwd * 0.12; swing = fwd * 0.7;
+          lift += fwd * 26; lean += -thr * 0.14 * dir; scaleY *= 1 + fwd * 0.14; scaleX *= 1 - fwd * 0.05;
+          swing = fwd * 0.7;
         } else if (mv.pierces) {
           lungeX += thr * Math.min(54, (mv.xRange || 120) * 0.32) * dir;
-          lean += thr * 0.10 * dir; scaleX *= 1 + fwd * 0.06; swing = fwd;
+          lean += thr * 0.10 * dir; scaleX *= 1 + fwd * 0.08; scaleY *= 1 - fwd * 0.03; swing = fwd;
         } else if (mv.hits > 1) {
           const buzz = Math.sin(p * Math.PI * mv.hits * 2) * 8 * fwd;
           lungeX += (thr * 16 + buzz) * dir; lean += thr * 0.08 * dir; swing = fwd;
         } else {
           lungeX += thr * Math.min(40, (mv.xRange || 90) * 0.4) * dir;
-          lean += thr * 0.18 * dir; scaleY *= 1 + fwd * 0.06; swing = fwd;
+          lean += thr * 0.18 * dir; scaleY *= 1 + fwd * 0.06; scaleX *= 1 - fwd * 0.02; swing = fwd;
         }
       } else {
+        // special cast: gather (crouch) → rise and release
         const p = clamp(1 - h.attacking / 0.45, 0, 1);
         const e = thrustEnv(p);
-        lift += Math.max(0, -e) * 12 + Math.max(0, e) * 4;
-        lean += e * 0.10 * dir;
-        scaleY *= 1 + Math.max(0, e) * 0.10; scaleX *= 1 + Math.max(0, -e) * 0.05;
+        lift += Math.max(0, e) * 16;
+        lean += e * 0.08 * dir;
+        scaleY *= 1 + Math.max(0, e) * 0.12 - Math.max(0, -e) * 0.10;
+        scaleX *= 1 + Math.max(0, -e) * 0.10 - Math.max(0, e) * 0.04;
       }
     }
 
-    if (h.hitFlash > 0 && h.attacking <= 0) {
+    if (h.hitFlash > 0 && h.attacking <= 0 && !ko) {
       const k = Math.min(1, h.hitFlash / 0.4);
-      lean += -0.14 * dir * k;
-      lungeX += Math.sin(t * 70) * 3 * k;
+      lean += -0.16 * dir * k;
+      lungeX += -dir * 8 * k + Math.sin(t * 70) * 3 * k;
+      scaleX *= 1 + 0.05 * k; scaleY *= 1 - 0.05 * k;
+    }
+
+    if (ko) {
+      // knocked off their feet: tumble backward, land flat
+      const k = clamp(h.ko / 0.5, 0, 1);
+      lean = -dir * k * (Math.PI / 2) * (airborne ? 0.8 : 1);
+      if (!airborne && h.ko > 1.0) alpha = 0.55 + 0.45 * Math.abs(Math.sin(t * 10));
+    }
+
+    const fold = turnFold(h.turnT);
+    if (fold && !ko) { scaleX *= fold.sx; if (fold.old) flip = !flip; }
+
+    if (h.hitFlash > 0) { tint = '#ff5a4a'; tintAlpha = Math.min(0.7, h.hitFlash * 2); }
+    else if (h.castT > 0) { tint = '#ffffff'; tintAlpha = Math.min(0.55, h.castT * 1.2); }
+    else if (h.invuln > 0 && h.dashing <= 0 && !ko && !g.stageComplete) {
+      alpha = Math.sin(t * 46) > 0 ? 1 : 0.5;              // i-frame blink
     }
 
     const footY = fy - bob;
     drawShadow(sx, fy, 56, 1 - Math.min(0.6, lift / 220));
 
-    if (h.dashing > 0) {                          // dash afterimages
+    // Empowered (Tiger Spirit etc.): a pulsing ring of fire at the feet
+    let buffed = false;
+    for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) buffed = true;
+    if (buffed) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.translate(sx, fy + 2);
+      ctx.scale(1, 0.34);
+      const pr = 44 + Math.sin(t * 9) * 5;
+      ctx.strokeStyle = 'rgba(255,170,70,0.6)';
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(0, 0, pr, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,230,160,0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, pr * 0.72, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+
+    const pose = { flip, lean, scaleX, scaleY, lift, lungeX, pivotY };
+    if (h.dashing > 0) {                          // dash afterimages (silhouettes)
       const ga = Math.min(1, h.dashing / 0.25);
-      for (let i = 2; i >= 1; i--) {
-        drawPosed(h.sprite || 'hero/idle', sx - dir * i * 18, footY, { flip, lean, scaleX, scaleY, lift, lungeX, alpha: 0.16 * ga });
+      for (let i = 3; i >= 1; i--) {
+        drawPosed(name, sx - dir * i * 22, footY, { ...pose, tint: tintCol, silhouette: true, alpha: 0.2 * ga * (1 - i * 0.2) });
       }
     }
-    if (swing > 0.25) {                           // swing motion-blur trail
+    if (swing > 0.25) {                           // swing smear trail
       const ga = (swing - 0.25) / 0.75;
       for (let i = 2; i >= 1; i--) {
-        drawPosed(h.sprite || 'hero/idle', sx, footY, { flip, lean: lean * (1 - i * 0.22), scaleX, scaleY, lift, lungeX: lungeX * (1 - i * 0.34), alpha: 0.13 * ga });
+        drawPosed(name, sx, footY, {
+          ...pose, lean: lean * (1 - i * 0.22), lungeX: lungeX * (1 - i * 0.34),
+          tint: tintCol, silhouette: true, alpha: 0.17 * ga,
+        });
       }
     }
 
-    const drew = drawPosed(h.sprite || 'hero/idle', sx, footY, { flip, lean, scaleX, scaleY, lift, lungeX });
+    const drew = drawPosed(name, sx, footY, { ...pose, alpha, tint, tintAlpha });
     if (!drew) {
       const bx = sx + lungeX, by = footY - lift;
       ctx.fillStyle = h.color || '#ffc26b';
@@ -365,14 +557,36 @@ export function createRenderer(canvas, themeName = 'dusk') {
       ctx.beginPath(); ctx.arc(bx, by - 88, 12, 0, Math.PI * 2); ctx.fill();
     }
 
-    if (h.hitFlash > 0) {
+    // Stars circle a knocked-out hero
+    if (ko && !airborne) {
       ctx.save();
-      ctx.globalAlpha = Math.min(0.55, h.hitFlash * 2);
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = '#ff6060';
-      ctx.fillRect(sx + lungeX - 28, footY - lift - 100, 56, 100);
+      ctx.fillStyle = '#ffe680';
+      for (let i = 0; i < 3; i++) {
+        const a = t * 4 + i * 2.1;
+        const px = sx - dir * visH * 0.55 + Math.cos(a) * 20;
+        const py = fy - 34 + Math.sin(a) * 6;
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(a * 2);
+        drawStar(px, py, 6, 2.4, a);
+      }
       ctx.restore();
     }
+  }
+
+  // Four-point star (hit sparks, KO stars). Caller sets fillStyle.
+  function drawStar(x, y, rLong, rShort, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot || 0);
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const r = i % 2 === 0 ? rLong : rShort;
+      const a = (i / 8) * Math.PI * 2;
+      if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawEnemy(e, camX) {
@@ -380,7 +594,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
     if (sx < -200 || sx > cssW + 200) return;
     const dir = e.facing >= 0 ? 1 : -1;
     const scale = e.boss ? 1.25 : 1.0;
-    const charH = e.height || 88;
+    // Visual height of the art as drawn (bars, rings and auras hang off this —
+    // NOT the smaller collision height, which left HP bars across faces).
+    const visH = spriteDrawHeight(e.sprite, scale) || (e.height || 88) * scale;
 
     // ── Death tumble: knocked into the air, spinning, fading out ──
     if (e.dead) {
@@ -391,49 +607,83 @@ export function createRenderer(canvas, themeName = 'dusk') {
       const dlift = e.deathY || 0;
       drawShadow(sx, dfy, e.width || 56, clamp(1 - dlift / 160 - fade * 0.5, 0, 1));
       drawPosed(e.sprite, sx, dfy, {
-        flip: e.facing >= 0, lean: e.deathSpin || 0, lift: dlift,
+        flip: e.facing >= 0, lean: e.deathSpin || 0, lift: dlift, pivotY: visH * 0.45,
         scale: scale * (1 - fade * 0.3), alpha: a,
+        tint: '#ffffff', tintAlpha: Math.max(0, 0.9 - fade * 3.5),
       });
       return;
     }
 
     const fy = floorYFromZ(e.z);
-    const flip = e.facing >= 0;
-    const bob = Math.sin(e.bobPhase) * 2;
-    let lean = 0, lungeX = 0, scaleX = 1, scaleY = 1;
-    let lift = (e.y || 0);                     // e.y is POSITIVE while launched (up)
+    let flip = e.facing >= 0;
+    let lean = 0, lungeX = 0, scaleX = 1, scaleY = 1, pivotY = 0, alpha = 1, bob = 0;
+    let lift = (e.y || 0);                     // height above the floor while launched
+    let tint = null, tintAlpha = 0;
 
     if (e.launched > 0) {
-      const prog = clamp((0.8 - e.launched) / 0.8, 0, 1);
+      // juggled: a full tumble through the air, landing upright
       const spinDir = (e.kbVx || dir) < 0 ? -1 : 1;
-      lean += prog * Math.PI * 1.5 * spinDir;
+      lean += clamp((e.launchT || 0) / 0.63, 0, 1) * Math.PI * 2 * spinDir;
+      pivotY = visH * 0.45;
     } else if (e.stun > 0) {
       const k = Math.min(1, e.stun / 0.2);
-      lean += -0.12 * dir * k;
-      lungeX += -dir * 5 * k + Math.sin(e.hitFlash * 120) * 3 * k;
+      lean += -0.14 * dir * k;
+      lungeX += -dir * 6 * k + Math.sin(e.hitFlash * 120) * 3 * k;
+    } else if (e.moving) {
+      // waddling march: rock foot to foot with a little hop
+      const st = Math.sin((e.walkPhase || 0) * Math.PI);
+      const dip = 1 - Math.abs(st);
+      bob = Math.abs(st) * 5;
+      lean += 0.04 * dir + st * 0.055;
+      scaleY *= 1 - dip * 0.04; scaleX *= 1 + dip * 0.03;
     } else {
-      lean += 0.04 * dir;
-      lungeX += Math.sin(e.bobPhase) * 1.5;
+      const br = Math.sin(e.bobPhase);
+      scaleY *= 1 + br * 0.015;
+      lean += 0.02 * dir;
     }
 
-    // Attack lunge (windup + strike follow-through both drive atkAnim)
-    if (e.atkAnim > 0) {
-      const p = clamp(1 - e.atkAnim / 0.4, 0, 1);
-      const thr = thrustEnv(p);
+    if (e.landT > 0) {                          // crash-landing squash
+      const k = e.landT / 0.2;
+      scaleY *= 1 - 0.26 * k; scaleX *= 1 + 0.2 * k;
+    }
+
+    if (e.windup > 0) {
+      // anticipation: coil back and flush red as the blow charges
+      const k = clamp(1 - e.windup / (e.windupMax || 0.3), 0, 1);
+      const pulse = 0.75 + 0.25 * Math.sin(k * 26);
+      lean += -0.17 * dir * k;
+      lungeX += -dir * 11 * k;
+      scaleY *= 1 - 0.07 * k; scaleX *= 1 + 0.06 * k;
+      tint = e.projectileSpeed ? '#ffd86a' : '#ff3a24'; tintAlpha = 0.42 * k * pulse;
+    } else if (e.atkAnim > 0) {
+      // the strike itself: snap forward, then recover
+      const p = clamp(1 - e.atkAnim / 0.26, 0, 1);
+      const f = p < 0.22 ? p / 0.22 : 1 - (p - 0.22) / 0.78;
       if (e.projectileSpeed) {
-        lungeX += thr * 9 * dir;
-        lean += -Math.max(0, -thr) * 0.10 * dir + Math.max(0, thr) * 0.05 * dir;
+        lungeX += -f * 7 * dir; lean += -f * 0.06 * dir;       // recoil from the shot
       } else {
-        lungeX += thr * 22 * dir;
-        lean += thr * 0.16 * dir;
-        scaleX *= 1 + Math.max(0, thr) * 0.05;
+        lungeX += f * 30 * dir; lean += f * 0.22 * dir;
+        scaleX *= 1 + f * 0.08; scaleY *= 1 - f * 0.03;
       }
     }
 
-    if (e.hitFlash > 0 && e.stun <= 0 && e.launched <= 0) {
+    if (e.hitFlash > 0) {
       const k = Math.min(1, e.hitFlash / 0.35);
-      scaleX *= 1 + 0.06 * k; scaleY *= 1 - 0.04 * k;
+      if (e.stun <= 0 && e.launched <= 0) { scaleX *= 1 + 0.08 * k; scaleY *= 1 - 0.06 * k; }
+      tint = '#ffffff'; tintAlpha = Math.min(0.9, e.hitFlash * 3.2);
     }
+
+    if (e.spawnT > 0) {
+      const k = clamp(e.spawnT / (e.spawnKind === 'mirror' ? 0.55 : 0.4), 0, 1);   // 1 → 0
+      alpha *= 1 - k;
+      if (e.spawnKind === 'mirror') {
+        scaleX *= 1 - 0.45 * k; scaleY *= 1 - 0.25 * k;
+        tint = '#e8f0ff'; tintAlpha = Math.max(tintAlpha, k);
+      }
+    }
+
+    const fold = turnFold(e.turnT);
+    if (fold && e.launched <= 0) { scaleX *= fold.sx; if (fold.old) flip = !flip; }
 
     const footY = fy - bob;
     drawShadow(sx, fy, e.width || 56, 1 - Math.min(0.6, lift / 200));
@@ -443,17 +693,17 @@ export function createRenderer(canvas, themeName = 'dusk') {
       ensureGhostGlow();
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.drawImage(ghostGlow, sx + lungeX - 60, footY - lift - charH * scale + 8,
-        120, charH * scale + 16);
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(ghostGlow, sx + lungeX - 60, footY - lift - visH + 8, 120, visH + 16);
       ctx.restore();
+      alpha *= 0.88;
     }
 
     const drew = drawPosed(e.sprite, sx, footY, {
-      flip, lean, lungeX, scaleX, scaleY, lift, scale,
-      alpha: theme.ghost ? 0.88 : 1,
+      flip, lean, lungeX, scaleX, scaleY, lift, scale, pivotY, alpha, tint, tintAlpha,
     });
     if (!drew) {
-      const w = e.width || 56, hh = charH;
+      const w = e.width || 56, hh = e.height || 88;
       const bx = sx + lungeX, by = footY - lift;
       ctx.fillStyle = e.color || '#a55';
       ctx.fillRect(bx - w / 2, by - hh, w, hh - 12);
@@ -461,19 +711,11 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
 
     const drawnFootY = footY - lift;
-    if (e.hitFlash > 0) {
-      ctx.save();
-      ctx.globalAlpha = Math.min(0.55, e.hitFlash * 2.2);
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = '#ffe0c0';
-      ctx.fillRect(sx + lungeX - 36, drawnFootY - charH - 4, 72, charH + 8);
-      ctx.restore();
-    }
 
     // Attack telegraph — a warning ring that closes as the strike lands.
     if (e.windup > 0) {
       const wk = clamp(e.windup / (e.windupMax || 0.3), 0, 1);  // 1 → 0
-      const cyW = drawnFootY - charH * scale * 0.5;
+      const cyW = drawnFootY - visH * 0.5;
       const cxW = sx + lungeX;
       ctx.save();
       ctx.lineWidth = 3;
@@ -485,17 +727,15 @@ export function createRenderer(canvas, themeName = 'dusk') {
       if (wk < 0.28) {
         ctx.globalAlpha = (0.28 - wk) / 0.28 * 0.7;
         ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(cxW, cyW, 13, 0, Math.PI * 2);
-        ctx.fill();
+        drawStar(cxW, cyW, 20, 5, wk * 6);
       }
       ctx.restore();
     }
 
-    if (e.boss || e.hp < e.hpMax) {
+    if ((e.boss || e.hp < e.hpMax) && !(e.spawnT > 0)) {
       const bw = e.boss ? 110 : 50;
       const bx = sx - bw / 2;
-      const by = drawnFootY - charH * scale - 14;
+      const by = drawnFootY - visH - 12;
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
       ctx.fillStyle = e.boss ? '#c44' : '#d77';
@@ -526,11 +766,17 @@ export function createRenderer(canvas, themeName = 'dusk') {
       ctx.save();
       ctx.translate(sx, fy);
       ctx.rotate(p.angle || 0);
+      // motion streak behind the shaft
+      const grad = ctx.createLinearGradient(-64, 0, -8, 0);
+      grad.addColorStop(0, 'rgba(255,255,255,0)');
+      grad.addColorStop(1, p.enemy ? 'rgba(255,120,100,0.55)' : 'rgba(210,255,190,0.6)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(-64, -1.5, 56, 3);
       ctx.fillStyle = p.enemy ? '#a44' : '#caffaa';
       ctx.fillRect(-12, -2, 24, 4);
       ctx.fillStyle = p.enemy ? '#622' : '#5a8a3a';
       ctx.beginPath();
-      ctx.moveTo(12, 0); ctx.lineTo(4, -5); ctx.lineTo(4, 5);
+      ctx.moveTo(14, 0); ctx.lineTo(4, -5); ctx.lineTo(4, 5);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
@@ -584,21 +830,146 @@ export function createRenderer(canvas, themeName = 'dusk') {
     ctx.globalAlpha = a;
     switch (fx.kind) {
       case 'slash': {
-        ctx.translate(sx + (fx.dir > 0 ? 40 : -40), fy);
-        ctx.scale(fx.dir, 1);
-        const r = fx.range || 90;
-        ctx.strokeStyle = fx.color || '#ffe080';
-        ctx.lineWidth = 10 * (1 - fx.t / fx.dur) + 4;
-        ctx.lineCap = 'round';
+        // A tapered crescent that sweeps through the arc of the swing.
         const tt = fx.t / fx.dur;
+        const r = Math.max(60, (fx.range || 100) * 0.74);
+        const ease = 1 - Math.pow(1 - Math.min(1, tt / 0.55), 3);
+        ctx.translate(sx + fx.dir * 14, fy);
+        ctx.scale(fx.dir, fx.flipY ? -1 : 1);
+        if (fx.up) ctx.rotate(-0.95);
+        else if (fx.down) ctx.rotate(0.75);
+        ctx.rotate(-0.85 + ease * 1.25);
+        ctx.scale(1 + ease * 0.12, 1 + ease * 0.12);
+        const th = 1.05;                                   // half-angle of the blade
+        const d = r * 0.36;                                // inner circle offset
+        const px = r * Math.cos(th), py = r * Math.sin(th);
+        const r2 = Math.hypot(px + d, py);
+        const ph = Math.atan2(py, px + d);
+        ctx.globalAlpha = a * a * 0.9;
+        ctx.fillStyle = fx.color || '#ffe080';
         ctx.beginPath();
-        ctx.arc(0, 0, r, -Math.PI / 2 - 0.5 + tt * 0.6, Math.PI / 2 + 0.5 + tt * 0.6);
-        ctx.stroke();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
+        ctx.arc(0, 0, r, -th, th);
+        ctx.arc(-d, 0, r2, ph, -ph, true);
+        ctx.closePath();
+        ctx.fill();
+        // bright leading edge
+        const d2 = r * 0.16;
+        const r3 = Math.hypot(px + d2, py), ph3 = Math.atan2(py, px + d2);
+        ctx.globalAlpha = a * 0.95;
+        ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(0, 0, r, -Math.PI / 2 - 0.5 + tt * 0.6, Math.PI / 2 + 0.5 + tt * 0.6);
+        ctx.arc(0, 0, r, -th * 0.92, th * 0.92);
+        ctx.arc(-d2, 0, r3, ph3 * 0.92, -ph3 * 0.92, true);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      case 'thrust': {
+        // Spear/sword lunge: a lance of light stabbing along the row.
+        const tt = fx.t / fx.dur;
+        const len = (fx.range || 150) * (1 - Math.pow(1 - Math.min(1, tt / 0.35), 3));
+        const wdt = 13 * (1 - tt * 0.6);
+        ctx.translate(sx + fx.dir * 10, fy);
+        ctx.scale(fx.dir, 1);
+        ctx.globalAlpha = a * 0.85;
+        ctx.fillStyle = fx.color || '#c2ddff';
+        ctx.beginPath();
+        ctx.moveTo(0, -wdt * 0.5); ctx.lineTo(len * 0.72, -wdt); ctx.lineTo(len, 0);
+        ctx.lineTo(len * 0.72, wdt); ctx.lineTo(0, wdt * 0.5);
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(8, -wdt * 0.18); ctx.lineTo(len * 0.8, -wdt * 0.32); ctx.lineTo(len * 0.97, 0);
+        ctx.lineTo(len * 0.8, wdt * 0.32); ctx.lineTo(8, wdt * 0.18);
+        ctx.closePath(); ctx.fill();
+        // speed lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(len * 0.1, -wdt - 7); ctx.lineTo(len * 0.62, -wdt - 7);
+        ctx.moveTo(len * 0.2, wdt + 8); ctx.lineTo(len * 0.7, wdt + 8);
         ctx.stroke();
+        break;
+      }
+      case 'muzzle': {
+        // Bowstring release: a quick flare at the bow.
+        const tt = fx.t / fx.dur;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#eaffd8';
+        drawStar(sx + fx.dir * 34, fy, 20 * (0.5 + tt), 4, tt * 2);
+        ctx.strokeStyle = fx.color || '#caffaa';
+        ctx.lineWidth = 3 * (1 - tt);
+        ctx.beginPath();
+        ctx.arc(sx + fx.dir * 34, fy, 8 + tt * 22, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case 'shock':
+      case 'ring': {
+        // Ground-hugging shockwave: flattened rings racing outward.
+        const tt = fx.t / fx.dur;
+        const ease = 1 - Math.pow(1 - tt, 3);
+        const R = (fx.range || 130) * (0.25 + ease * 0.95);
+        const gy = floorYFromZ(fx.z || 100) + 4;
+        const gx = fx.kind === 'shock' ? sx + fx.dir * 46 : sx;
+        ctx.translate(gx, gy);
+        ctx.scale(1, 0.36);
+        ctx.globalAlpha = a * 0.5;
+        ctx.fillStyle = fx.color || '#ffd07a';
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.arc(0, 0, R * 0.82, 0, Math.PI * 2, true); ctx.fill();
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4 * (1 - tt) + 1;
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+        if (fx.kind === 'shock') {
+          // cracks radiating through the earth
+          ctx.strokeStyle = 'rgba(30,16,8,0.8)';
+          ctx.lineWidth = 3;
+          for (let i = 0; i < 7; i++) {
+            const ang = i * 0.9 + 0.3;
+            const r0 = R * 0.18, r1 = R * (0.62 + (i % 3) * 0.12);
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(ang) * r0, Math.sin(ang) * r0);
+            ctx.lineTo(Math.cos(ang + 0.12) * r1 * 0.6, Math.sin(ang + 0.12) * r1 * 0.6);
+            ctx.lineTo(Math.cos(ang - 0.06) * r1, Math.sin(ang - 0.06) * r1);
+            ctx.stroke();
+          }
+        }
+        break;
+      }
+      case 'cast': {
+        // Gathering power: a magic circle spins up under the caster while
+        // motes of light are drawn inward.
+        const tt = fx.t / fx.dur;
+        const gy = floorYFromZ(fx.z || 100) + 4;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.save();
+        ctx.translate(sx, gy);
+        ctx.scale(1, 0.36);
+        ctx.globalAlpha = Math.sin(Math.min(1, tt * 1.2) * Math.PI) * 0.9;
+        ctx.strokeStyle = fx.color || '#ffd07a';
+        const R = 74;
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, R * 0.72, 0, Math.PI * 2); ctx.stroke();
+        for (let i = 0; i < 8; i++) {
+          const ang = tt * 5 + (i / 8) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, R * 0.86, ang, ang + 0.34);
+          ctx.stroke();
+        }
+        ctx.restore();
+        ctx.fillStyle = '#ffffff';
+        for (let i = 0; i < 10; i++) {
+          const ang = i * 2.39 + 0.6;
+          const rr = 120 * (1 - tt) * (0.5 + (i % 4) * 0.17);
+          ctx.globalAlpha = Math.min(1, tt * 3) * (1 - tt);
+          ctx.beginPath();
+          ctx.arc(sx + Math.cos(ang) * rr, gy - 70 + Math.sin(ang) * rr * 0.6, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
         break;
       }
       case 'aoe': {
@@ -611,62 +982,147 @@ export function createRenderer(canvas, themeName = 'dusk') {
         break;
       }
       case 'beam': {
-        ctx.strokeStyle = fx.color || '#c2ddff';
-        ctx.lineWidth = (fx.width || 40) * (1 - 0.5 * (fx.t / fx.dur));
+        // Layered energy beam: soft halo, coloured body, flickering white core.
+        const tt = fx.t / fx.dur;
+        const L = (fx.range || 600) * Math.min(1, tt / 0.12);
+        const flick = 0.85 + 0.15 * Math.sin(fx.t * 70);
+        const wd = (fx.width || 40) * (tt < 0.7 ? 1 : 1 - (tt - 0.7) / 0.3) * flick;
+        const x1 = sx + fx.dir * 26, x2 = sx + fx.dir * L;
         ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(sx, fy); ctx.lineTo(sx + fx.dir * (fx.range || 600), fy);
-        ctx.stroke();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.moveTo(sx, fy); ctx.lineTo(sx + fx.dir * (fx.range || 600), fy);
-        ctx.stroke();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.28;
+        ctx.strokeStyle = fx.color || '#c2ddff';
+        ctx.lineWidth = wd * 1.7;
+        ctx.beginPath(); ctx.moveTo(x1, fy); ctx.lineTo(x2, fy); ctx.stroke();
+        ctx.globalAlpha = 0.8;
+        ctx.lineWidth = wd * 0.8;
+        ctx.beginPath(); ctx.moveTo(x1, fy); ctx.lineTo(x2, fy); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(2, wd * 0.26);
+        ctx.beginPath(); ctx.moveTo(x1, fy); ctx.lineTo(x2, fy); ctx.stroke();
+        // rings racing down the beam + a flare at the source
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+          const k = ((fx.t * 2.4 + i * 0.25) % 1);
+          ctx.globalAlpha = (1 - k) * 0.8;
+          ctx.beginPath();
+          ctx.ellipse(sx + fx.dir * (26 + k * (L - 26)), fy, wd * 0.22, wd * 0.75, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#ffffff';
+        drawStar(x1, fy, wd * 1.1, wd * 0.25, fx.t * 6);
         break;
       }
       case 'spin': {
-        const r = fx.range || 130;
-        ctx.strokeStyle = fx.color || '#ff9cd6';
-        ctx.lineWidth = 5;
-        for (let k = 0; k < 6; k++) {
-          const ang = (fx.t / fx.dur) * Math.PI * 2 * 2 + k * (Math.PI / 3);
+        // Whirling blades: crescents orbiting the caster over expanding rings.
+        const tt = fx.t / fx.dur;
+        const R = fx.range || 130;
+        const gy = floorYFromZ(fx.z || 100) + 4;
+        ctx.save();
+        ctx.translate(sx, gy);
+        ctx.scale(1, 0.36);
+        for (let k = 0; k < 3; k++) {
+          const kk = (tt * 1.6 + k / 3) % 1;
+          ctx.globalAlpha = a * (1 - kk) * 0.8;
+          ctx.strokeStyle = k === 1 ? '#ffffff' : (fx.color || '#ff9cd6');
+          ctx.lineWidth = 5 * (1 - kk) + 1;
+          ctx.beginPath(); ctx.arc(0, 0, R * (0.15 + kk * 0.95), 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
+        const blades = 5;
+        for (let k = 0; k < blades; k++) {
+          const ang = tt * Math.PI * 5 + k * (Math.PI * 2 / blades);
+          const rr = Math.min(R * 0.62, 150) * Math.min(1, tt / 0.15);
+          const bx = sx + Math.cos(ang) * rr;
+          const by = fy + Math.sin(ang) * rr * 0.36 - 6;
+          const depth = Math.sin(ang);                      // behind → smaller
+          ctx.save();
+          ctx.translate(bx, by);
+          ctx.rotate(ang + Math.PI / 2);
+          const sc = 1.25 + depth * 0.35;
+          ctx.scale(sc, sc);
+          ctx.globalAlpha = a * (0.65 + depth * 0.3);
+          ctx.fillStyle = fx.color || '#ff9cd6';
           ctx.beginPath();
-          ctx.moveTo(sx, fy);
-          ctx.lineTo(sx + Math.cos(ang) * r, fy + Math.sin(ang) * r * 0.45);
-          ctx.stroke();
+          ctx.arc(0, 0, 30, -1.1, 1.1);
+          ctx.arc(-13, 0, 37, 0.8, -0.8, true);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, 30, -0.9, 0.9);
+          ctx.arc(-5, 0, 32.5, 0.8, -0.8, true);
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
         }
         break;
       }
       case 'rain': {
+        // Starlight arrows streak down across the field, splashing where they land.
         const seedRoot = fx.seed | 0;
-        ctx.fillStyle = fx.color || '#9cffb5';
-        const N = 18;
+        const spread = Math.min(fx.range || 600, 620);
+        const N = 26;
+        ctx.lineCap = 'round';
         for (let i = 0; i < N; i++) {
-          const seed = (seedRoot + i * 31) | 0;
-          const offX = ((seed * 37) % (fx.width || 360)) - (fx.width || 360) / 2;
-          const fall = ((fx.t * 1200) + (seed * 17) % 240) % 240;
-          ctx.fillRect(sx + offX, fy - 240 + fall, 3, 14);
+          const seed = (seedRoot + i * 7919) | 0;
+          const offX = ((seed * 37) % (spread * 2)) - spread;
+          const gz = Z_MIN + ((seed * 13) % (Z_MAX - Z_MIN));
+          const gy = floorYFromZ(gz);
+          const cyc = (fx.t * 2.2 + ((seed * 17) % 100) / 100) % 1;
+          const fall = 1 - cyc;                              // 1 high → 0 ground
+          const x = sx + offX + fall * 70;
+          const y = gy - fall * 330;
+          ctx.globalAlpha = a * 0.9;
+          ctx.strokeStyle = fx.color || '#d6ffe0';
+          ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 11, y - 52); ctx.stroke();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 6, y - 28); ctx.stroke();
+          if (cyc > 0.82) {                                  // ground splash
+            const k = (cyc - 0.82) / 0.18;
+            ctx.globalAlpha = a * (1 - k);
+            ctx.strokeStyle = fx.color || '#d6ffe0';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(sx + offX, gy, 6 + k * 16, 2 + k * 5, 0, 0, Math.PI * 2); ctx.stroke();
+          }
         }
         break;
       }
       case 'pop': {
-        const r = 14 * (1 - fx.t / fx.dur) + 4;
+        // Impact star: a spiked flash plus a ring snapping outward.
+        const k = fx.t / fx.dur;
+        const R = 12 + k * 20;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#ffffff';
+        drawStar(sx, fy, R * 1.5, R * 0.3, fx.rot || 0);
         ctx.fillStyle = fx.color || '#fff';
+        drawStar(sx, fy, R * 1.05, R * 0.42, (fx.rot || 0) + 0.6);
+        ctx.strokeStyle = fx.color || '#fff';
+        ctx.lineWidth = 3 * (1 - k);
         ctx.beginPath();
-        ctx.arc(sx, fy, r, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.arc(sx, fy, R * 1.3, 0, Math.PI * 2);
+        ctx.stroke();
         break;
       }
       case 'damageNumber': {
-        const ddy = fx.t * 60;
+        const ddy = 46 * (1 - Math.pow(1 - Math.min(1, fx.t / fx.dur), 2));
+        const pop = fx.t < 0.12 ? 1.7 - (fx.t / 0.12) * 0.7 : 1;      // punch in, settle
+        const nx = sx + (fx.drift || 0) * Math.min(1, fx.t / fx.dur);
+        ctx.globalAlpha = Math.min(1, a * 2.2);
+        ctx.translate(nx, fy - 30 - ddy);
+        ctx.scale(pop, pop);
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(0,0,0,0.78)';
         if (fx.text) {                       // spirit-capture / status float
           ctx.fillStyle = fx.effColor || '#e8d8ff';
           ctx.font = 'bold 15px system-ui';
-          ctx.textAlign = 'center';
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = 'rgba(0,0,0,0.78)';
-          ctx.strokeText(fx.text, sx, fy - 30 - ddy);
-          ctx.fillText(fx.text, sx, fy - 30 - ddy);
+          ctx.strokeText(fx.text, 0, 0);
+          ctx.fillText(fx.text, 0, 0);
           break;
         }
         // element effectiveness tints the number: green = overcoming (相剋),
@@ -674,12 +1130,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
         ctx.fillStyle = fx.crit ? '#fff076' : fx.heal ? '#a0ff90'
           : fx.eff === 'strong' ? '#b8ffb0' : fx.eff === 'weak' ? '#bfbfbf' : '#ffd0d0';
         ctx.font = `bold ${fx.crit ? 28 : fx.eff === 'strong' ? 23 : 20}px system-ui`;
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = 'rgba(0,0,0,0.78)';
         const text = fx.heal ? `+${fx.value}` : `${fx.value}`;
-        ctx.strokeText(text, sx, fy - 30 - ddy);
-        ctx.fillText(text, sx, fy - 30 - ddy);
+        ctx.strokeText(text, 0, 0);
+        ctx.fillText(text, 0, 0);
         break;
       }
       case 'bolt': {
@@ -711,17 +1164,38 @@ export function createRenderer(canvas, themeName = 'dusk') {
         break;
       }
       case 'banner': {
-        ctx.globalAlpha = a * 0.95;
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.font = `bold ${fx.size || 38}px system-ui`;
+        // Brush-stroke title card: snaps in large, settles, then fades.
+        const size0 = fx.size || 38;
+        ctx.font = `bold ${size0}px system-ui`;
+        const fit = Math.min(1, (cssW - 56) / Math.max(1, ctx.measureText(fx.text || '').width + 48));
+        const size = Math.max(14, Math.floor(size0 * fit));
+        const inK = Math.min(1, fx.t / 0.16);
+        const sc = 1 + (1 - inK) * 0.35;
+        ctx.globalAlpha = Math.min(1, a * 3) * inK * 0.96;
+        ctx.translate(sx, fy);
+        ctx.scale(sc, sc);
+        ctx.font = `bold ${size}px system-ui`;
         ctx.textAlign = 'center';
         const m = ctx.measureText(fx.text || '');
-        const pad = 24;
+        const pad = Math.round(size * 0.6);
         const bw = m.width + pad * 2;
-        const bh = (fx.size || 38) + pad;
-        ctx.fillRect(sx - bw / 2, fy - bh / 2, bw, bh);
+        const bh = size + pad;
+        const grad = ctx.createLinearGradient(-bw / 2, 0, bw / 2, 0);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(0.14, 'rgba(8,4,2,0.74)');
+        grad.addColorStop(0.86, 'rgba(8,4,2,0.74)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(-bw / 2 - 30, -bh / 2, bw + 60, bh);
+        ctx.fillStyle = 'rgba(255,214,118,0.75)';
+        ctx.fillRect(-bw / 2, -bh / 2, bw, 2);
+        ctx.fillRect(-bw / 2, bh / 2 - 2, bw, 2);
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.strokeText(fx.text || '', 0, size * 0.34);
         ctx.fillStyle = '#fff8c4';
-        ctx.fillText(fx.text || '', sx, fy + (fx.size || 38) * 0.32);
+        ctx.fillText(fx.text || '', 0, size * 0.34);
         break;
       }
     }
@@ -1250,7 +1724,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
   }
 
-  function dispose() { skyGrad = groundGrad = sunCanvas = mountainCanvas = null; }
+  function dispose() { skyGrad = groundGrad = sunCanvas = mountainCanvas = groundTile = treeTile = null; }
 
   return { resize, render, dispose, floorYFromZ, getFloorBand: () => ({ top: Z_MIN, bot: Z_MAX }) };
 }

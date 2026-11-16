@@ -46,6 +46,13 @@ const COMBO_WINDOW = 0.55;       // seconds after a hit during which the next at
 const GRAVITY = 1900;            // px/s² for jump physics
 const ZONE_PUSH = 0;             // wave camera lock x — set by waves
 
+const NO_INPUT = Object.freeze({
+  left: false, right: false, up: false, down: false,
+  attackEdge: false, jumpEdge: false, magicEdge: false, dashEdge: false, attackHeld: false,
+});
+const TURN_T = 0.13;             // seconds for the turn-around flip
+const LAUNCH_VY = 600;           // launch impulse for juggled enemies
+
 function compact(arr, alive) {
   let w = 0;
   for (let r = 0; r < arr.length; r++) if (alive(arr[r])) arr[w++] = arr[r];
@@ -75,6 +82,10 @@ function makeHero(heroDef, level = 1, upgrades = null) {
     buffs: [],
     coins: 0, xp: 0,
     bobPhase: 0,
+    atkBuf: 0,                     // buffered attack press (seconds left)
+    turnT: 0,                      // turn-around flip animation
+    castT: 0,                      // special-cast aura timer
+    ko: 0, koVx: 0,                // knocked-out tumble
   };
 }
 
@@ -93,6 +104,7 @@ export default function KnightsApp() {
      (navigator.maxTouchPoints || 0) > 0));
 
   const gameRef = useRef(null);
+  const pausedRef = useRef(false);
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
   const inputRef = useRef({
@@ -114,10 +126,12 @@ export default function KnightsApp() {
     });
   }
   function pushDamage(g, x, z, value, crit = false, heal = false, eff = null) {
-    g.vfx.push({ kind: 'damageNumber', x, z, value, crit, heal, eff, dur: 0.9, t: 0, world: true, yOff: -100 });
+    g.vfx.push({ kind: 'damageNumber', x, z, value, crit, heal, eff, dur: 0.9, t: 0, world: true, yOff: -100,
+      drift: (Math.random() * 2 - 1) * 26 });
   }
   function pushPop(g, x, z, color) {
-    g.vfx.push({ kind: 'pop', x, z, color: color || '#ffe080', dur: 0.3, t: 0, world: true, yOff: -50 });
+    g.vfx.push({ kind: 'pop', x, z, color: color || '#ffe080', dur: 0.24, t: 0, world: true,
+      yOff: -44 - Math.random() * 26, rot: Math.random() * Math.PI });
   }
 
   // In-world speech bubble. target: 'hero' | 'ritual' | {kind:'enemy', id}
@@ -136,6 +150,9 @@ export default function KnightsApp() {
     }
     g.speech.push(s);
   }
+
+  // Run fn after `delay` seconds of GAME time (respects pause and hit-stop).
+  function after(g, delay, fn) { g.pending.push({ t: delay, fn }); }
 
   // ── Game-feel: screen shake + particle bursts ──
   function addShake(g, amt) { g.shake = Math.min(1, (g.shake || 0) + amt); }
@@ -252,6 +269,8 @@ export default function KnightsApp() {
       relicSpDmg: ef.spDmgMult || 1,
       relicMinEl: ef.minElementMult || 0,
       relicGained: null,
+      pending: [],                   // timed follow-up hits (game-time, pause-safe)
+      slowT: 0, endT: null, winT: 0,
       _ended: false,
       _drawList: [],
     };
@@ -293,7 +312,7 @@ export default function KnightsApp() {
         e.sprite = g.heroDef.sprite;
         e.name = `Mirror ${g.heroDef.name}`;
       }
-      e.x = lockX + window.innerWidth * 0.45;
+      e.x = Math.max(lockX + window.innerWidth * 0.45, g.camX + window.innerWidth + 90);
       e.z = (Z_MIN + Z_MAX) / 2;
       e.facing = -1;
       g.enemies.push(e);
@@ -326,12 +345,13 @@ export default function KnightsApp() {
           if (wave.mirror) {
             e.x = lockX - 50 - Math.random() * 70;
             e.facing = -1;
+            e.spawnT = 0.55; e.spawnKind = 'mirror';   // steps out of the glass
           } else {
-            // Far-side spawns enter just past the lock edge (not half a screen
-            // beyond it) so they reach the arena in a beat, not ten seconds.
+            // Everyone enters from just OFF-screen (never popping into view):
+            // right-siders past the screen edge, left-siders behind the camera.
             e.x = side > 0
-              ? lockX + window.innerWidth * (0.08 + Math.random() * 0.12)
-              : lockX - window.innerWidth * 0.25 - Math.random() * 80;
+              ? Math.max(lockX + 30, g.camX + window.innerWidth + 40) + Math.random() * 110
+              : g.camX - 60 - Math.random() * 110;
             e.facing = side > 0 ? -1 : 1;
           }
           e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
@@ -393,7 +413,7 @@ export default function KnightsApp() {
         const e = makeEnemy(type, g.stage.chapter || 1);
         const fromRight = (i + n) % 2 === 0;
         e.x = fromRight
-          ? g.waveLockX + 40 + Math.random() * 80
+          ? Math.max(g.waveLockX + 40, g.camX + window.innerWidth + 40) + Math.random() * 80
           : g.camX - 60 - Math.random() * 80;
         e.z = Z_MIN + 20 + Math.random() * (Z_MAX - Z_MIN - 40);
         e.facing = fromRight ? -1 : 1;
@@ -539,8 +559,9 @@ export default function KnightsApp() {
     const kb = (opts && opts.knockback) || 0;
     e.kbVx = kb * (Math.sign(e.x - g.hero.x) || 1);
     if (opts && opts.launches && !e.boss) {
-      e.vy = 380;
-      e.launched = 0.8;
+      if (!(e.launched > 0)) e.launchT = 0;
+      e.vy = LAUNCH_VY;              // +up; gravity pulls it back down
+      e.launched = 1.2;              // cleared on touchdown
     }
     pushDamage(g, e.x, e.z, dmg, isCrit, false, em > 1 ? 'strong' : em < 1 ? 'weak' : null);
     pushPop(g, e.x, e.z, isCrit ? '#fff076' : '#fff');
@@ -566,6 +587,16 @@ export default function KnightsApp() {
       e.deathY = 0; e.deathSpin = 0; e.deathFade = 0;
       addShake(g, e.boss ? 0.5 : 0.2);
       g.zoom = Math.max(g.zoom || 1, e.boss ? 1.08 : 1.05);   // kill zoom-punch
+      if (e.boss) {
+        g.slowT = 0.9;                                        // savour the finishing blow
+        g.vfx.push({ kind: 'flash', dur: 0.3, t: 0, world: false, x: 0, y: 0 });
+        for (let b = 1; b <= 4; b++) {
+          after(g, b * 0.09, () => {
+            spawnSpark(g, e.x + (Math.random() * 2 - 1) * 46, e.z, 12, b % 2 ? '#fff1a0' : '#ffb070');
+            pushPop(g, e.x + (Math.random() * 2 - 1) * 40, e.z, '#fff1a0');
+          });
+        }
+      }
       spawnSpark(g, e.x, e.z, e.boss ? 28 : 10, '#ffd0a0');
       const earned = Math.round((e.xp || 6) * g.fortune);
       g.hero.xp += earned;
@@ -615,7 +646,7 @@ export default function KnightsApp() {
 
   function damageHero(g, amount, atkEl = null) {
     const h = g.hero;
-    if (h.invuln > 0) return 0;
+    if (h.invuln > 0 || h.ko > 0 || g.stageComplete) return 0;
     amount = Math.round(amount * elementMult(atkEl, h.el) * charmTaken(g.charms, atkEl) * (g.relicTaken || 1));
     h.hp -= amount;
     h.hitFlash = 0.4;
@@ -628,6 +659,12 @@ export default function KnightsApp() {
       h.hp = 0;
       g.stageFailed = true;
       addShake(g, 0.6);
+      // knocked off their feet — the fall plays out before the Continue screen
+      h.ko = 0.001; h.koVx = -h.facing * 230;
+      h.vy = -560; h.y = -1;
+      h.attacking = 0; h.dashing = 0; h.atkBuf = 0;
+      g.slowT = 0.7;
+      g.zoom = Math.max(g.zoom || 1, 1.06);
     }
     return amount;
   }
@@ -640,14 +677,18 @@ export default function KnightsApp() {
     for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) activeAtk *= 1 + h.buffs[i].atk;
 
     // Slash VFX
+    const thrusty = !move.aoe && !move.projectile && (move.pierces || (move.xRange >= 150 && move.zRange <= 30));
     g.vfx.push({
-      kind: move.beam ? 'beam' : move.aoe ? 'aoe' : 'slash',
-      x: h.x, z: h.z, yOff: -50,
+      kind: move.projectile ? 'muzzle' : move.aoe ? 'shock' : thrusty ? 'thrust' : 'slash',
+      x: h.x, z: h.z, yOff: -50 + (h.y || 0),
       dir, range: move.xRange,
       color: g.heroDef.color || '#ffe080',
       width: move.zRange,
-      dur: move.dur || 0.22, t: 0, world: true,
+      up: !!move.launches, down: !!move.downward,
+      flipY: (h.swingN = (h.swingN || 0) + 1) % 2 === 0,
+      dur: Math.max(0.2, (move.dur || 0.22) * 1.05), t: 0, world: true,
     });
+    if (move.aoe) { spawnDust(g, h.x + dir * 40, h.z, 8); addShake(g, 0.14); }
 
     if (move.projectile) {
       const spread = move.fan || 1;
@@ -684,11 +725,10 @@ export default function KnightsApp() {
         if (k === 0) {
           damageEnemy(g, e, perHit, { knockback: move.knockback || 0, stun: 0.10, hitstop: move.hitstop || 30, launches: move.launches });
         } else {
-          setTimeout(() => {
-            if (!gameRef.current || gameRef.current !== g) return;
+          after(g, k * 0.06, () => {
             if (e.dead) return;
             damageEnemy(g, e, perHit, { knockback: (move.knockback || 0) * 0.3, stun: 0.06, hitstop: 20 });
-          }, k * 60);
+          });
         }
       }
       hitCount++;
@@ -769,6 +809,7 @@ export default function KnightsApp() {
     h.attacking = move.dur;
     h.attackMove = move;
     h.attackHitDone = false;
+    if (move.downward && h.y < -4) { h.vy = Math.max(h.vy, 520); h.plunge = true; }   // dive
   }
 
   function tryJump(g) {
@@ -797,6 +838,8 @@ export default function KnightsApp() {
     h.hp -= cost;
     h.attacking = 0.45;
     h.attackMove = null;
+    h.castT = 0.6;
+    g.vfx.push({ kind: 'cast', x: h.x, z: h.z, yOff: 0, color: m.color || '#fff', dur: 0.6, t: 0, world: true });
     pushBanner(g, m.name, 0.9, 30);
     addShake(g, 0.34);
     spawnSpark(g, h.x, h.z, 18, m.color || '#fff');
@@ -812,15 +855,14 @@ export default function KnightsApp() {
       kind: m.beam ? 'beam' : m.rain ? 'rain' : 'spin',
       x: h.x, z: h.z, yOff: -50,
       dir, range: m.range, width: m.zRange,
-      color: m.color, dur: 0.9, t: 0, world: true,
+      color: m.color === '#1a1a1a' ? '#8a7cff' : m.color, dur: 0.9, t: 0, world: true,
       seed: g.time * 100 | 0,
     });
     let activeAtk = h.atk * m.dmgMult * (empowered ? 1.3 : 1) * (g.relicSpDmg || 1);
     for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) activeAtk *= 1 + h.buffs[i].atk;
     const perHit = activeAtk / (m.hits || 1);
     for (let k = 0; k < (m.hits || 1); k++) {
-      setTimeout(() => {
-        if (!gameRef.current || gameRef.current !== g) return;
+      after(g, k * 0.08, () => {
         for (let i = 0; i < g.enemies.length; i++) {
           const e = g.enemies[i];
           if (e.dead) continue;
@@ -835,7 +877,7 @@ export default function KnightsApp() {
           }
           damageEnemy(g, e, perHit, { knockback: m.knockback || 30, stun: 0.15, hitstop: m.hitstop || 40, source: 'magic' });
         }
-      }, k * 80);
+      });
     }
   }
 
@@ -843,7 +885,26 @@ export default function KnightsApp() {
   function tick(g, dt) {
     g.time += dt;
     const h = g.hero;
-    const inp = inputRef.current;
+    // A fallen hero takes no orders.
+    const inp = h.ko > 0 ? NO_INPUT : inputRef.current;
+
+    // Timed follow-up hits scheduled with after()
+    if (g.pending.length) {
+      for (let i = 0; i < g.pending.length; i++) {
+        const pd = g.pending[i];
+        pd.t -= dt;
+        if (pd.t <= 0 && !pd.done) { pd.done = true; pd.fn(); }
+      }
+      compact(g.pending, pd => !pd.done);
+    }
+
+    if (h.ko > 0) {
+      h.ko += dt;
+      h.x += h.koVx * dt;
+      h.koVx *= Math.pow(0.02, dt);
+    }
+    if (h.turnT > 0) h.turnT -= dt;
+    if (h.castT > 0) h.castT -= dt;
 
     // Buffs (incl. heal-over-time)
     for (let i = 0; i < h.buffs.length; i++) {
@@ -870,7 +931,10 @@ export default function KnightsApp() {
     } else {
       h.walking = false;
     }
-    if (mvx !== 0) h.facing = mvx > 0 ? 1 : -1;
+    if (mvx !== 0) {
+      const nf = mvx > 0 ? 1 : -1;
+      if (nf !== h.facing) { h.facing = nf; h.turnT = TURN_T; }
+    }
 
     if (h.dashing > 0) {
       h.dashing -= dt;
@@ -898,6 +962,13 @@ export default function KnightsApp() {
       h.vy += GRAVITY * dt;
       if (h.y >= 0) {
         if (h.vy > 250) { h.land = 0.15; spawnDust(g, h.x, h.z, 7); addShake(g, 0.12); }
+        if (h.plunge) {                    // dive attack slams down
+          h.plunge = false;
+          g.vfx.push({ kind: 'ring', x: h.x, z: h.z, yOff: 0, range: 110, color: g.heroDef.color || '#ffe080', dur: 0.36, t: 0, world: true });
+          spawnDust(g, h.x - 30, h.z, 5); spawnDust(g, h.x + 30, h.z, 5);
+          addShake(g, 0.2);
+        }
+        if (h.ko > 0) { spawnDust(g, h.x, h.z, 10); addShake(g, 0.25); }
         h.y = 0; h.vy = 0;
       }
     }
@@ -917,8 +988,13 @@ export default function KnightsApp() {
     if (h.comboTimer <= 0) h.comboStep = 0;
 
     // Edge-trigger inputs (holding the touch attack button auto-chains)
+    // A press made mid-swing is remembered briefly so combos chain reliably.
     if (inp.attackHeld) inp.attackEdge = true;
-    if (inp.attackEdge) { inp.attackEdge = false; tryAttack(g); }
+    if (inp.attackEdge) { inp.attackEdge = false; h.atkBuf = 0.2; }
+    if (h.atkBuf > 0) {
+      if (h.attacking <= 0) { h.atkBuf = 0; tryAttack(g); }
+      else h.atkBuf -= dt;
+    }
     if (inp.jumpEdge)   { inp.jumpEdge   = false; tryJump(g);   }
     if (inp.magicEdge)  { inp.magicEdge  = false; tryMagic(g);  }
     if (inp.dashEdge)   { inp.dashEdge   = false; tryDash(g);   }
@@ -940,6 +1016,13 @@ export default function KnightsApp() {
     if (h.hitFlash > 0) h.hitFlash -= dt;
     if (h.invuln > 0) h.invuln -= dt;
     h.bobPhase += dt * 2.5;
+
+    // Victory: the hero is safe and bounces in triumph until the reward screen
+    if (g.stageComplete) {
+      h.invuln = 1;
+      g.winT += dt;
+      if (g.winT > 0.9 && h.y >= 0 && h.attacking <= 0 && !h.walking) { h.vy = -430; h.y = -1; }
+    }
 
     // Camera follow (only forward; never scrolls back to keep arcade feel)
     const target = Math.max(g.camX, h.x - window.innerWidth * 0.42);
@@ -965,21 +1048,35 @@ export default function KnightsApp() {
         e.x += (e.kbVx || 0) * dt;
         e.kbVx = (e.kbVx || 0) * Math.pow(0.05, dt);
         e.deathSpin = (e.deathSpin || 0) + (e.deathVr || 0) * dt;
-        e.deathFade = Math.min(1, (g.time - e.deadT) / 0.62);
+        e.deathFade = Math.min(1, (g.time - e.deadT) / (e.boss ? 1.4 : 0.62));
         continue;
       }
       e.bobPhase += dt * 3.5;
       if (e.hitFlash > 0) e.hitFlash -= dt;
       if (e.atkAnim > 0) e.atkAnim -= dt;
+      if (e.spawnT > 0) e.spawnT -= dt;
+      if (e.turnT > 0) e.turnT -= dt;
+      if (e.landT > 0) e.landT -= dt;
+      e.moving = false;
 
-      // Airborne (launched)
-      if (e.y < 0 || e.vy !== 0) {
+      // Airborne (launched): e.y is height above the floor (+up)
+      if (e.y > 0 || e.vy !== 0) {
         e.y += e.vy * dt;
-        e.vy += GRAVITY * dt;
-        if (e.y >= 0) { e.y = 0; e.vy = 0; }
+        e.vy -= GRAVITY * dt;
+        if (e.y <= 0) {
+          e.y = 0; e.vy = 0;
+          if (e.launched > 0) {            // crash back to earth
+            e.launched = 0;
+            e.landT = 0.2;
+            e.stun = Math.max(e.stun || 0, 0.3);
+            spawnDust(g, e.x, e.z, 6);
+            addShake(g, 0.08);
+          }
+        }
       }
       if (e.launched > 0) {
         e.launched -= dt;
+        e.launchT = (e.launchT || 0) + dt;
         e.x += (e.kbVx || 0) * dt * 1.2;
         continue;
       }
@@ -997,7 +1094,9 @@ export default function KnightsApp() {
       const dx = tgt.x - e.x;
       const dz = tgt.z - e.z;
       const dist = Math.hypot(dx, dz);
-      e.facing = Math.sign(dx) || e.facing;
+      const nf = Math.sign(dx) || e.facing;
+      if (nf !== e.facing) { e.facing = nf; e.turnT = TURN_T; }
+      const px0 = e.x, pz0 = e.z;
 
       // Movement toward player based on AI. While winding up an attack the
       // enemy is committed and plants in place, so the telegraph stays fair.
@@ -1037,6 +1136,10 @@ export default function KnightsApp() {
       }
       if (e.z < Z_MIN) e.z = Z_MIN;
       if (e.z > Z_MAX) e.z = Z_MAX;
+      if (Math.abs(e.x - px0) + Math.abs(e.z - pz0) > 0.05) {
+        e.moving = true;
+        e.walkPhase = (e.walkPhase || 0) + dt * (3.6 + e.moveSpeed / 34);
+      }
 
       e.atkCdLeft = Math.max(0, e.atkCdLeft - dt);
       if (e.windup > 0) {
@@ -1044,6 +1147,7 @@ export default function KnightsApp() {
         // the danger zone during the wind-up to make the blow whiff.
         e.windup -= dt;
         if (e.windup <= 0) {
+          e.atkAnim = 0.26;                     // the strike lunge plays NOW, with the hit
           const rtgt = (g.ritual && g.ritual.active) ? g.ritual : h;
           const sdx = rtgt.x - e.x, sdz = rtgt.z - e.z;
           const sdist = Math.hypot(sdx, sdz);
@@ -1061,13 +1165,31 @@ export default function KnightsApp() {
           }
           // else: the target dodged — the blow finds empty air.
         }
-      } else if (e.atkCdLeft <= 0 && dist < e.atkRange && Math.abs(dz) < 36) {
+      } else if (e.atkCdLeft <= 0 && dist < e.atkRange && Math.abs(dz) < 36 && !(h.ko > 0)) {
         e.atkCdLeft = e.atkCooldown * (0.85 + Math.random() * 0.3);
-        e.windup = e.windupMax;                // begin the telegraph wind-up
-        e.atkAnim = 0.4;                        // sprite lunge/draw animation
+        e.windup = e.windupMax;                // begin the telegraph wind-up (coil back)
       }
     }
-    compact(g.enemies, e => !(e.dead && g.time - e.deadT > 0.7));
+    // Keep foes from stacking on a single spot — nudge overlapping pairs apart.
+    for (let i = 0; i < g.enemies.length; i++) {
+      const a = g.enemies[i];
+      if (a.dead || a.launched > 0) continue;
+      for (let j = i + 1; j < g.enemies.length; j++) {
+        const b = g.enemies[j];
+        if (b.dead || b.launched > 0) continue;
+        const ddx = b.x - a.x, ddz = b.z - a.z;
+        const minX = 40, minZ = 18;
+        if (Math.abs(ddx) >= minX || Math.abs(ddz) >= minZ) continue;
+        const k = Math.min(1, dt * 7);
+        const sxn = ddx === 0 ? (a.id < b.id ? 1 : -1) : Math.sign(ddx);
+        const szn = ddz === 0 ? (a.id < b.id ? 1 : -1) : Math.sign(ddz);
+        const pushX = (minX - Math.abs(ddx)) * 0.5 * k * sxn;
+        const pushZ = (minZ - Math.abs(ddz)) * 0.5 * k * szn;
+        if (!a.boss) { a.x -= pushX; a.z = Math.min(Z_MAX, Math.max(Z_MIN, a.z - pushZ)); }
+        if (!b.boss) { b.x += pushX; b.z = Math.min(Z_MAX, Math.max(Z_MIN, b.z + pushZ)); }
+      }
+    }
+    compact(g.enemies, e => !(e.dead && g.time - e.deadT > (e.boss ? 1.5 : 0.7)));
 
     // Projectiles
     for (let i = 0; i < g.projectiles.length; i++) {
@@ -1286,9 +1408,14 @@ export default function KnightsApp() {
       let dt = (now - lastT) / 1000;
       lastT = now;
       if (dt > 0.06) dt = 0.06;
+      const rawDt = dt;
       const g = gameRef.current;
       if (g) {
-        if (now >= g.hitStopUntil) {
+        const paused = pausedRef.current;
+        if (g.slowT > 0) { g.slowT -= rawDt; dt *= 0.32; }      // finishing-blow slow motion
+        if (paused) {
+          // frozen: nothing advances while the pause card is up
+        } else if (now >= g.hitStopUntil) {
           tick(g, dt);
         } else {
           for (let i = 0; i < g.vfx.length; i++) g.vfx[i].t += dt * 0.4;
@@ -1296,7 +1423,15 @@ export default function KnightsApp() {
         }
         rendererRef.current.render(g);
 
-        if (g.stageFailed && !g._ended) {
+        // Let the knock-out / victory play out before leaving the stage.
+        let endNow = false;
+        if ((g.stageFailed || g.stageComplete) && !g._ended && !paused) {
+          if (g.endT == null) g.endT = g.stageFailed ? 1.7 : 2.6;
+          g.endT -= rawDt;
+          endNow = g.endT <= 0;
+        }
+
+        if (endNow && g.stageFailed) {
           g._ended = true;
           // RPG loop: a defeat still trains you — keep run XP, coins, spirits.
           const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot } };
@@ -1309,7 +1444,7 @@ export default function KnightsApp() {
             coins: g.hero.coins, xp: g.hero.xp, score: g.score, cleared: false,
             level: g.heroLevel, levelsGained: g.heroLevel - g.startLevel });
           setScreen('gameover');
-        } else if (g.stageComplete && !g._ended) {
+        } else if (endNow && g.stageComplete) {
           g._ended = true;
           const next = nextStageId(g.stageId);
           const s = { ...save, heroXp: { ...save.heroXp }, upgrades: { ...save.upgrades }, pot: { ...save.pot }, relics: { ...save.relics } };
@@ -1344,6 +1479,9 @@ export default function KnightsApp() {
     /* eslint-disable react-hooks/exhaustive-deps */
   }, [screen, save, chosenHeroId]);
   /* eslint-enable react-hooks/exhaustive-deps */
+
+  // The pause card (Esc / Pause button) really freezes the fight.
+  useEffect(() => { pausedRef.current = showHowTo && screen === 'stage'; }, [showHowTo, screen]);
 
   // Cheap HUD ticker
   useEffect(() => {
@@ -1904,7 +2042,7 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
       {showHowTo && (
         <div className="knights-modal" onClick={dismissHowTo}>
           <div className="knights-modal-card" onClick={e => e.stopPropagation()}>
-            <h3>Controls</h3>
+            <h3>Paused</h3>
             <ul>
               <li><b>WASD / Arrows</b> — 8-direction floor movement</li>
               <li><b>J / X</b> — attack (chain combo)</li>
@@ -1916,7 +2054,7 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
             <p style={{ fontStyle: 'italic', color: '#caa07a' }}>
               Pick up meat / wine / scrolls from barrels and felled foes.
             </p>
-            <button className="knights-btn primary" onClick={dismissHowTo}>Got it</button>
+            <button className="knights-btn primary" onClick={dismissHowTo}>Resume</button>
           </div>
         </div>
       )}

@@ -66,7 +66,7 @@ const { chromium } = require('playwright');
 
   // Force a clear to reach the victory screen with its outro narrative
   await page.evaluate(() => { const g = window.__KN; g.waveActive = false; g.waveIdx = g.stage.waves.length; g.stageComplete = true; });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(3200);
   await page.screenshot({ path: 'tour-reward.png' });
 
   await browser.close();

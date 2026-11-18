@@ -18,19 +18,19 @@ export const ENEMIES = {
   halberd:   { name: 'Halberdier',     sprite: 'enemy/guard',     el: 'metal', drop: 'tough',
     hp: 200, atk: 17, moveSpeed: 75,  atkRange: 130, atkCooldown: 1.6,
     width: 64, height: 100, color: '#777', ai: 'charge', reach: true, xp: 14 },
-  captain:   { name: 'Captain Zhao',   sprite: 'enemy/captain',   el: 'metal', drop: 'boss',
+  captain:   { zh: '趙都頭', name: 'Captain Zhao',   sprite: 'enemy/captain',   el: 'metal', drop: 'boss',
     hp: 1600, atk: 32, moveSpeed: 95, atkRange: 110, atkCooldown: 1.2,
     width: 92, height: 132, color: '#933', ai: 'boss', boss: true, xp: 80 },
-  warlord:   { name: 'Luan Tingyu',    sprite: 'enemy/warlord',   el: 'earth', drop: 'boss',
+  warlord:   { zh: '欒廷玉', name: 'Luan Tingyu',    sprite: 'enemy/warlord',   el: 'earth', drop: 'boss',
     hp: 2800, atk: 44, moveSpeed: 85, atkRange: 120, atkCooldown: 1.4,
     width: 110, height: 148, color: '#511', ai: 'boss', boss: true, xp: 140 },
-  sorcerer:  { name: 'Gao Lian',       sprite: 'enemy/warlord',   el: 'water', drop: 'boss',
+  sorcerer:  { zh: '高廉', name: 'Gao Lian',       sprite: 'enemy/warlord',   el: 'water', drop: 'boss',
     hp: 3400, atk: 38, moveSpeed: 70, atkRange: 480, atkCooldown: 1.3,
     projectileSpeed: 300, width: 96, height: 140, color: '#629',
     ai: 'boss-kite', boss: true, xp: 220 },
   // Red Chamber crossover boss — the Mirror of Romance walking out wearing
   // YOUR shape. Sprite is overridden at spawn to the chosen hero's art.
-  phantom:   { name: 'Mirror Self',    sprite: 'npc/songjiang',   el: 'water', drop: 'boss',
+  phantom:   { zh: '鏡中人', name: 'Mirror Self',    sprite: 'npc/songjiang',   el: 'water', drop: 'boss',
     hp: 3200, atk: 40, moveSpeed: 155, atkRange: 110, atkCooldown: 0.9,
     width: 64, height: 104, color: '#c8b0e8', ai: 'boss', boss: true, xp: 260 },
 };
@@ -41,7 +41,7 @@ export function makeEnemy(typeId, level = 1) {
   const scale = 1 + (level - 1) * 0.12;
   return {
     id: ++_eid,
-    typeId, name: t.name, sprite: t.sprite, el: t.el,
+    typeId, name: t.name, zh: t.zh || '', sprite: t.sprite, el: t.el,
     hp: Math.round(t.hp * scale), hpMax: Math.round(t.hp * scale),
     atk: Math.round(t.atk * scale), moveSpeed: t.moveSpeed,
     atkRange: t.atkRange, atkCooldown: t.atkCooldown, atkCdLeft: 0.4 + Math.random() * 0.6,

@@ -336,6 +336,13 @@ html, body { overscroll-behavior: none; }
 .knights-bar.hp .knights-bar-fill { background: linear-gradient(180deg, #ff8484 0%, #d63030 100%); }
 .knights-bar.xp { height: 8px; border-color: rgba(255,214,118,0.3); }
 .knights-bar.xp .knights-bar-fill { background: linear-gradient(180deg, #ffe2a4 0%, #d8a83a 100%); }
+.kn-horse-pips {
+  position: fixed; left: 16px; bottom: 16px; z-index: 5;
+  background: rgba(20,12,8,0.78); border: 1px solid rgba(255,214,118,0.4);
+  color: #ffd676; font-size: 14px; letter-spacing: 0.12em;
+  padding: 5px 12px; border-radius: 4px;
+}
+@media (pointer: coarse) { .kn-horse-pips { left: 50%; transform: translateX(-50%); bottom: auto; top: 8px; } }
 /* 氣 gauge — fills as you fight; pulses gold when the free special is ready */
 .knights-bar.rage { height: 12px; border-color: rgba(120,200,255,0.4); }
 .knights-bar.rage .knights-bar-fill { background: linear-gradient(180deg, #9fe3ff 0%, #2f8fd6 100%); }

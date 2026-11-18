@@ -22,35 +22,47 @@ const SHADOW_ALPHA = 0.34;
 // dusk  (ch1): sunset over the pass          night (ch2): moonlit siege,
 // burning manor glow                          mist  (ch3): sorcerous fog
 const THEMES = {
+  // 水墨 ink-wash: cream rice paper for sky, grey ink mountains dissolving
+  // into mist, pale sand underfoot. Each chapter tints the paper differently.
   dusk: {
-    sky: ['#1a1a2e', '#4a2540', '#8a3a20'],
-    ground: ['#6a4830', '#5a3a25', '#3a2418', '#22150d'],
-    mts: ['#3a2a3a', '#2a1c30', '#1a121f'],
-    orb: { x: 0.72, y: 0.18, r: 70, c1: 'rgba(255,200,140,0.95)', c2: 'rgba(255,160,90,0.30)' },
+    sky: ['#f6efdf', '#f2e8d3', '#ecdfc6'],
+    ground: ['#eadbb9', '#e3d0a6', '#d9c293', '#cdb482'],
+    mts: ['#8f9498', '#5d6266', '#33373a'],
+    tree: '#2a2d2f',
+    orb: { x: 0.74, y: 0.2, r: 54, c1: 'rgba(206,74,52,0.55)', c2: 'rgba(206,74,52,0.10)' },
+    mistCol: '255,252,244',
   },
   night: {
-    sky: ['#04060e', '#0b1124', '#182140'],
-    ground: ['#2b3143', '#222736', '#171b29', '#0d101b'],
-    mts: ['#141a2c', '#0e1322', '#070b16'],
-    orb: { x: 0.80, y: 0.14, r: 46, c1: 'rgba(230,238,255,0.95)', c2: 'rgba(180,200,255,0.22)' },
-    burn: true,             // distant burning-manor glow on the horizon
+    sky: ['#e3ddd0', '#ddd5c5', '#d5ccb8'],
+    ground: ['#d6cbb0', '#cbbd9c', '#bdad88', '#ad9c76'],
+    mts: ['#7c8085', '#4c5055', '#25282c'],
+    tree: '#1d2023',
+    orb: { x: 0.8, y: 0.16, r: 40, c1: 'rgba(255,255,255,0.9)', c2: 'rgba(255,255,255,0.15)' },
+    burn: true,             // the burning manor bleeds red wash along the horizon
+    mistCol: '250,246,238',
   },
   mist: {
-    sky: ['#120a20', '#291646', '#40295e'],
-    ground: ['#3b2f47', '#2e2538', '#211a2b', '#141020'],
-    mts: ['#241636', '#190f28', '#11091d'],
-    orb: { x: 0.26, y: 0.16, r: 42, c1: 'rgba(200,255,215,0.75)', c2: 'rgba(140,220,170,0.16)' },
+    sky: ['#e6e8dd', '#dfe2d5', '#d6dacb'],
+    ground: ['#d9d8bf', '#cdcbad', '#bfbc99', '#aeaa85'],
+    mts: ['#869088', '#56605a', '#2d3531'],
+    tree: '#232a26',
+    orb: { x: 0.26, y: 0.18, r: 40, c1: 'rgba(120,150,130,0.35)', c2: 'rgba(120,150,130,0.06)' },
     mist: true,             // drifting fog bands over the floor
+    mistCol: '248,250,244',
   },
   dream: {                  // 红楼梦 crossover — the Land of Illusion
-    sky: ['#251b40', '#5a3f6e', '#b87e96'],
-    ground: ['#5c4660', '#4a3850', '#362a40', '#221a2c'],
-    mts: ['#68557f', '#52426a', '#3d3156'],
-    orb: { x: 0.5, y: 0.13, r: 56, c1: 'rgba(255,244,252,0.95)', c2: 'rgba(240,200,225,0.28)' },
+    sky: ['#f7e9e6', '#f3dfdd', '#edd3d2'],
+    ground: ['#ecd9cf', '#e3c9c0', '#d6b7b0', '#c7a5a0'],
+    mts: ['#a58f9c', '#77606f', '#4a3846'],
+    tree: '#3a2c37',
+    orb: { x: 0.5, y: 0.15, r: 50, c1: 'rgba(214,96,120,0.45)', c2: 'rgba(214,96,120,0.08)' },
     mist: true,
-    ghost: true,            // enemies are dream-phantoms: translucent + jade aura
+    ghost: true,            // enemies are dream-phantoms: jade aura
+    mistCol: '255,246,248',
   },
 };
+const INK = '#1a1612';      // brush ink
+const SEAL = '#c0261c';     // vermilion seal paste
 
 // Attack thrust envelope: p in [0,1] across the move's duration.
 // Returns a signed thrust:  brief wind-BACK (negative) → snap FORWARD to
@@ -61,6 +73,12 @@ function thrustEnv(p) {
   return Math.max(0, 1 - (p - 0.42) / 0.58);
 }
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+
+// '#rrggbb' + alpha → rgba()
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
 
 function offscreen(w, h) {
   const c = document.createElement('canvas');
@@ -134,9 +152,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
       const gr = bc.createRadialGradient(
         burnCanvas.width / 2, burnCanvas.height, 10,
         burnCanvas.width / 2, burnCanvas.height, burnCanvas.width / 2);
-      gr.addColorStop(0, 'rgba(255,130,40,0.55)');
-      gr.addColorStop(0.5, 'rgba(200,70,20,0.22)');
-      gr.addColorStop(1, 'rgba(120,30,10,0)');
+      gr.addColorStop(0, 'rgba(206,60,34,0.42)');
+      gr.addColorStop(0.5, 'rgba(206,90,50,0.16)');
+      gr.addColorStop(1, 'rgba(206,90,50,0)');
       bc.fillStyle = gr;
       bc.fillRect(0, 0, burnCanvas.width, burnCanvas.height);
     }
@@ -149,22 +167,34 @@ export function createRenderer(canvas, themeName = 'dusk') {
     {
       const mc = mountainCanvas.getContext('2d');
       const layers = [
-        { color: theme.mts[0], amp: 60,  y: horizonY - 10, freq: 0.004 },
-        { color: theme.mts[1], amp: 100, y: horizonY,      freq: 0.003 },
-        { color: theme.mts[2], amp: 150, y: horizonY + 14, freq: 0.0025 },
+        { color: theme.mts[0], amp: Math.min(150, horizonY * 0.8),  y: horizonY - 14, freq: 0.004 },
+        { color: theme.mts[1], amp: Math.min(110, horizonY * 0.6), y: horizonY - 4,  freq: 0.003 },
+        { color: theme.mts[2], amp: Math.min(70, horizonY * 0.4),  y: horizonY + 8,  freq: 0.0025 },
       ];
-      for (const L of layers) {
-        mc.fillStyle = L.color;
+      // Each ridge is a wet brush-load of ink: darkest along the crest,
+      // bleeding out to bare paper (mist) lower down.
+      const period = Math.PI * 2 / 0.0005;           // keeps the tile seamless
+      const snap = (f) => Math.max(1, Math.round(f * mountainCanvasW / (Math.PI * 2))) * (Math.PI * 2) / mountainCanvasW;
+      void period;
+      layers.forEach((L, li) => {
+        const f1 = snap(L.freq), f2 = snap(L.freq * 2.3), f3 = snap(L.freq * 5.1);
+        const top = L.y - L.amp;
+        const grad = mc.createLinearGradient(0, top, 0, L.y + 34);
+        const a = [0.42, 0.6, 0.82][li];
+        grad.addColorStop(0, hexA(L.color, a));
+        grad.addColorStop(0.45, hexA(L.color, a * 0.55));
+        grad.addColorStop(1, hexA(L.color, 0));
+        mc.fillStyle = grad;
         mc.beginPath();
         mc.moveTo(0, mountainCanvas.height);
-        for (let x = 0; x <= mountainCanvasW; x += 6) {
-          const y = L.y - (Math.sin(x * L.freq) * 0.6 + Math.sin(x * L.freq * 2.3) * 0.4) * L.amp;
-          mc.lineTo(x, y);
+        for (let x = 0; x <= mountainCanvasW; x += 4) {
+          const n = Math.sin(x * f1 + li) * 0.55 + Math.sin(x * f2 + li * 2) * 0.33 + Math.sin(x * f3) * 0.12;
+          mc.lineTo(x, L.y - (0.5 + n * 0.5) * L.amp);
         }
         mc.lineTo(mountainCanvasW, mountainCanvas.height);
         mc.closePath();
         mc.fill();
-      }
+      });
     }
   }
 
@@ -189,7 +219,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
       const len = 30 + k * 150 + r() * 60;
       const x = r() * GROUND_W;
       const light = r() < 0.4;
-      gc.strokeStyle = light ? `rgba(255,236,200,${0.03 + k * 0.035})` : `rgba(0,0,0,${0.045 + k * 0.07})`;
+      gc.strokeStyle = light ? `rgba(255,252,240,${0.10 + k * 0.10})` : `rgba(60,48,34,${0.035 + k * 0.06})`;
       gc.lineWidth = 1 + k * 2;
       gc.lineCap = 'round';
       wrap((ox) => { gc.beginPath(); gc.moveTo(x + ox, y); gc.lineTo(x + ox + len, y + (r() - 0.5) * 2); gc.stroke(); });
@@ -229,8 +259,8 @@ export function createRenderer(canvas, themeName = 'dusk') {
     const r = rng(theme.mts[2].length * 104729 + 5);
     const wrap = (fn) => { fn(0); fn(-TREE_W); fn(TREE_W); };
     for (let layer = 0; layer < 2; layer++) {
-      tc.fillStyle = layer ? theme.mts[2] : theme.mts[1];
-      tc.globalAlpha = layer ? 0.72 : 0.45;
+      tc.fillStyle = theme.tree || theme.mts[2];
+      tc.globalAlpha = layer ? 0.5 : 0.22;
       const count = layer ? 13 : 20;
       for (let i = 0; i < count; i++) {
         const x = (i + r() * 0.8) * (TREE_W / count);
@@ -336,9 +366,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
     mistBand = offscreen(440, 34);
     const mc = mistBand.getContext('2d');
     const grad = mc.createRadialGradient(220, 17, 4, 220, 17, 220);
-    grad.addColorStop(0, 'rgba(190,170,230,0.11)');
-    grad.addColorStop(0.7, 'rgba(190,170,230,0.05)');
-    grad.addColorStop(1, 'rgba(190,170,230,0)');
+    grad.addColorStop(0, `rgba(${theme.mistCol},0.34)`);
+    grad.addColorStop(0.7, `rgba(${theme.mistCol},0.14)`);
+    grad.addColorStop(1, `rgba(${theme.mistCol},0)`);
     mc.fillStyle = grad;
     mc.fillRect(0, 0, 440, 34);
   }
@@ -405,6 +435,81 @@ export function createRenderer(canvas, themeName = 'dusk') {
     rig.belly += sw * 3.2;                              // shoulders and hips counter-swing
     rig.head += (-1.5 + Math.sin(phase * 2) * 1.6) * art - sw * 2.2;
     rig.hem = 7; rig.phase = phase;                     // skirts and robes swing with each step
+  }
+
+  // ── Mounted fighters ──
+  // The rider's own picture (cut off at the waist) seated on the war horse.
+  // The horse gallops through the cut-out rig: front and hind legs scissor,
+  // the body rocks and bounces, and the rider bobs half a beat behind.
+  //   o: { dir, phase, moving, t, lean, lift, lungeX, scaleX, scaleY, scale,
+  //        riderFlip, rig, alpha, tint, tintAlpha, dark, rear }
+  // Returns the height of the whole figure (for bars and labels).
+  const HORSE = 'world/horse';
+  function drawMounted(riderName, sx, fy, o) {
+    const hs = (o.scale || 1) * 1.3;
+    const horseH = spriteDrawHeight(HORSE, hs) || 170;
+    const horseW = horseH * 0.9;
+    const ph = o.phase || 0;
+    const run = o.moving ? 1 : 0;
+    const hop = run ? Math.abs(Math.sin(ph)) * 8 : 0;
+    const rear = o.rear || 0;                              // 0..1 rearing up
+    const rock = (run ? Math.sin(ph) * 0.05 : Math.sin((o.t || 0) * 1.5) * 0.006) - rear * 0.42;
+    const lift = o.lift || 0, lungeX = o.lungeX || 0;
+    const alpha = o.alpha == null ? 1 : o.alpha;
+    const horseRig = {
+      bend: 0, belly: 0, breathe: 0, hem: 0, phase: 0,
+      head: run ? Math.sin(ph + 1) * 3.5 : Math.sin((o.t || 0) * 1.3) * 1.6,
+      stride: run ? 15 * Math.sin(ph) : rear * 10,
+      liftL: run ? 14 * Math.max(0, Math.cos(ph)) : rear * 16,
+      liftR: run ? 14 * Math.max(0, -Math.cos(ph)) : 0,
+    };
+    const dark = !!o.dark;
+    drawShadow(sx, fy, 104, 1 - Math.min(0.6, lift / 220));
+    // horse art faces LEFT
+    drawPosed(HORSE, sx, fy - hop, {
+      flip: o.dir > 0, lean: rock * o.dir + (o.lean || 0) * 0.4, lift, lungeX, scale: hs,
+      scaleX: o.scaleX, scaleY: o.scaleY, rig: horseRig, alpha,
+      tint: o.tintAlpha > 0.01 ? o.tint : (dark ? '#14110e' : null),
+      tintAlpha: o.tintAlpha > 0.01 ? o.tintAlpha : (dark ? 0.62 : 0),
+    });
+    // rider: seated on the saddle, legs hidden behind the horse's barrel
+    const rs = (o.scale || 1) * 1.06;
+    const rH = spriteDrawHeight(riderName, rs) || 140;
+    const bobR = run ? Math.abs(Math.sin(ph - 0.7)) * 6 : 0;
+    const seatY = fy - hop - lift - horseH * 0.63 - bobR - rear * horseH * 0.16;
+    const seatX = sx + lungeX - o.dir * (horseW * 0.07 + rear * horseW * 0.12);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(seatX - 260, seatY - rH - 140, 520, rH + 140 + 10);
+    ctx.clip();
+    drawPosed(riderName, seatX, seatY + rH * 0.36, {
+      flip: !!o.riderFlip, lean: (o.lean || 0) - rear * 0.2 * o.dir, scale: rs,
+      scaleX: o.scaleX, scaleY: o.scaleY, rig: o.rig || null, alpha,
+      tint: o.tint || null, tintAlpha: o.tintAlpha || 0,
+    });
+    ctx.restore();
+    return horseH * 0.63 + rH * 0.64 + rear * horseH * 0.16;
+  }
+
+  // A vermilion seal with the fighter's name, as stamped on a painting.
+  function drawSeal(x, y, zh, alpha) {
+    if (!zh) return;
+    const chars = [...zh];
+    const cs = 17, pad = 5;
+    const w = cs + pad * 2, h = chars.length * cs + pad * 2;
+    ctx.save();
+    ctx.globalAlpha = alpha == null ? 1 : alpha;
+    ctx.fillStyle = SEAL;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x - w / 2, y, w, h, 6); else ctx.rect(x - w / 2, y, w, h);
+    ctx.fill();
+    ctx.fillStyle = '#fbf3e2';
+    ctx.font = `bold ${cs - 2}px "KaiTi", "STKaiti", "Songti SC", "SimSun", serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < chars.length; i++) ctx.fillText(chars[i], x, y + pad + cs * (i + 0.5));
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
   }
 
   // Turn-around: the sprite folds flat and unfolds facing the new way.
@@ -543,8 +648,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
       if (Math.sin(t * 46) > 0) { tint = '#ffffff'; tintAlpha = 0.4; }   // i-frame flicker
     }
 
-    const footY = fy - bob;
-    drawShadow(sx, fy, 56, 1 - Math.min(0.6, lift / 220));
+    const selfGallop = h.selfMounted && walking ? Math.abs(Math.sin(h.gallop)) * 6 : 0;
+    const footY = fy - bob - selfGallop;
+    if (!(h.mounted && !h.selfMounted && !ko)) drawShadow(sx, fy, 56, 1 - Math.min(0.6, lift / 220));
 
     // Empowered (Tiger Spirit etc.): a pulsing ring of fire at the feet
     let buffed = false;
@@ -565,6 +671,27 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
 
     const pose = { flip, lean, scaleX, scaleY, lift, lungeX, pivotY, rig: ko ? null : rig };
+    const riding = h.mounted && !h.selfMounted && !ko;
+    let figH = visH;
+    if (riding) {
+      // the rider's legs are hidden; only the spine/head of the rig matter
+      rig.stride = 0; rig.liftL = 0; rig.liftR = 0; rig.hem = 0;
+      const mo = {
+        dir, phase: h.gallop, moving: h.walking || h.dashing > 0, t,
+        lean: lean * 0.7, lift, lungeX, scaleX, scaleY, riderFlip: flip, rig,
+      };
+      if (h.dashing > 0) {                        // charge afterimages
+        const ga = Math.min(1, h.dashing / 0.42);
+        for (let i = 2; i >= 1; i--) drawMounted(name, sx - dir * i * 34, fy, { ...mo, alpha: 0.2 * ga });
+      }
+      figH = drawMounted(name, sx, fy, { ...mo, alpha: alpha < 1 ? alpha : 1, tint, tintAlpha });
+    }
+    // name seal: stamped beside the hero as the stage opens
+    if (t < 4.2 && h.zh) drawSeal(sx - dir * 62, fy - figH - 6, h.zh, Math.min(1, t * 2, (4.2 - t) * 1.5));
+    if (riding) {
+      if (h.grab) { /* grabs are on foot only */ }
+      return;
+    }
     if (h.dashing > 0) {                          // dash afterimages (silhouettes)
       const ga = Math.min(1, h.dashing / 0.25);
       for (let i = 3; i >= 1; i--) {
@@ -654,7 +781,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
       drawPosed(e.sprite, sx, dfy, {
         flip: e.artRight ? e.facing < 0 : e.facing >= 0, lean: e.deathSpin || 0, lift: dlift, pivotY: visH * 0.45,
         scale: scale * (1 - fade * 0.3), alpha: a,
-        tint: '#ffffff', tintAlpha: Math.max(0, 0.9 - fade * 3.5),
+        tint: INK, tintAlpha: Math.min(0.85, fade * 1.6),            // dissolves into ink
       });
       return;
     }
@@ -733,7 +860,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
     if (e.hitFlash > 0) {
       const k = Math.min(1, e.hitFlash / 0.35);
       if (e.stun <= 0 && e.launched <= 0) { scaleX *= 1 + 0.08 * k; scaleY *= 1 - 0.06 * k; }
-      tint = '#ffffff'; tintAlpha = Math.min(0.9, e.hitFlash * 3.2);
+      tint = SEAL; tintAlpha = Math.min(0.72, e.hitFlash * 2.6);   // struck: flushed vermilion
     }
 
     if (e.spawnT > 0) {
@@ -749,7 +876,22 @@ export function createRenderer(canvas, themeName = 'dusk') {
     if (fold && e.launched <= 0) { scaleX *= fold.sx; if (fold.old) flip = !flip; }
 
     const footY = fy - bob;
-    drawShadow(sx, fy, e.width || 56, 1 - Math.min(0.6, lift / 200));
+    if (!e.mounted) drawShadow(sx, fy, e.width || 56, 1 - Math.min(0.6, lift / 200));
+
+    // A charging officer: the lane they will thunder down is washed in red
+    let rear = 0;
+    if (e.charge) {
+      const c = e.charge;
+      if (c.phase === 0) {
+        rear = Math.sin(Math.min(1, c.t / 0.9) * Math.PI * 0.9);
+        const x0 = c.dir > 0 ? sx : 0, x1 = c.dir > 0 ? cssW : sx;
+        ctx.save();
+        ctx.globalAlpha = 0.14 + 0.14 * Math.abs(Math.sin(c.t * 12));
+        ctx.fillStyle = SEAL;
+        ctx.fillRect(x0, fy - 26, x1 - x0, 44);
+        ctx.restore();
+      }
+    }
 
     // Dream theme: enemies are phantoms — jade aura + slight translucency
     if (theme.ghost) {
@@ -761,10 +903,22 @@ export function createRenderer(canvas, themeName = 'dusk') {
       ctx.restore();
     }
 
-    const drew = drawPosed(e.sprite, sx, footY, {
-      flip, lean, lungeX, scaleX, scaleY, lift, scale, pivotY, alpha, tint, tintAlpha,
-      rig: e.launched > 0 ? null : rig,
-    });
+    let figH = visH;
+    let drew = true;
+    if (e.mounted) {
+      rig.stride = 0; rig.liftL = 0; rig.liftR = 0; rig.hem = 0;
+      const charging = e.charge && e.charge.phase === 1;
+      figH = drawMounted(e.sprite, sx, fy, {
+        dir, phase: (e.walkPhase || 0) * Math.PI * (charging ? 1 : 0.8), moving: e.moving, t: e.bobPhase,
+        lean: lean * 0.7 + (charging ? 0.12 * dir : 0), lift, lungeX, scaleX, scaleY, scale,
+        riderFlip: flip, rig, alpha, tint, tintAlpha, dark: true, rear,
+      });
+    } else {
+      drew = drawPosed(e.sprite, sx, footY, {
+        flip, lean, lungeX, scaleX, scaleY, lift, scale, pivotY, alpha, tint, tintAlpha,
+        rig: e.launched > 0 ? null : rig,
+      });
+    }
     if (!drew) {
       const w = e.width || 56, hh = e.height || 88;
       const bx = sx + lungeX, by = footY - lift;
@@ -778,7 +932,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
     // Attack telegraph — a warning ring that closes as the strike lands.
     if (e.windup > 0) {
       const wk = clamp(e.windup / (e.windupMax || 0.3), 0, 1);  // 1 → 0
-      const cyW = drawnFootY - visH * 0.5;
+      const cyW = drawnFootY - figH * (e.mounted ? 0.72 : 0.5);
       const cxW = sx + lungeX;
       ctx.save();
       ctx.lineWidth = 3;
@@ -798,7 +952,8 @@ export function createRenderer(canvas, themeName = 'dusk') {
     if ((e.boss || e.hp < e.hpMax) && !(e.spawnT > 0)) {
       const bw = e.boss ? 110 : 50;
       const bx = sx - bw / 2;
-      const by = drawnFootY - visH - 12;
+      const by = drawnFootY - figH - 12;
+      if (e.boss) drawSeal(sx + dir * -84, by - 4, e.zh);          // the officer's name seal
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
       ctx.fillStyle = e.boss ? '#c44' : '#d77';
@@ -908,8 +1063,8 @@ export function createRenderer(canvas, themeName = 'dusk') {
         const px = r * Math.cos(th), py = r * Math.sin(th);
         const r2 = Math.hypot(px + d, py);
         const ph = Math.atan2(py, px + d);
-        ctx.globalAlpha = a * a * 0.9;
-        ctx.fillStyle = fx.color || '#ffe080';
+        ctx.globalAlpha = a * 0.86;
+        ctx.fillStyle = INK;
         ctx.beginPath();
         ctx.arc(0, 0, r, -th, th);
         ctx.arc(-d, 0, r2, ph, -ph, true);
@@ -918,8 +1073,8 @@ export function createRenderer(canvas, themeName = 'dusk') {
         // bright leading edge
         const d2 = r * 0.16;
         const r3 = Math.hypot(px + d2, py), ph3 = Math.atan2(py, px + d2);
-        ctx.globalAlpha = a * 0.95;
-        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = a * 0.75;
+        ctx.fillStyle = '#f7f1e3';
         ctx.beginPath();
         ctx.arc(0, 0, r, -th * 0.92, th * 0.92);
         ctx.arc(-d2, 0, r3, ph3 * 0.92, -ph3 * 0.92, true);
@@ -935,19 +1090,19 @@ export function createRenderer(canvas, themeName = 'dusk') {
         ctx.translate(sx + fx.dir * 10, fy);
         ctx.scale(fx.dir, 1);
         ctx.globalAlpha = a * 0.85;
-        ctx.fillStyle = fx.color || '#c2ddff';
+        ctx.fillStyle = INK;
         ctx.beginPath();
         ctx.moveTo(0, -wdt * 0.5); ctx.lineTo(len * 0.72, -wdt); ctx.lineTo(len, 0);
         ctx.lineTo(len * 0.72, wdt); ctx.lineTo(0, wdt * 0.5);
         ctx.closePath(); ctx.fill();
-        ctx.globalAlpha = a;
-        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = a * 0.8;
+        ctx.fillStyle = '#f7f1e3';
         ctx.beginPath();
         ctx.moveTo(8, -wdt * 0.18); ctx.lineTo(len * 0.8, -wdt * 0.32); ctx.lineTo(len * 0.97, 0);
         ctx.lineTo(len * 0.8, wdt * 0.32); ctx.lineTo(8, wdt * 0.18);
         ctx.closePath(); ctx.fill();
         // speed lines
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.strokeStyle = 'rgba(26,22,18,0.55)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(len * 0.1, -wdt - 7); ctx.lineTo(len * 0.62, -wdt - 7);
@@ -959,9 +1114,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
         // Bowstring release: a quick flare at the bow.
         const tt = fx.t / fx.dur;
         ctx.globalAlpha = a;
-        ctx.fillStyle = '#eaffd8';
+        ctx.fillStyle = INK;
         drawStar(sx + fx.dir * 34, fy, 20 * (0.5 + tt), 4, tt * 2);
-        ctx.strokeStyle = fx.color || '#caffaa';
+        ctx.strokeStyle = INK;
         ctx.lineWidth = 3 * (1 - tt);
         ctx.beginPath();
         ctx.arc(sx + fx.dir * 34, fy, 8 + tt * 22, 0, Math.PI * 2);
@@ -978,11 +1133,11 @@ export function createRenderer(canvas, themeName = 'dusk') {
         const gx = fx.kind === 'shock' ? sx + fx.dir * 46 : sx;
         ctx.translate(gx, gy);
         ctx.scale(1, 0.36);
-        ctx.globalAlpha = a * 0.5;
-        ctx.fillStyle = fx.color || '#ffd07a';
+        ctx.globalAlpha = a * 0.45;
+        ctx.fillStyle = INK;
         ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.arc(0, 0, R * 0.82, 0, Math.PI * 2, true); ctx.fill();
-        ctx.globalAlpha = a;
-        ctx.strokeStyle = '#ffffff';
+        ctx.globalAlpha = a * 0.8;
+        ctx.strokeStyle = INK;
         ctx.lineWidth = 4 * (1 - tt) + 1;
         ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
         if (fx.kind === 'shock') {
@@ -1006,12 +1161,11 @@ export function createRenderer(canvas, themeName = 'dusk') {
         // motes of light are drawn inward.
         const tt = fx.t / fx.dur;
         const gy = floorYFromZ(fx.z || 100) + 4;
-        ctx.globalCompositeOperation = 'lighter';
         ctx.save();
         ctx.translate(sx, gy);
         ctx.scale(1, 0.36);
-        ctx.globalAlpha = Math.sin(Math.min(1, tt * 1.2) * Math.PI) * 0.9;
-        ctx.strokeStyle = fx.color || '#ffd07a';
+        ctx.globalAlpha = Math.sin(Math.min(1, tt * 1.2) * Math.PI) * 0.8;
+        ctx.strokeStyle = SEAL;
         const R = 74;
         ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
@@ -1024,7 +1178,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
           ctx.stroke();
         }
         ctx.restore();
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = INK;
         for (let i = 0; i < 10; i++) {
           const ang = i * 2.39 + 0.6;
           const rr = 120 * (1 - tt) * (0.5 + (i % 4) * 0.17);
@@ -1037,7 +1191,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
       }
       case 'aoe': {
         const r = (fx.range || 200) * Math.min(1, fx.t / (fx.dur * 0.4));
-        ctx.strokeStyle = fx.color || '#ffd07a';
+        ctx.strokeStyle = INK;
         ctx.lineWidth = 6 * (1 - fx.t / fx.dur);
         ctx.beginPath();
         ctx.arc(sx, fy + 12, r, 0, Math.PI * 2);
@@ -1052,17 +1206,15 @@ export function createRenderer(canvas, themeName = 'dusk') {
         const wd = (fx.width || 40) * (tt < 0.7 ? 1 : 1 - (tt - 0.7) / 0.3) * flick;
         const x1 = sx + fx.dir * 26, x2 = sx + fx.dir * L;
         ctx.lineCap = 'round';
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.28;
-        ctx.strokeStyle = fx.color || '#c2ddff';
+        ctx.globalAlpha = 0.16;
+        ctx.strokeStyle = INK;
         ctx.lineWidth = wd * 1.7;
         ctx.beginPath(); ctx.moveTo(x1, fy); ctx.lineTo(x2, fy); ctx.stroke();
-        ctx.globalAlpha = 0.8;
+        ctx.globalAlpha = 0.82;
         ctx.lineWidth = wd * 0.8;
         ctx.beginPath(); ctx.moveTo(x1, fy); ctx.lineTo(x2, fy); ctx.stroke();
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = '#ffffff';
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = '#f7f1e3';
         ctx.lineWidth = Math.max(2, wd * 0.26);
         ctx.beginPath(); ctx.moveTo(x1, fy); ctx.lineTo(x2, fy); ctx.stroke();
         // rings racing down the beam + a flare at the source
@@ -1075,7 +1227,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
           ctx.stroke();
         }
         ctx.globalAlpha = 0.9;
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = INK;
         drawStar(x1, fy, wd * 1.1, wd * 0.25, fx.t * 6);
         break;
       }
@@ -1090,7 +1242,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
         for (let k = 0; k < 3; k++) {
           const kk = (tt * 1.6 + k / 3) % 1;
           ctx.globalAlpha = a * (1 - kk) * 0.8;
-          ctx.strokeStyle = k === 1 ? '#ffffff' : (fx.color || '#ff9cd6');
+          ctx.strokeStyle = INK;
           ctx.lineWidth = 5 * (1 - kk) + 1;
           ctx.beginPath(); ctx.arc(0, 0, R * (0.15 + kk * 0.95), 0, Math.PI * 2); ctx.stroke();
         }
@@ -1108,12 +1260,12 @@ export function createRenderer(canvas, themeName = 'dusk') {
           const sc = 1.25 + depth * 0.35;
           ctx.scale(sc, sc);
           ctx.globalAlpha = a * (0.65 + depth * 0.3);
-          ctx.fillStyle = fx.color || '#ff9cd6';
+          ctx.fillStyle = INK;
           ctx.beginPath();
           ctx.arc(0, 0, 30, -1.1, 1.1);
           ctx.arc(-13, 0, 37, 0.8, -0.8, true);
           ctx.closePath(); ctx.fill();
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = '#f7f1e3';
           ctx.beginPath();
           ctx.arc(0, 0, 30, -0.9, 0.9);
           ctx.arc(-5, 0, 32.5, 0.8, -0.8, true);
@@ -1138,16 +1290,16 @@ export function createRenderer(canvas, themeName = 'dusk') {
           const x = sx + offX + fall * 70;
           const y = gy - fall * 330;
           ctx.globalAlpha = a * 0.9;
-          ctx.strokeStyle = fx.color || '#d6ffe0';
+          ctx.strokeStyle = INK;
           ctx.lineWidth = 3;
           ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 11, y - 52); ctx.stroke();
-          ctx.strokeStyle = '#ffffff';
+          ctx.strokeStyle = '#f7f1e3';
           ctx.lineWidth = 1.2;
           ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 6, y - 28); ctx.stroke();
           if (cyc > 0.82) {                                  // ground splash
             const k = (cyc - 0.82) / 0.18;
             ctx.globalAlpha = a * (1 - k);
-            ctx.strokeStyle = fx.color || '#d6ffe0';
+            ctx.strokeStyle = INK;
             ctx.lineWidth = 2;
             ctx.beginPath(); ctx.ellipse(sx + offX, gy, 6 + k * 16, 2 + k * 5, 0, 0, Math.PI * 2); ctx.stroke();
           }
@@ -1159,11 +1311,16 @@ export function createRenderer(canvas, themeName = 'dusk') {
         const k = fx.t / fx.dur;
         const R = 12 + k * 20;
         ctx.globalAlpha = a;
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = INK;
         drawStar(sx, fy, R * 1.5, R * 0.3, fx.rot || 0);
-        ctx.fillStyle = fx.color || '#fff';
+        ctx.fillStyle = fx.color === '#fff076' ? SEAL : INK;
         drawStar(sx, fy, R * 1.05, R * 0.42, (fx.rot || 0) + 0.6);
-        ctx.strokeStyle = fx.color || '#fff';
+        // spatter droplets
+        for (let i = 0; i < 5; i++) {
+          const da = (fx.rot || 0) + i * 1.26, dr = R * (1.5 + (i % 3) * 0.35);
+          ctx.beginPath(); ctx.arc(sx + Math.cos(da) * dr, fy + Math.sin(da) * dr, 2.2 - k * 1.4, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.strokeStyle = INK;
         ctx.lineWidth = 3 * (1 - k);
         ctx.beginPath();
         ctx.arc(sx, fy, R * 1.3, 0, Math.PI * 2);
@@ -1180,9 +1337,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
         ctx.textAlign = 'center';
         ctx.lineWidth = 4;
         ctx.lineJoin = 'round';
-        ctx.strokeStyle = 'rgba(0,0,0,0.78)';
+        ctx.strokeStyle = 'rgba(250,244,230,0.92)';
         if (fx.text) {                       // spirit-capture / status float
-          ctx.fillStyle = fx.effColor || '#e8d8ff';
+          ctx.fillStyle = INK;
           ctx.font = 'bold 15px system-ui';
           ctx.strokeText(fx.text, 0, 0);
           ctx.fillText(fx.text, 0, 0);
@@ -1190,8 +1347,8 @@ export function createRenderer(canvas, themeName = 'dusk') {
         }
         // element effectiveness tints the number: green = overcoming (相剋),
         // grey = resisted
-        ctx.fillStyle = fx.crit ? '#fff076' : fx.heal ? '#a0ff90'
-          : fx.eff === 'strong' ? '#b8ffb0' : fx.eff === 'weak' ? '#bfbfbf' : '#ffd0d0';
+        ctx.fillStyle = fx.crit ? SEAL : fx.heal ? '#2f7a3c'
+          : fx.eff === 'strong' ? '#1f5f8a' : fx.eff === 'weak' ? '#8a8378' : INK;
         ctx.font = `bold ${fx.crit ? 28 : fx.eff === 'strong' ? 23 : 20}px system-ui`;
         const text = fx.heal ? `+${fx.value}` : `${fx.value}`;
         ctx.strokeText(text, 0, 0);
@@ -1204,7 +1361,7 @@ export function createRenderer(canvas, themeName = 'dusk') {
         const segs = 7;
         ctx.lineCap = 'round';
         for (let pass = 0; pass < 2; pass++) {
-          ctx.strokeStyle = pass ? '#ffffff' : 'rgba(170,190,255,0.85)';
+          ctx.strokeStyle = pass ? INK : 'rgba(60,70,110,0.45)';
           ctx.lineWidth = pass ? 3 : 9 * a;
           ctx.beginPath();
           let px = sx, py = fy - 420;
@@ -1224,6 +1381,27 @@ export function createRenderer(canvas, themeName = 'dusk') {
         // Fullscreen white flash (screen-space).
         ctx.fillStyle = `rgba(235,240,255,${a * 0.75})`;
         ctx.fillRect(-30, -30, cssW + 60, cssH + 60);
+        break;
+      }
+      case 'clash': {
+        // Blades meet: a burst of ink, a ring, and the ring of steel — 鏘.
+        const k = fx.t / fx.dur;
+        const R = 22 + k * 46;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = INK;
+        drawStar(sx, fy, R * 1.9, R * 0.22, fx.rot || 0);
+        drawStar(sx, fy, R * 1.3, R * 0.3, (fx.rot || 0) + 0.8);
+        ctx.fillStyle = '#fbf3e2';
+        drawStar(sx, fy, R * 0.9, R * 0.2, (fx.rot || 0) + 0.4);
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 4 * (1 - k) + 1;
+        ctx.beginPath(); ctx.arc(sx, fy, R * 1.5, 0, Math.PI * 2); ctx.stroke();
+        for (let i = 0; i < 9; i++) {
+          const da = (fx.rot || 0) + i * 0.7, dr = R * (1.7 + (i % 3) * 0.4);
+          ctx.beginPath(); ctx.arc(sx + Math.cos(da) * dr, fy + Math.sin(da) * dr * 0.8, 3 - k * 2, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = Math.min(1, a * 2);
+        drawSeal(sx + 44, fy - 74 - k * 16, '鏘', Math.min(1, a * 2));
         break;
       }
       case 'cutin': {
@@ -1298,14 +1476,14 @@ export function createRenderer(canvas, themeName = 'dusk') {
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = grad;
         ctx.fillRect(-bw / 2 - 30, -bh / 2, bw + 60, bh);
-        ctx.fillStyle = 'rgba(255,214,118,0.75)';
+        ctx.fillStyle = SEAL;
         ctx.fillRect(-bw / 2, -bh / 2, bw, 2);
         ctx.fillRect(-bw / 2, bh / 2 - 2, bw, 2);
         ctx.lineWidth = 4;
         ctx.lineJoin = 'round';
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.strokeText(fx.text || '', 0, size * 0.34);
-        ctx.fillStyle = '#fff8c4';
+        ctx.fillStyle = '#f7f1e3';
         ctx.fillText(fx.text || '', 0, size * 0.34);
         break;
       }
@@ -1320,8 +1498,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
     const lifeK = clamp(p.life / p.max, 0, 1);
     switch (p.kind) {
       case 'spark':
-        ctx.globalAlpha = lifeK;
-        ctx.strokeStyle = p.color;
+        // flung ink; the brightest sparks (crits, relics) are vermilion
+        ctx.globalAlpha = lifeK * 0.9;
+        ctx.strokeStyle = inkOf(p.color);
         ctx.lineWidth = p.size;
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -1348,8 +1527,9 @@ export function createRenderer(canvas, themeName = 'dusk') {
         ctx.restore();
         break;
       case 'ember':
-        ctx.globalAlpha = lifeK * 0.8;
-        ctx.fillStyle = p.color;
+        // drifting flecks of dry ink
+        ctx.globalAlpha = lifeK * 0.28;
+        ctx.fillStyle = INK;
         ctx.beginPath();
         ctx.arc(sx, fy, p.size, 0, Math.PI * 2);
         ctx.fill();
@@ -1370,6 +1550,14 @@ export function createRenderer(canvas, themeName = 'dusk') {
     }
   }
 
+  // Map the old glow colours onto the two inks a painter has: black and red.
+  function inkOf(color) {
+    if (!color) return INK;
+    const c = color.toLowerCase();
+    if (c === '#fff1a0' || c === '#ffe6a0' || c === '#ff8484') return SEAL;
+    return INK;
+  }
+
   // Ground-hugging particles (dust, wood debris, falling petals) — drawn
   // behind characters.
   function drawGroundParticles(g) {
@@ -1384,12 +1572,10 @@ export function createRenderer(canvas, themeName = 'dusk') {
   // Glowing particles (impact sparks, ambient embers) — additive, on top.
   function drawAirParticles(g) {
     const camX = g.camX;
-    ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < g.particles.length; i++) {
       const p = g.particles[i];
       if (p.kind === 'spark' || p.kind === 'ember') drawParticle(p, camX);
     }
-    ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
   }
 
@@ -1629,7 +1815,11 @@ export function createRenderer(canvas, themeName = 'dusk') {
     const fy = floorYFromZ(a.z);
     drawShadow(sx, fy, 44, 1 - Math.min(0.6, (a.y || 0) / 160));
     drawPosed(a.sprite, sx, fy, {
-      flip: a.vx < 0, lift: a.y || 0,
+      flip: a.artLeft ? a.vx > 0 : a.vx < 0, lift: a.y || 0,
+      rig: a.artLeft ? {
+        bend: 0, belly: 0, head: Math.sin(a.t * 16) * 3, breathe: 0, hem: 0, phase: 0,
+        stride: 15 * Math.sin(a.t * 14), liftL: 14 * Math.max(0, Math.cos(a.t * 14)), liftR: 14 * Math.max(0, -Math.cos(a.t * 14)),
+      } : null,
       // static garden NPCs breathe gently; freed captives scamper-wobble
       lean: a.static ? Math.sin(a.t * 1.6) * 0.025 : Math.sin(a.t * 9) * 0.08,
       scale: a.static ? 1 : 0.9, alpha: a.alpha == null ? 1 : a.alpha,

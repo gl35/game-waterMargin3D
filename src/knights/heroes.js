@@ -4,7 +4,7 @@
 // signature special.
 export const HEROES = [
   {
-    id: 'songjiang', name: 'Song Jiang', title: 'Crimson Captain',
+    id: 'songjiang', zh: '宋江', name: 'Song Jiang', title: 'Crimson Captain',
     sprite: 'npc/songjiang', color: '#ffc26b', portrait: '#e08a3a',
     moveId: 'captain', el: 'earth',
     stats: { hpMax: 1400, atk: 38, atkSpeed: 1.0, atkRange: 96,
@@ -13,7 +13,7 @@ export const HEROES = [
     opening: 'Brothers of the marsh — hold the line. Heaven watches our banner!',
   },
   {
-    id: 'linchong', name: 'Lin Chong', title: 'Spear of the Pine',
+    id: 'linchong', zh: '林沖', name: 'Lin Chong', title: 'Spear of the Pine',
     sprite: 'npc/linchong', color: '#9bc7ff', portrait: '#5a8fcf',
     moveId: 'spear', el: 'wood',
     stats: { hpMax: 1180, atk: 44, atkSpeed: 1.4, atkRange: 140,
@@ -22,7 +22,7 @@ export const HEROES = [
     opening: 'Gao Qiu taught me patience. My spear will teach him regret.',
   },
   {
-    id: 'wusong', name: 'Wu Song', title: 'Tiger Slayer',
+    id: 'wusong', zh: '武松', name: 'Wu Song', title: 'Tiger Slayer',
     sprite: 'npc/wusong', color: '#ff8b6b', portrait: '#b04a26',
     moveId: 'berserker', el: 'metal',
     stats: { hpMax: 1700, atk: 52, atkSpeed: 0.85, atkRange: 84,
@@ -31,7 +31,7 @@ export const HEROES = [
     opening: 'I killed a tiger on Jingyang Ridge with these hands. Bandits are easier.',
   },
   {
-    id: 'huarong', name: 'Hua Rong', title: 'Little Li Guang',
+    id: 'huarong', zh: '花榮', name: 'Hua Rong', title: 'Little Li Guang',
     sprite: 'npc/huarong', color: '#9cffb5', portrait: '#3aa75d',
     moveId: 'archer', el: 'wood',
     stats: { hpMax: 1050, atk: 32, atkSpeed: 1.7, atkRange: 380,
@@ -40,7 +40,7 @@ export const HEROES = [
     opening: 'Nock, draw, loose. You will not reach me.',
   },
   {
-    id: 'husanniang', name: 'Hu Sanniang', title: 'Ten-Foot Green',
+    id: 'husanniang', zh: '扈三娘', name: 'Hu Sanniang', title: 'Ten-Foot Green',
     sprite: 'npc/husanniang', color: '#ff9cd6', portrait: '#c84e92',
     moveId: 'twin', el: 'water',
     stats: { hpMax: 1100, atk: 30, atkSpeed: 2.0, atkRange: 96,
@@ -49,7 +49,7 @@ export const HEROES = [
     opening: 'Two sabers, one dance. Try to keep up.',
   },
   {
-    id: 'likui', name: 'Li Kui', title: 'Black Whirlwind',
+    id: 'likui', zh: '李逵', name: 'Li Kui', title: 'Black Whirlwind',
     sprite: 'npc/likui', color: '#8a8a8a', portrait: '#3a3a3a',
     moveId: 'whirlwind', el: 'fire',
     stats: { hpMax: 1900, atk: 46, atkSpeed: 1.0, atkRange: 110,

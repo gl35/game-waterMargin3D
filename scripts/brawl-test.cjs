@@ -34,6 +34,7 @@ const SHOTS = process.argv[2] || null;
   await page.waitForTimeout(300);
   await page.evaluate(() => {
     const g = window.__KN; g.hero.invuln = 999;
+    g.hero.mounted = false;                 // grabs are an on-foot technique
     g.enemies.forEach((e, i) => { e.hp = e.hpMax = 5000; e.stun = 30; e.spawnT = 0; e.z = g.hero.z; e.x = g.hero.x + 90 + i * 150; });
   });
 

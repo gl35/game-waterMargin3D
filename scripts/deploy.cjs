@@ -22,6 +22,8 @@ const USED = [
   'npc_白日鼠-白胜.png', 'npc_拼命三郎-石秀.png', 'npc_智多星-吴用.png',
   // Red Chamber crossover (Baoyu / Daiyu stand-ins)
   'npc_白面郎君-郑天寿.png', 'npc_母夜叉-孙二娘.png',
+  // War horse (mounted combat)
+  'world_horse.png',
 ];
 const MAX_H = 640;   // source is scaled down at draw time; 640 keeps 2x crispness
 

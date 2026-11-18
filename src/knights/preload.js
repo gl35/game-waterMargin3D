@@ -16,6 +16,8 @@ const REQUIRED = [
   'npc/baisheng', 'npc/shixiu', 'npc/wuyong',
   // Red Chamber crossover: Jia Baoyu + Lin Daiyu stand-ins
   'npc/zhengtianshou', 'npc/sunerniang',
+  // War horse (mounted combat)
+  'world/horse',
 ];
 
 export function preloadKnightsSprites() {

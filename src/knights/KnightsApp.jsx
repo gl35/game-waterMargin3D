@@ -51,6 +51,9 @@ const NO_INPUT = Object.freeze({
   attackEdge: false, jumpEdge: false, magicEdge: false, dashEdge: false, attackHeld: false,
 });
 const TURN_T = 0.13;             // seconds for the turn-around flip
+const HORSE_HP = 4;              // blows a horse absorbs before throwing its rider
+const MOUNT_SPEED = 1.35;        // riding is faster than walking
+const MOUNT_REACH = 1.3;         // and strikes reach further from the saddle
 // Pose-only pseudo moves for the grab game (damage is applied directly)
 const KNEE_MOVE = { name: 'knee', dur: 0.16, xRange: 50, zRange: 30, dmgMult: 1 };
 const THROW_MOVE = { name: 'throw', dur: 0.26, xRange: 90, zRange: 30, dmgMult: 1, launches: true };
@@ -65,7 +68,11 @@ function compact(arr, alive) {
 function makeHero(heroDef, level = 1, upgrades = null) {
   const s = statsFor(heroDef, level, upgrades);
   return {
-    id: heroDef.id, color: heroDef.color, sprite: heroDef.sprite, el: heroDef.el,
+    id: heroDef.id, zh: heroDef.zh || '', color: heroDef.color, sprite: heroDef.sprite, el: heroDef.el,
+    // Mounted combat: every hero rides into battle. The horse can take a few
+    // blows before the rider is thrown; it returns once the wave is cleared.
+    // (Hu Sanniang's own picture is already on horseback — she is never thrown.)
+    mounted: true, horseHp: HORSE_HP, selfMounted: heroDef.id === 'husanniang', gallop: 0,
     x: 100, z: (Z_MIN + Z_MAX) / 2,
     vx: 0, vz: 0,
     y: 0, vy: 0,                   // airborne offset & vertical velocity
@@ -181,7 +188,7 @@ export default function KnightsApp() {
         kind: 'dust', x: x + (Math.random() * 2 - 1) * 9, z,
         y: 2, vx: (Math.random() * 2 - 1) * 45, vy: 22 + Math.random() * 34, vz: 0,
         life: 0.3 + Math.random() * 0.28, max: 0.6,
-        size: 5 + Math.random() * 4, color: color || 'rgba(186,156,116,1)', grav: false,
+        size: 5 + Math.random() * 4, color: color || 'rgba(150,128,96,1)', grav: false,
       });
     }
   }
@@ -324,6 +331,9 @@ export default function KnightsApp() {
       e.x = Math.max(lockX + window.innerWidth * 0.45, g.camX + window.innerWidth + 90);
       e.z = (Z_MIN + Z_MAX) / 2;
       e.facing = -1;
+      if (wave.boss !== 'phantom') {         // officers duel from the saddle
+        e.mounted = true; e.chargeCd = 3.5; e.moveSpeed *= 1.15;
+      }
       g.enemies.push(e);
       lastEnemy = e;
       pushBanner(g, wave.intro || 'A boss arrives.', 2.0);
@@ -567,6 +577,17 @@ export default function KnightsApp() {
     e.windup = 0;                          // staggering interrupts their wind-up
     const kb = (opts && opts.knockback) || 0;
     e.kbVx = kb * (Math.sign(e.x - g.hero.x) || 1);
+    if (e.mounted && e.boss && e.hp > 0 && e.hp < e.hpMax * 0.4) {
+      // beaten out of the saddle — the duel finishes on foot
+      e.mounted = false; e.charge = null;
+      e.moveSpeed /= 1.15;
+      e.stun = Math.max(e.stun, 1.0);
+      e.landT = 0.2;
+      horseFlees(g, e.x, e.z, e.facing >= 0 ? -1 : 1);
+      pushBanner(g, `${e.name} is unhorsed!`, 1.6, 28);
+      spawnDust(g, e.x, e.z, 12);
+      addShake(g, 0.4);
+    }
     if (opts && opts.launches && !e.boss) {
       if (!(e.launched > 0)) e.launchT = 0;
       e.vy = LAUNCH_VY;              // +up; gravity pulls it back down
@@ -672,6 +693,10 @@ export default function KnightsApp() {
     h.invuln = 0.55;
     g.rage = Math.min(100, g.rage + 8);    // pain feeds the gauge too
     releaseGrab(g);
+    if (h.mounted && !h.selfMounted) {     // the horse takes the blow with you
+      h.horseHp--;
+      if (h.horseHp <= 0 && h.hp > 0) unhorseHero(g);
+    }
     addShake(g, 0.32);
     spawnSpark(g, h.x, h.z, 9, '#ff8484');
     g.comboCount = 0; g.comboT = 0;        // taking a hit drops your combo
@@ -681,6 +706,7 @@ export default function KnightsApp() {
       g.stageFailed = true;
       addShake(g, 0.6);
       // knocked off their feet — the fall plays out before the Continue screen
+      if (h.mounted && !h.selfMounted) { h.mounted = false; horseFlees(g, h.x, h.z, h.facing); }
       h.ko = 0.001; h.koVx = -h.facing * 230;
       h.vy = -560; h.y = -1;
       h.attacking = 0; h.dashing = 0; h.atkBuf = 0;
@@ -691,9 +717,12 @@ export default function KnightsApp() {
   }
 
   // Execute the current combo step's hitbox and damage application.
-  function executeAttack(g, move) {
+  function executeAttack(g, move0) {
     const h = g.hero;
     const dir = h.facing;
+    const move = h.mounted
+      ? { ...move0, xRange: move0.xRange * MOUNT_REACH, zRange: move0.zRange + 8 }
+      : move0;
     let activeAtk = h.atk * (move.dmgMult || 1);
     for (let i = 0; i < h.buffs.length; i++) if (h.buffs[i].atk) activeAtk *= 1 + h.buffs[i].atk;
 
@@ -744,7 +773,19 @@ export default function KnightsApp() {
       // Apply all hits with brief delay between
       for (let k = 0; k < totalHits; k++) {
         if (k === 0) {
-          damageEnemy(g, e, perHit, { knockback: move.knockback || 0, stun: 0.10, hitstop: move.hitstop || 30, launches: move.launches });
+          if (e.windup > 0 && !e.projectileSpeed) {
+            // CLASH — your blade meets theirs mid-swing: their blow is turned
+            // aside, they reel, and the gauge surges.
+            e.atkCdLeft = Math.max(e.atkCdLeft, 0.9);
+            g.vfx.push({ kind: 'clash', x: (h.x + e.x) / 2, z: e.z, yOff: -70, dur: 0.5, t: 0, world: true, rot: Math.random() * 3 });
+            g.rage = Math.min(100, g.rage + 10);
+            addShake(g, 0.3);
+            g.zoom = Math.max(g.zoom || 1, 1.05);
+            sfxCrit();
+            damageEnemy(g, e, perHit * 1.25, { knockback: (move.knockback || 0) + 30, stun: 0.6, hitstop: 95, launches: move.launches });
+          } else {
+            damageEnemy(g, e, perHit, { knockback: move.knockback || 0, stun: 0.10, hitstop: move.hitstop || 30, launches: move.launches });
+          }
         } else {
           after(g, k * 0.06, () => {
             if (e.dead) return;
@@ -833,6 +874,30 @@ export default function KnightsApp() {
     if (move.downward && h.y < -4) { h.vy = Math.max(h.vy, 520); h.plunge = true; }   // dive
   }
 
+  // ── Horses ──
+  function horseFlees(g, x, z, dir) {
+    g.actors.push({ sprite: 'world/horse', artLeft: true, x, z, vx: dir * 360, y: 0, vy: 0, t: 0, dur: 2.4, alpha: 1 });
+  }
+  function unhorseHero(g) {
+    const h = g.hero;
+    if (!h.mounted || h.selfMounted) return;
+    h.mounted = false;
+    h.vy = -430; h.y = -1;                 // thrown from the saddle
+    h.dashing = 0;
+    horseFlees(g, h.x, h.z, -h.facing);
+    pushBanner(g, 'Unhorsed! Fight on foot', 1.4, 28);
+    spawnDust(g, h.x, h.z, 10);
+    addShake(g, 0.3);
+  }
+  function remountHero(g) {
+    const h = g.hero;
+    if (h.mounted || h.ko > 0) return;
+    releaseGrab(g);
+    h.mounted = true; h.horseHp = HORSE_HP;
+    pushBanner(g, 'Your steed returns', 1.2, 26);
+    spawnDust(g, h.x - 30, h.z, 6); spawnDust(g, h.x + 30, h.z, 6);
+  }
+
   // ── Grab & throw ──
   // Walk into a foe to seize them. Attack = a knee (the third hurls them);
   // hold ← / → with Attack to throw that way at once. A thrown body bowls
@@ -882,6 +947,13 @@ export default function KnightsApp() {
   function tryDash(g) {
     const h = g.hero;
     if (h.dashing > 0 || h.dashCdLeft > 0 || h.y < -4) return;
+    if (h.mounted) {                       // cavalry charge: longer, and it tramples
+      h.dashing = 0.42;
+      h.dashCdLeft = 1.0;
+      h.invuln = Math.max(h.invuln, 0.42);
+      h.chargeHit = {};
+      return;
+    }
     h.dashing = 0.25;
     h.dashCdLeft = 0.7;
     h.invuln = Math.max(h.invuln, 0.15);
@@ -1020,10 +1092,22 @@ export default function KnightsApp() {
       h.dashing -= dt;
       h.x += h.facing * h.dashSpeed * dt;
       spawnDust(g, h.x - h.facing * 12, h.z, 1);
+      if (h.mounted) {                     // trample everything in the charge's path
+        spawnDust(g, h.x - h.facing * 40, h.z, 1);
+        for (let i = 0; i < g.enemies.length; i++) {
+          const e = g.enemies[i];
+          if (e.dead || (h.chargeHit && h.chargeHit[e.id])) continue;
+          if (Math.abs(e.x - h.x) > 62 || Math.abs(e.z - h.z) > 36) continue;
+          if (h.chargeHit) h.chargeHit[e.id] = true;
+          damageEnemy(g, e, h.atk * 1.4, { knockback: 90, stun: 0.5, hitstop: 45, launches: !e.boss });
+        }
+      }
     } else if (h.attacking <= 0) {
-      h.x += mvx * h.moveSpeed * dt;
-      h.z += mvz * h.moveSpeed * dt;
+      const spd = h.moveSpeed * (h.mounted ? MOUNT_SPEED : 1);
+      h.x += mvx * spd * dt;
+      h.z += mvz * spd * dt;
     }
+    if (h.mounted) h.gallop += dt * (h.walking || h.dashing > 0 ? (h.dashing > 0 ? 13 : 9) : 0);
 
     // Clamp z to floor band
     if (h.z < Z_MIN) h.z = Z_MIN;
@@ -1078,7 +1162,7 @@ export default function KnightsApp() {
     if (inp.jumpEdge)   { inp.jumpEdge   = false; releaseGrab(g); tryJump(g); }
 
     // Seize a foe by walking into them
-    if (!h.grab && h.grabCd <= 0 && h.walking && mvx !== 0 && h.attacking <= 0 && h.dashing <= 0 && h.y >= 0 && !g.stageComplete) {
+    if (!h.mounted && !h.grab && h.grabCd <= 0 && h.walking && mvx !== 0 && h.attacking <= 0 && h.dashing <= 0 && h.y >= 0 && !g.stageComplete) {
       for (let i = 0; i < g.enemies.length; i++) {
         const e = g.enemies[i];
         if (e.dead || e.boss || e.launched > 0 || e.spawnT > 0 || e.windup > 0) continue;
@@ -1205,6 +1289,39 @@ export default function KnightsApp() {
         e.x += (e.kbVx || 0) * dt;
         e.kbVx *= Math.pow(0.001, dt);
         continue;
+      }
+
+      // A mounted officer's signature move: rear up (the warning), then
+      // thunder down the lane. Step out of the lane, leap it, or charge through.
+      if (e.mounted && e.boss) {
+        if (e.charge) {
+          const c = e.charge;
+          c.t += dt;
+          if (c.phase === 0) {
+            if (c.t >= 0.9) { c.phase = 1; c.t = 0; c.hit = false; addShake(g, 0.15); }
+          } else {
+            e.x += c.dir * 860 * dt;
+            e.moving = true;
+            e.walkPhase = (e.walkPhase || 0) + dt * 9;
+            if (Math.random() < dt * 30) spawnDust(g, e.x - c.dir * 40, e.z, 1);
+            if (!c.hit && Math.abs(e.x - h.x) < 72 && Math.abs(e.z - h.z) < 34 && h.y > -50) {
+              c.hit = true;
+              damageHero(g, Math.round(e.atk * 1.4), e.el);
+            }
+            const wallL = g.camX + 90, wallR = g.waveLockX - 40;
+            if ((c.dir > 0 && e.x >= wallR) || (c.dir < 0 && e.x <= wallL) || c.t > 1.7) {
+              e.charge = null;
+              e.chargeCd = 4.5 + Math.random() * 3;
+              e.facing = -c.dir; e.turnT = TURN_T;
+            }
+          }
+          continue;
+        }
+        e.chargeCd -= dt;
+        if (e.chargeCd <= 0 && e.windup <= 0 && Math.abs(e.x - h.x) > 170 && e.x < g.waveLockX + 60 && !(h.ko > 0)) {
+          e.charge = { phase: 0, t: 0, dir: Math.sign(h.x - e.x) || -1, hit: false };
+          e.facing = e.charge.dir;
+        }
       }
 
       // During the defend mission the attackers single-mindedly hunt the
@@ -1498,6 +1615,8 @@ export default function KnightsApp() {
         g.waveActive = false;
         g.waveIdx++;
         h.hp = Math.min(h.hpMax, h.hp + h.hpMax * 0.08);
+        if (g.waveIdx < g.stage.waves.length) remountHero(g);
+        else if (h.mounted) h.horseHp = HORSE_HP;
         if (g.waveIdx >= g.stage.waves.length) {
           g.stageComplete = true;
           pushBanner(g, 'Stage Cleared', 2.2);
@@ -1680,7 +1799,9 @@ export default function KnightsApp() {
               <li><b>K / Z / Space</b> — jump (jump → attack = aerial)</li>
               <li><b>L / C</b> — special (costs HP, like the arcade)</li>
               <li><b>Shift</b> — dash · <b>M</b> — mute · <b>Esc</b> — pause</li>
-              <li><b>Grab</b> — walk into a foe; <b>J</b> knees, <b>←/→ + J</b> throws them into the crowd</li>
+              <li><b>On horseback</b> — you ride faster and strike further; <b>Shift</b> is a trampling charge. Take too many blows and you are thrown until the wave ends</li>
+              <li><b>Clash</b> — strike a foe as they wind up to turn their blow aside</li>
+              <li><b>Grab</b> (on foot) — walk into a foe; <b>J</b> knees, <b>←/→ + J</b> throws them into the crowd</li>
               <li><b>氣 gauge</b> — fills as you fight; when full your special is free and stronger</li>
             </ul>
             <p className="knights-hint">Smash barrels for food. Eat meat to heal. Brawl on.</p>
@@ -2136,6 +2257,11 @@ function StageHUD({ g, heroDef, moves, muted, onMute, onPause, showHowTo, dismis
         </div>
       </div>
 
+      {h.mounted && !h.selfMounted && (
+        <div className="kn-horse-pips" title="Your horse — when these run out you are thrown">
+          馬 {'●'.repeat(Math.max(0, h.horseHp))}{'○'.repeat(Math.max(0, HORSE_HP - h.horseHp))}
+        </div>
+      )}
       <div className="knights-hud knights-hud-tr">
         <div className="knights-stage-label">{g.stage.name}</div>
         <div className="knights-row" style={{ gap: 6 }}>
